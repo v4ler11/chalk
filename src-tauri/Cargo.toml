@@ -1,0 +1,55 @@
+[package]
+name = "chalk"
+version = "0.1.0"
+description = "A desktop chat client for any OpenAI-compatible API"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "chalk_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Transparent windows on macOS need private APIs, and transparency is what gives
+# the frameless window its rounded corners. An App Store build has to drop one.
+tauri = { version = "2", features = ["macos-private-api"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# One HTTP client for both the chat and the protocol: the SDK is built against
+# the same version, so the two share one connection pool and one TLS stack.
+reqwest = { version = "0.13", features = ["json", "stream"] }
+futures-util = "0.3"
+parking_lot = "0.12"
+# The protocol client's two ends: a child process's streams for stdio servers,
+# and the request headers a streamable HTTP server is spoken to with.
+tokio = { version = "1", features = ["io-util", "process"] }
+http = "1"
+# The reference Rust implementation of the model context protocol, for the
+# framing, the two transports and the revision negotiation of both eras.
+# The server half of the SDK is not built: this app is a client only.
+rmcp = { version = "3.5.0", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest"] }
+# Bundled: the app carries its own SQLite rather than depending on whatever the
+# host happens to ship, at the cost of compiling it once.
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde_norway = "0.9.42"
+# Local wall-clock time, for the `@{{TODAY}}` variable in the system prompt: the
+# offset comes from the OS, so the time is the user's own and not UTC's.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

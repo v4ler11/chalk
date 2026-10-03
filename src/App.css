@@ -1,0 +1,2842 @@
+:root {
+  /* Chalk colour tokens, taken from the design file's variables. */
+  --bg: #ffffff;
+  --sidebar: #f7f7f4;
+  --sidebar-hover: #fdfdfc;
+  --sidebar-active: #ebebe7;
+  --border: #e7e7e2;
+  --text-primary: #1c1c1a;
+  --text-secondary: #6e6e68;
+  --text-muted: #a2a29b;
+  --accent: #1c1c1a;
+  --accent-contrast: #ffffff;
+  --input-bg: #f4f4f1;
+  /* The wavy prompt rule and the error notice are not in the design's tokens. */
+  --rule: #c4c4bc;
+  --danger: #b00020;
+  --danger-bg: #fdecea;
+  --danger-border: #f1cbc5;
+  /* The reasoning level in force: the pill the composer's brain turns into.
+     Not one of the design file's tokens — the levels are the app's own. */
+  --reasoning: #2563eb;
+  --reasoning-bg: #e7eefc;
+  --reasoning-divider: #b9cdf5;
+
+  --font-display: "Space Grotesk Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "DM Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-message: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* The content measure: a share of the window, capped, shared by the composer
+     and the transcript so the two always agree. Then the fixed measure a prompt
+     is set to, and the sidebar width — which the title bar's rail matches so
+     their borders line up. */
+  --content-w: clamp(420px, 72vw, 1120px);
+  --prompt: 326px;
+  --sidebar-w: 246px;
+  /* The rail while the sidebar is shut — its own padding and its controls,
+     16 + 52 + 12 + 64 + 16 — so the chrome covers only what it needs of the
+     chat panel's corner. */
+  --rail-collapsed: 160px;
+  --titlebar: 48px;
+  /* How much the composer grows past its design size: nothing at the 820px
+     minimum window, 2px of extra type by 1600px. */
+  --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
+
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  /* The window is transparent so its corners are ours to round; .app paints. */
+  background-color: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: transparent;
+  /* macOS rubber-bands the whole window when a gesture outruns the content
+     under it. Nothing scrolls at this level — the panels say so themselves —
+     so the window must never take the gesture. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* The transparent window shows the desktop through the corners of this box. */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--bg);
+}
+
+/* --------------------------------------------------------------------- shell */
+
+/* The window is a row: the sidebar's own column on the left, and the chat panel
+   taking everything else. The column shuts to nothing, and the window's chrome
+   floats over the panel instead, so a shut sidebar leaves the panel the whole
+   window — which is the space the composer is centred in. */
+.shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.left {
+  flex: none;
+  width: var(--sidebar-w);
+  overflow: hidden;
+  transition: width 130ms ease;
+}
+
+.left:not(.open) {
+  width: 0;
+}
+
+/* Frameless window: this rail is the window's chrome, so it drags the window and
+   its traffic lights drive the real one. It is taken out of the row, so it costs
+   the chat panel no width; while the sidebar is open it sits over that sidebar's
+   head, and its right edge is the border the sidebar carries on below it. */
+.rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: var(--sidebar-w);
+  height: var(--titlebar);
+  padding: 0 16px;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+  /* Reserved, never toggled in width: the rail must not resize its own contents
+     when the sidebar opens or shuts, or the controls would jump by a pixel. */
+  border-bottom: 1px solid transparent;
+  transition:
+    width 130ms ease,
+    background-color 200ms ease,
+    border-right-color 200ms ease,
+    border-bottom-color 200ms ease;
+  user-select: none;
+}
+
+/* Shut, the rail is only as wide as its controls and wears the chat panel's own
+   colour, so it reads as the panel's corner rather than a column of its own —
+   and it draws the nav's rule across its own width, starting the line that
+   separates the nav from the transcript at the window's edge. */
+.shell:not(:has(.left.open)) .rail {
+  width: var(--rail-collapsed);
+  background-color: var(--bg);
+  border-right-color: transparent;
+  border-bottom-color: var(--border);
+}
+
+/* The chip names the model in use and leads to where it is chosen: no box
+   around it, just the name and a chevron. Its measure is generous enough that an
+   id like `deepseek/deepseek-v4.1-flash` is shown whole. */
+.model-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.model-chip:hover {
+  color: var(--text-primary);
+}
+
+.model-chip .chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.model-name {
+  /* Wide enough for the model ids in use, so the name is not cut off; past it,
+     the ellipsis is there so a very long id cannot crowd the nav. */
+  max-width: 360px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.light {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.light.close {
+  background-color: #ff5f57;
+}
+
+.light.min {
+  background-color: #febc2e;
+}
+
+.light.max {
+  background-color: #28c840;
+}
+
+.window-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.icon-btn:hover,
+.icon-btn.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}
+
+.icon-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* A button's name and its shortcut, under the button and under the pointer. It
+   is out of the flow so the rail is the same width whether or not it is drawn,
+   and it takes no clicks, so it never stands between the pointer and the button
+   it belongs to. */
+.hint {
+  position: relative;
+  display: flex;
+}
+
+.key-hint {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.hint:hover .key-hint,
+.hint:focus-within .key-hint {
+  opacity: 1;
+}
+
+/* The chip opens the list of models rather than the settings window: a chat's
+   model is the chat's own, so choosing one belongs beside the chat — and the
+   menu still leads to where the list itself is written. */
+.model-picker {
+  position: relative;
+}
+
+/* Anywhere else closes the menu, which is what a click outside one is for. */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+
+/* A menu of choices: the model list under the chip that opened it, and the
+   reasoning levels beside the composer's brain. Held at the window rather than
+   in the card, since the levels are placed from the control's own rect — the
+   composer's bar clips whatever would hang out of it. */
+.menu {
+  position: fixed;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg);
+}
+
+/* Hanging under the chip that opened it, at the nav's own right edge. */
+.menu.below {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+}
+
+.model-menu {
+  min-width: 260px;
+}
+
+.reasoning-menu {
+  min-width: 132px;
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-option.active {
+  color: var(--text-primary);
+}
+
+.menu-option:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.menu-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu-option-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.menu-option.empty {
+  color: var(--text-muted);
+}
+
+/* The servers this chat calls: a row each, its switch at the right. Nothing in
+   a row leads to the settings, since what a server *is* is edited there and
+   whether this conversation calls it is decided here. */
+.servers-menu {
+  min-width: 236px;
+  padding: 6px;
+  gap: 2px;
+}
+
+.menu-server {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-server:hover {
+  background-color: var(--sidebar);
+}
+
+/* The name and, under it, what the server has to say for itself: two lines that
+   are cut rather than wrapped, since a row is a row. */
+.menu-server-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-server-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+}
+
+.menu-server-count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.menu-server-count.failed {
+  color: var(--danger);
+}
+
+/* A lazily imported server this chat has not loaded: not a count but a state, so
+   it is italic, and blue — the composer's own blue, the one its controls wear
+   when they are holding something up. */
+.menu-server-count.lazy {
+  color: var(--reasoning);
+  font-style: italic;
+}
+
+/* The switch: a track and a knob — grey and to the left while the server is out
+   of this chat, filled and to the right while it is in. The fill and the knob
+   swap places with the theme the way the filled buttons do, so it reads in
+   either scheme without a colour of its own. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--sidebar-active);
+  transition: background-color 150ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+.menu-server[aria-pressed="true"] .switch {
+  background-color: var(--text-primary);
+}
+
+.menu-server[aria-pressed="true"] .switch::after {
+  transform: translateX(14px);
+  background-color: var(--bg);
+}
+
+/* Asking every server again: the one thing a list of switches needs, and the
+   only way to see a tool a server has grown since the window was opened. */
+.menu-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 5px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.menu-refresh:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.menu-refresh:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.menu-refresh svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The icon turning while the servers are asked: the same motion the attachment
+   being prepared uses, which is the app's one way of saying "working". */
+.menu-refresh svg.spinning {
+  animation: attachment-spin 900ms linear infinite;
+}
+
+.menu-note {
+  margin: 0;
+  padding: 10px 8px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.key-hint kbd,
+.sidebar-settings kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------------ sidebar */
+
+/* Mounted open or shut, and slid out of the column's left edge rather than
+   dropped, so it arrives and leaves in motion. Its top padding clears the rail
+   that floats over its head. Its right border is the divider between the two
+   panels: the rail draws the same border at the same x, so the line reads as
+   one. */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: var(--sidebar-w);
+  margin-left: calc(-1 * var(--sidebar-w));
+  overflow: hidden;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+  transition: margin-left 130ms ease;
+}
+
+.sidebar.open {
+  margin-left: 0;
+}
+
+/* Only the history scrolls. The settings row lives outside this box, in the
+   sidebar's own column, so it holds the bottom however long the list gets. */
+.sidebar-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding: calc(var(--titlebar) + 16px) 16px 8px;
+  overflow-y: auto;
+  /* The gesture stops at the history's end, rather than reaching the window. */
+  overscroll-behavior: none;
+}
+
+.sidebar-foot {
+  flex: none;
+  padding: 8px 16px;
+}
+
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-label {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.chat-item.active {
+  background-color: var(--sidebar-active);
+}
+
+/* Under the pointer every row lifts, the open one included: the pill is a
+   pointer state first, and the open row keeps its place through its type and
+   its wave. */
+.chat-item:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.chat-wave {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.chat-item.active .chat-wave {
+  color: var(--text-primary);
+}
+
+/* The title is the button that opens the chat, and it is the whole row: the
+   click target is stretched over the row — its padding and its wave included,
+   and under the actions — so a click anywhere on the pill opens the chat, not
+   just the words. The name is its own span so the ellipsis lives there rather
+   than on the button, whose overflow must stay visible for the target. */
+.chat-item-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.chat-item-title::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.chat-item-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-item.active .chat-item-title {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* While the question is up the row's own words step back — dimmed, not hidden —
+   so the two answers read as the row's business, not the chat's name. It is
+   clipped like a name, so the question can never run under the two answers,
+   which would leave all three unreadable. */
+.row.confirming .chat-item-title,
+.row.confirming .mcp-row-name {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* The end of a list row, where the row is removed — one drawing for every list
+   that has rows worth removing, so the chat history and the protocol servers
+   cannot come to disagree about it. A list says `row` on its rows; the question
+   itself is `RowDelete`'s. */
+.row.confirming .row-action {
+  color: var(--text-primary);
+}
+
+.row.confirming .row-action.confirm {
+  color: var(--danger);
+}
+
+/* Held in the row whether or not it is drawn, so a row does not twitch as the
+   pointer crosses it, and drawn only under the pointer — or under the keyboard,
+   which reaches it either way. It rides above the title's stretched target, and
+   takes no clicks until it is drawn, so the row stays clickable through it. */
+.row-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.row:hover .row-actions,
+.row-actions:focus-within,
+.row.confirming .row-actions {
+  opacity: 1;
+}
+
+.row:hover .row-action,
+.row-actions:focus-within .row-action,
+.row.confirming .row-action {
+  pointer-events: auto;
+}
+
+.row-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.row-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.row-action.confirm {
+  color: var(--danger);
+}
+
+.row-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The row's name, while it is being rewritten in place. */
+.chat-item-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.sidebar-settings {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-settings:hover {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}
+
+/* The shortcut sits at the row's far end, where the rail's hints put it. */
+.sidebar-settings kbd {
+  margin-left: auto;
+}
+
+/* --------------------------------------------------------------------- main */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg);
+}
+
+/* The chat panel's nav: this strip drags the window wherever the window's
+   controls are not, it names the model in use, and its rule is what separates
+   the nav from the transcript below it. */
+.chat-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+  height: var(--titlebar);
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg);
+  user-select: none;
+}
+
+.messages-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* The transcript is the only thing that scrolls, and a gesture past its end
+     dies here: nothing chains to the window, and the panel itself does not
+     rubber-band. */
+  overscroll-behavior: none;
+  padding: 32px 24px;
+  /* The centred column has to stay centred on the pane when the platform draws
+     a classic scrollbar, which takes width from this box alone. Reserving the
+     gutter at both edges keeps it symmetric — and with the overlay scrollbars
+     macOS draws by default the gutter is nothing, so this costs nothing. */
+  scrollbar-gutter: stable both-edges;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The space between messages is a margin rather than a gap, so that a turn's own
+   steps can close themselves up against their neighbours: a gap is the
+   container's and cannot be spent differently by one of the things in it. */
+.messages > * + * {
+  margin-top: 28px;
+}
+
+/* A message that ends in an offered row already ends in space: that row is the
+   gap under it, so what follows starts right after it. */
+.msg:has(.msg-actions) + * {
+  margin-top: 2px;
+}
+
+/* A round that only asked for tools, and a tool row whose call is not in the
+   transcript at all: steps inside a turn rather than messages of their own, so
+   they are held close to what surrounds them and a run of rounds reads as one
+   stretch of work instead of a stack of replies. */
+.msg.calls-only,
+.msg.tool,
+.msg.calls-only + .msg,
+.msg.tool + .msg {
+  margin-top: 0;
+}
+
+/* What a turn's calls are followed by — the message that answers for them — is
+   prose rather than another row, so it keeps a little more of the gap: someone
+   reading down the calls should not find the answer's own line inside them. */
+.msg.calls-only + .msg:has(.thinking),
+.msg.tool + .msg:has(.thinking) {
+  margin-top: 10px;
+}
+
+/* Centred on the pane and at the foot of the transcript, so it lands over the
+   composer's own centre and directly above it. It is centred with `auto`
+   margins rather than a translate, so the hover lift and the entry animation
+   keep the shorthand to themselves. */
+.to-bottom {
+  position: absolute;
+  right: 0;
+  left: 0;
+  bottom: 12px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  /* It arrives with the scroll it announces, rather than blinking into place. */
+  animation: to-bottom-in 160ms ease-out;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.to-bottom svg {
+  display: block;
+}
+
+.to-bottom:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+
+.to-bottom:active {
+  transform: translateY(0);
+}
+
+@keyframes to-bottom-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.msg {
+  display: flex;
+  width: 100%;
+  max-width: var(--content-w);
+}
+
+.msg.user {
+  justify-content: flex-end;
+}
+
+.msg.assistant,
+.msg.developer,
+.msg.tool,
+.msg.function {
+  justify-content: flex-start;
+}
+
+/* A new prompt is set apart from the answer above it. */
+.msg.assistant + .msg.user {
+  margin-top: 28px;
+}
+
+.bubble {
+  min-width: 0;
+}
+
+/* A prompt is a fixed measure, right-aligned, ruled off by its own wavy line. */
+.msg.user .bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: var(--prompt);
+  color: var(--text-primary);
+  /* The prompt's actions hang from its right-hand edge. */
+  position: relative;
+}
+
+.plain-text {
+  width: 100%;
+  /* A step in from the wave below, so the two do not start on the same edge. */
+  padding-left: 5px;
+  font-family: var(--font-message);
+  font-size: 17px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The images a prompt was sent with, above the rule that ends it — square, and
+   wrapped onto as many rows as they need. */
+.msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding-left: 5px;
+}
+
+.msg-image {
+  display: block;
+  width: 104px;
+  height: 104px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+/* The design rules off every prompt with a wavy line. It is drawn as one path
+   spanning the whole rule, not a tile: a tiled stroke breaks at every join,
+   where the tile's edge clips the round cap. The humps vary in width and
+   amplitude, so the wave reads as drawn rather than repeated, and the mask is
+   stretched to the prompt's measure so the wave keeps pace with it. */
+.prompt-rule {
+  width: 100%;
+  height: 10px;
+  background-color: var(--rule);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 10px;
+  mask-size: 100% 10px;
+}
+
+/* What a prompt offers — copy it, ask again, rewrite it — hanging under its
+   right-hand edge, and the same row for an answer under its left.
+   
+   The row holds its own place in the flow rather than floating in the gap under
+   the message. A row taken out of the flow is drawn over whatever comes next,
+   which for a prompt is the first calls of the turn it asked for: invisible
+   buttons over rows that cannot then be pressed. Holding the space also keeps
+   the transcript the same height whether or not a pointer is in it — only the
+   drawing of the row changes, and only for a message that can act. */
+.msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 27px;
+  padding-top: 5px;
+  box-sizing: border-box;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+/* Hidden rather than absent: a row that is not offered takes no click and no
+   place in the tab order, and one that is, is drawn under the pointer. */
+.msg.acting .bubble:hover .msg-actions,
+.msg.acting .msg-actions:focus-within {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* An answer's row hangs from its left edge, under the start of the text it acts
+   on; a prompt's stays at the right, where the prompt itself sits. */
+.msg.assistant .msg-actions {
+  justify-content: flex-start;
+}
+
+.msg-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.msg-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.msg-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* A message action's tip hangs over the message rather than under the row, at
+   the row's own outer edge — the right for a prompt, whose row sits at the
+   right, and the left for an answer — so it grows inward and never past the
+   transcript's edge, where nobody could scroll to it. */
+.msg-actions .key-hint {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
+}
+
+.msg.user .msg-actions .key-hint {
+  left: auto;
+  right: 0;
+}
+
+/* An answer's tokens are read rather than clicked: the icon is what there is to
+   hover, so it takes no click of its own. */
+.msg-action.usage {
+  cursor: default;
+}
+
+/* An answer is the content of the transcript, not a card in it: it takes the
+   wide measure and shows nothing but its own text. */
+.msg.assistant .bubble {
+  width: 100%;
+  font-family: var(--font-message);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  /* The answer's actions hang from its own edge, the way a prompt's do. */
+  position: relative;
+}
+
+.msg.error {
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+}
+
+.bubble p:first-child {
+  margin-top: 0;
+}
+
+/* The block the actions hang under keeps no bottom margin, so the row sits just
+   below the text and not a paragraph's gap below it. It is not `:last-child`:
+   what a message offers is positioned out of the flow but is still a child, so
+   the last block is named as the child before it — and as the plain last child
+   while an answer is still live, when there are no actions yet. */
+.bubble > :nth-last-child(2):has(+ .msg-actions),
+.bubble > :last-child:not(.msg-actions) {
+  margin-bottom: 0;
+}
+
+.msg h1,
+.msg h2,
+.msg h3,
+.msg h4,
+.msg h5,
+.msg h6 {
+  font-family: var(--font-display);
+  line-height: 1.3;
+  margin: 16px 0 6px;
+}
+
+.msg h1 {
+  font-size: 24px;
+}
+
+.msg h2 {
+  font-size: 20px;
+}
+
+.msg h3 {
+  font-size: 18px;
+}
+
+.msg h4,
+.msg h5,
+.msg h6 {
+  font-size: 17px;
+}
+
+.msg ul,
+.msg ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.msg li {
+  margin: 2px 0;
+}
+
+.msg a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.msg blockquote {
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.msg hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* Thinking is UI chrome: the sans face at UI sizes, and none of it is prose to
+   be selected — not the timings, not the chevron, not the reasoning. The summary
+   is the one line the block reads from: how long the model took to say anything,
+   and, where it reasoned at all, how long it spent thinking, with the chevron
+   that opens the reasoning under them. */
+.thinking {
+  margin-bottom: 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.thinking summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+/* The thinking time and its chevron, held together as the one thing they are.
+   They are not a line of their own: the two times read as one line, and this is
+   the second half of it. */
+.thinking-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.thinking .chevron {
+  flex: none;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  transition: transform 150ms ease;
+}
+
+/* The chevron points at the reasoning while the block is shut, and turns down
+   onto it when it opens. */
+.thinking[open] .chevron {
+  transform: rotate(90deg);
+}
+
+.thinking-body {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+
+.timer {
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  /* Chrome, not content: a drag across one should start no selection. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The tools a message called. A call and what it answered with are one fact, so
+   they are one row of the transcript rather than two: the row, and the card it
+   opens into.
+   
+   A list only in markup: it is indented like the message's own text rather than
+   like the bullets inside it, so the rows stand on the same edge the answer and
+   its timers do — which is what the second class in the selector is for, the
+   markdown lists inside a message having taken the first. */
+.msg .tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Held close to the message above and to each other: the calls of a turn are
+     one stretch of work, not a stack of paragraphs. */
+  margin: 1px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The rows are items of a list in markup only: the markdown list's item spacing
+   is not theirs to wear. It is what kept them a paragraph apart — two pixels
+   above each row and two below, more than the row's own padding, which is what
+   the eye read as the space between one call and the next. */
+.msg .tool-calls li {
+  margin: 0;
+}
+
+/* The row: how long the server took, what was called, and the arguments as they
+   were sent — one line, cut off rather than wrapped, with the whole of it in the
+   card below. It is a record of an identifier being invoked, so it is set as
+   code. Under the pointer, or with the caret in it, the line takes the
+   transcript's own tint and its text comes up to the reading colour: it is then
+   plainly the thing to press. */
+.tool-call-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* The text sits on the message's own edge, and the tint under the pointer
+     bleeds a little past it on the left — the negative margin and the padding
+     are mirrors of each other. Only on the left: a row wider than the column it
+     stands in would give the transcript a sideways scroll of its own. */
+  width: calc(100% + 8px);
+  margin-left: -8px;
+  /* The padding is the tint's room and stays what it always was; what is taken
+     out is the leading — a 12px line set in a 19px one, which is where three
+     rows' worth of dead air a turn was hiding. Rows then sit one line apart,
+     which is what reading a record down should look like. */
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-call-row:hover,
+.tool-call-row:focus-visible {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+}
+
+/* The timer, in the app's one voice for durations, held at a width so the names
+   below it line up. */
+.tool-call-timer {
+  flex: none;
+  min-width: 44px;
+}
+
+.tool-call-id {
+  flex: none;
+  white-space: nowrap;
+}
+
+.tool-call-sep {
+  margin: 0 3px;
+  color: var(--text-muted);
+}
+
+.tool-call .tool-call-args {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The chevron onto the card: out of the way until the row is under the pointer
+   or has the caret, since an idle transcript is a record rather than a list of
+   controls — and turned down while the card is open, as a chevron onto
+   something always is. */
+.tool-call-chevron {
+  flex: none;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.tool-call-row:hover .tool-call-chevron,
+.tool-call-row:focus-visible .tool-call-chevron,
+.tool-call.open .tool-call-chevron {
+  opacity: 1;
+}
+
+.tool-call.open .tool-call-chevron {
+  transform: rotate(90deg);
+}
+
+/* What the row opens into: which server, which tool, with what arguments, and
+   what came back. The sections are divided by the hairline the app draws
+   everywhere else, so the two halves read as one card. */
+.tool-call-card {
+  margin: 4px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tool-call-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.tool-call-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.tool-call-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tool-call-head .tool-call-tool {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.tool-call-section {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-call-section-name {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The JSON as it was sent and answered: wrapped rather than scrolled sideways,
+   a long string usually being the whole of what is being read. A tall result
+   scrolls inside the card rather than pushing the conversation off the screen. */
+.tool-call .tool-call-json {
+  margin: 8px 0 0;
+  padding: 0;
+  border-radius: 0;
+  max-height: 220px;
+  overflow: auto;
+  background-color: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg code {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  background-color: var(--input-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+
+.msg pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.msg pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Display math is centered and never wraps, so a formula wider than the bubble
+   scrolls inside its own box for the same reason a table does; its own margins
+   are dropped at the edges of the bubble, as a paragraph's are. */
+.bubble .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.bubble .katex-display:first-child {
+  margin-top: 0;
+}
+
+.bubble .katex-display:last-child {
+  margin-bottom: 0;
+}
+
+/* Tables scroll inside their own box, so a wide one cannot push the transcript
+   sideways; a narrow one still lays out as a table. */
+.msg table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.msg th,
+.msg td {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.msg th {
+  background-color: var(--input-bg);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------- composer */
+
+/* The bar's horizontal padding is the transcript's, so both columns take the
+   same measure out of the pane and their edges meet at every width — not just
+   when the measure is capped rather than the pane. */
+.composer-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 24px 8px;
+  /* The transcript reserves a scrollbar gutter at both edges; the bar reserves
+     the same, so the two keep one centre and one measure. */
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* The line that says the composer holds an earlier prompt rather than a new
+   one, with the way out of it on the far right. */
+.composer-editing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.composer-editing-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-editing-label svg {
+  width: 13px;
+  height: 13px;
+}
+
+.composer-editing-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.composer-editing-cancel:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.composer-editing-cancel svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The bar takes the window's measure, and its own parts grow a little with it:
+   the same ramp carries the type, the padding, the paperclip and the button, so
+   a wide window gets a composer in proportion rather than a small one adrift in
+   a wide bar. */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: var(--content-w);
+  padding: calc(8px + var(--composer-grow) * 1.5) calc(12px + var(--composer-grow) * 2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background-color: var(--input-bg);
+}
+
+/* The images attached to the draft: a row of squares above it, scrolled
+   sideways when there are more than fit. Each carries its way out at the
+   top-right, and a spinner over it while it is being prepared. */
+.composer-attachments {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior: none;
+}
+
+.attachment {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--sidebar);
+  overflow: hidden;
+}
+
+.attachment-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Still being prepared: the picture is dimmed under the spinner rather than
+   hidden, so the tile keeps the shape the image will have. */
+.attachment.processing .attachment-image {
+  opacity: 0.4;
+}
+
+.attachment-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: attachment-spin 700ms linear infinite;
+}
+
+@keyframes attachment-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.attachment.error {
+  border-color: var(--danger);
+}
+
+.attachment-failed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(20, 20, 20, 0.62);
+  color: #fff;
+  cursor: pointer;
+}
+
+.attachment-remove:hover {
+  background-color: rgba(20, 20, 20, 0.85);
+}
+
+.attachment-remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 22px;
+  max-height: 140px;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: calc(15px + var(--composer-grow));
+  line-height: 1.5;
+}
+
+.composer textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.composer textarea:disabled {
+  opacity: 0.6;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.composer-tools svg {
+  width: calc(13px + var(--composer-grow));
+  height: calc(13px + var(--composer-grow));
+}
+
+/* The composer's tips are the rail's, drawn over each control rather than under
+   it: this row is the last of the window, and a tip below it would be the one
+   nobody could read. */
+.composer-tools .key-hint {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* The paperclip: it opens the file panel for images, drawn at the weight the
+   static mark always had. */
+.composer-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.composer-tool:hover {
+  color: var(--text-primary);
+}
+
+/* The reasoning control, beside the paperclip: the brain alone — in the tools'
+   own grey — while nothing is being asked for, and a pill while a level is, the
+   brain on its left and the level's letter and chevron on its right. The two
+   halves are two buttons: one gives the level up, the other opens the levels. */
+.reasoning-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reasoning-pill.on {
+  padding: 2px 5px 2px 4px;
+  background-color: var(--reasoning-bg);
+  color: var(--reasoning);
+}
+
+.reasoning-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Off is the paperclip's own grey, brightening under the pointer. A level in
+   force keeps the pill's blue — the pill is a state, not a hint — and tints only
+   the half under the pointer, the two halves being the two buttons. */
+.reasoning-pill:not(.on) .reasoning-btn:hover {
+  color: var(--text-primary);
+}
+
+.reasoning-pill.on .reasoning-btn:hover {
+  background-color: var(--reasoning-divider);
+}
+
+.reasoning-pill.on .reasoning-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.reasoning-pill.on .reasoning-btn:last-child {
+  padding-left: 6px;
+  border-left: 1px solid var(--reasoning-divider);
+  border-radius: 0 999px 999px 0;
+}
+
+.reasoning-level {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.reasoning-btn .reasoning-chevron {
+  width: 11px;
+  height: 11px;
+}
+
+/* The tools control, beside the reasoning control: the hammer alone while this
+   chat calls no server, and a pill of two while it calls any — the hammer that
+   opens the servers, and the count of what they offer, which is also the button
+   that gives them all up. The two controls are the same shape and wear the same
+   colour: both say what the chat is asking with, one level and one count. */
+.tools-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tools-pill.on {
+  padding: 2px 5px 2px 4px;
+  background-color: var(--reasoning-bg);
+  color: var(--reasoning);
+}
+
+.tools-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.tools-pill:not(.on) .tools-btn {
+  color: var(--text-muted);
+}
+
+.tools-pill:not(.on) .tools-btn:hover {
+  color: var(--text-primary);
+}
+
+.tools-pill.on .tools-btn:hover {
+  background-color: var(--reasoning-divider);
+}
+
+/* Only while both halves are there: with nothing called the pill is the hammer
+   alone, which no divider may cut in two. */
+.tools-pill.on .tools-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.tools-pill.on .tools-btn:last-child {
+  padding-left: 6px;
+  border-left: 1px solid var(--reasoning-divider);
+  border-radius: 0 999px 999px 0;
+}
+
+/* How many servers the chat calls, worn where the reasoning pill wears its
+   level's letter, and the chevron onto the list that switches them. */
+.tools-count {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tools-chevron {
+  width: 11px;
+  height: 11px;
+}
+
+.composer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* What the chat has cost, beside the send button: every answer's price, summed,
+   in the money format of two decimals. Tabular figures keep it from twitching as
+   the total grows, and it is chrome rather than content — a drag across it should
+   start no selection. */
+.composer-cost {
+  font-size: calc(11px + var(--composer-grow));
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The button holds its place whether or not there is a draft — an empty one
+   sends nothing — and the animation marks the swap between Send and Stop. */
+@keyframes send-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(26px + var(--composer-grow) * 2);
+  height: calc(26px + var(--composer-grow) * 2);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  animation: send-in 120ms ease-out;
+}
+
+.send-btn svg {
+  width: calc(13px + var(--composer-grow));
+  height: calc(13px + var(--composer-grow));
+}
+
+/* Held back while an image is still being prepared: it says so, and takes no
+   click, so a request cannot go out missing its picture. */
+.send-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------ tool approval */
+
+/* The calls a turn is waiting on, above the composer. It spans the same measure
+   the transcript and the composer do — the two share a centre — so it reads as
+   part of the conversation rather than as another bar of chrome. */
+.tool-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--content-w);
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--sidebar);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.tool-approval-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-approval-question {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.tool-approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.tool-approval-run,
+.tool-approval-decline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+/* The one that does something is the one that is filled in. */
+.tool-approval-run {
+  background-color: var(--text-primary);
+  color: var(--bg);
+  border: 1px solid var(--text-primary);
+}
+
+.tool-approval-decline {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.tool-approval-decline:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.tool-approval-run svg,
+.tool-approval-decline svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-approval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Long argument lists scroll: the card is a prompt, not a page. */
+  max-height: 200px;
+  overflow: auto;
+}
+
+.tool-approval-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background-color: var(--input-bg);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.tool-approval-name {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.tool-approval-args {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------- side windows */
+
+/* The settings window's own chrome and body. */
+.settings-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: var(--titlebar);
+  padding: 0 16px;
+  background-color: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.settings-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* A row: the sections down the left, the page they open on the right. Each
+   column takes its own scroll, so moving between tabs never moves the tabs. */
+.settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The window's own sidebar. The tabs are its rows; the log window's button
+   keeps its foot, the way the app's sidebar keeps Settings. */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 168px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background-color: var(--sidebar);
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.settings-tab.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.settings-tab-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.settings-nav-spacer {
+  flex: 1;
+}
+
+/* The page the open tab draws, and the Save that commits it. */
+.settings-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+/* Before the settings file has been read there is no form to draw, only the
+   two things the window can still offer. */
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-saved {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* A page's fields, laid out in the pane itself rather than boxed inside it: the
+   pane's padding is the frame, and the same gap runs inside the page as between
+   the page and the Save under it. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.settings input:focus {
+  border-color: var(--text-muted);
+}
+
+/* The system prompt is prose, so it takes a textarea: the fields' own shape,
+   taller, and free to grow with what is written in it. */
+.settings textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.settings textarea:focus {
+  border-color: var(--text-muted);
+}
+
+/* The models are a list rather than a field: a row each, in the picker's order,
+   with the first as what a new chat starts from. */
+.settings-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-model input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-model-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-model-remove:hover:not(:disabled) {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* The list cannot be emptied, so the last row keeps its button and says why. */
+.settings-model-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings-model-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-model-add {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-model-add:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.settings-model-add svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The variable a prompt may hold, worn the way a shortcut is: a token of its
+   own inside the sentence. */
+.settings-note code {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* The panel's one filled button. Scoped to the actions so the list's own
+   buttons — add and remove — are not painted like it. */
+.settings-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* The way to the log window, at the foot of the sections: a row of the same
+   sidebar, since it opens a window rather than writing anything. */
+.settings-open-logs {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-open-logs:hover {
+  background-color: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+.logs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The log window is the log: the panel takes it whole rather than sitting in a
+   capped card the way it did inside the settings window. */
+.logs-body {
+  overflow: hidden;
+}
+
+.logs-body .logs {
+  flex: 1;
+  max-height: none;
+}
+
+.logs-empty {
+  color: var(--text-muted);
+}
+
+.log-line {
+  display: flex;
+  gap: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.log-time {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.log-level {
+  flex: none;
+  width: 42px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.log-line.info .log-level {
+  color: var(--text-secondary);
+}
+
+.log-line.warn .log-level {
+  color: #b54708;
+}
+
+.log-line.error .log-level {
+  color: #d92d20;
+}
+
+.log-message {
+  flex: 1;
+}
+
+/* -------------------------------------------------------------- dark scheme */
+
+/* The design defines a single light theme; these are the same tokens inverted
+   for the OS dark scheme the app already honoured. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a18;
+    --sidebar: #141412;
+    --sidebar-hover: #1b1b18;
+    --sidebar-active: #24241f;
+    --border: #2e2e29;
+    --text-primary: #f2f2ee;
+    --text-secondary: #a8a8a0;
+    --text-muted: #6e6e68;
+    --accent: #f2f2ee;
+    --accent-contrast: #141412;
+    --input-bg: #232320;
+    --rule: #4a4a44;
+    --danger: #ff8a80;
+    --danger-bg: #3a1d1d;
+    --danger-border: #6b2b2b;
+    --reasoning: #6f9dff;
+    --reasoning-bg: #1d2b4a;
+    --reasoning-divider: #34507f;
+  }
+
+  .log-line.warn .log-level {
+    color: #fdba74;
+  }
+
+  .log-line.error .log-level {
+    color: #ff8a80;
+  }
+}
+
+/* ------------------------------------------------------------ mcp settings */
+
+/* The MCP page is two panes, not one form: the servers down the left, the one
+   that is open on the right. It takes the whole page, so each column scrolls
+   on its own and neither can push the other's Save off the bottom. */
+.mcp {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+
+/* The list of servers: a row each, the way the window's own sidebar lists its
+   sections, with New server kept at its head. */
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  /* Wide enough for the question a row asks before it is removed — the same
+     one the history's rows ask, in the same words. */
+  width: 240px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.mcp-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mcp-new:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.mcp-new svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.mcp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.mcp-row:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.mcp-row.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* The name is the button that opens the server, and it is the whole row: the
+   click target stretches over the row — under the actions included — so a click
+   anywhere on the pill opens it, the way a chat row's does. */
+.mcp-row-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+button.mcp-row-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* A server that is switched off is still listed, and says so in passing. */
+.mcp-row-off {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* The open server: its fields, then its report and its own actions. The gaps
+   are the form's own, one step tighter: a server is a handful of fields, and the
+   whole of it — with its actions at the foot — is meant to fit without the
+   column scrolling under the pointer. */
+.mcp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.mcp-detail .settings {
+  gap: 12px;
+}
+
+/* Two fields on one line, where they are both short: a name and the id it is
+   named by. It keeps a server's whole form inside the column. */
+.settings-row {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-row > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* The type is chosen from a list rather than typed, so it wears the fields'
+   shape without their freedom. */
+.mcp-detail select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.mcp-detail select:focus {
+  border-color: var(--text-muted);
+}
+
+/* The switch: an empty square when it is off, and a filled square with a tick on
+   it when it is on. The box is the app's own rather than the platform's, because
+   the platform draws that one in its own colours while every other control here
+   is the app's — and it reads the same in both schemes, since the tick is the
+   page's colour and so is light on the dark fill and dark on the light one. The
+   input keeps the click, the keyboard and the accessibility tree; only its box
+   is replaced. */
+.mcp-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mcp-check input {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  opacity: 0;
+}
+
+.mcp-check-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--bg);
+}
+
+.mcp-check input:checked + .mcp-check-box {
+  border-color: var(--text-primary);
+  background-color: var(--text-primary);
+}
+
+.mcp-check input:focus-visible + .mcp-check-box {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mcp-check-box svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+/* Headers and environment are the same list: a name, a value, and a way to drop
+   the row, with the way to add one beside the label above them. */
+.mcp-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-kv-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-kv-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-kv-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mcp-kv-remove:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.mcp-kv-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The label and the way to add a row, on one line: a list of headers costs its
+   rows and not a row of its own. */
+.mcp-kv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mcp-kv-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mcp-kv-add:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.mcp-kv-add svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Test does not commit, whatever it finds: it is outlined so the filled Save is
+   the only button in the pane that looks like it writes. */
+.mcp-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mcp-secondary:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  background-color: var(--sidebar-hover);
+}
+
+.mcp-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mcp-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The one filled button in the pane: what writes `mcp.json`. */
+.mcp-actions .mcp-primary {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mcp-actions .mcp-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mcp-saved {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* What a verify or test answered: the server, the revision it agreed to, and
+   the tools it offers. */
+.mcp-report {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--input-bg);
+}
+
+.mcp-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mcp-report-name {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mcp-report-protocol {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mcp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mcp-tool-title {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+/* The name the model calls: the one thing here that is not prose. */
+.mcp-tool-name {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mcp-tool-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
