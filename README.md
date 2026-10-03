@@ -62,5 +62,11 @@ Defaults point at OpenRouter: `provider: openrouter`, a list of one model, `deep
 ## Build a release bundle
 
 ```sh
-npm run tauri build
+APPLE_SIGNING_IDENTITY="-" npm run tauri build -- --target aarch64-apple-darwin
 ```
+
+The signing identity is not optional: without it the bundle carries only the
+linker's ad-hoc signature and macOS reports it as damaged rather than as an
+app from an unidentified developer. [`skills/RELEASE.md`](skills/RELEASE.md)
+has the whole release — the version bump, the secret check, the artifact
+verification, and the published dmg.
