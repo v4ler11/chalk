@@ -103,6 +103,18 @@ pub struct Message {
     /// Structured reasoning blocks; replay verbatim for multi-turn tool use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_details: Option<Vec<ReasoningDetail>>,
+
+    /// When the window sent this prompt, in epoch milliseconds.
+    ///
+    /// The window's own field rather than the API's: it is what the header on a
+    /// user message is written from on the way out — see `lib.rs`, which stamps
+    /// every prompt with the time it was sent — and it is never sent itself,
+    /// since a request carries the header instead. It rides in the transcript,
+    /// though, because the header has to be the same bytes on every later
+    /// request, and the only way to write it the same is to remember when it was
+    /// written the first time.
+    #[serde(rename = "sentAt", default, skip_serializing)]
+    pub sent_at: Option<i64>,
 }
 
 impl Message {
@@ -124,6 +136,7 @@ impl Message {
             reasoning: None,
             reasoning_content: None,
             reasoning_details: None,
+            sent_at: None,
         }
     }
 }
@@ -140,11 +153,62 @@ pub enum Content {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Part {
-    Text { text: String },
+    Text {
+        text: String,
+        /// The breakpoint that ends the prefix a gateway may cache here, where a
+        /// request puts one. Absent everywhere else, and it is the last block of
+        /// a request that carries one — see `lib.rs`, which marks it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+    },
     ImageUrl { image_url: ImageUrl },
     InputAudio { input_audio: InputAudio },
     File { file: FileData },
     Refusal { refusal: String },
+}
+
+/// A cache breakpoint on a content block: `{"type": "ephemeral"}`, which is the
+/// only kind the gateways take.
+///
+/// It is what tells a provider where the reusable part of a request ends. Left
+/// to itself a provider decides, and some — Gemini and Anthropic through
+/// OpenRouter among them — decide that nothing is reusable at all.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct CacheControl {
+    #[serde(rename = "type")]
+    pub kind: String,
+}
+
+impl CacheControl {
+    /// The one kind there is.
+    pub fn ephemeral() -> Self {
+        CacheControl { kind: "ephemeral".into() }
+    }
+}
+
+impl Part {
+    /// A block of text, with no breakpoint on it.
+    ///
+    /// The plain constructor, so a block's two fields are not written out at
+    /// every site that has nothing to say about caching.
+    pub fn text(text: impl Into<String>) -> Self {
+        Part::Text {
+            text: text.into(),
+            cache_control: None,
+        }
+    }
+
+    /// Whether this is a block of text — the only kind a breakpoint is put on.
+    pub fn is_text(&self) -> bool {
+        matches!(self, Part::Text { .. })
+    }
+
+    /// Puts a breakpoint on this block, if it is a block of text.
+    pub fn cached(&mut self) {
+        if let Part::Text { cache_control, .. } = self {
+            *cache_control = Some(CacheControl::ephemeral());
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

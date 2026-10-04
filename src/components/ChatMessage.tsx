@@ -57,11 +57,16 @@ async function copyText(text: string) {
 
 /**
  * What one answer used, as the provider reported it: the tokens altogether, split
- * into what was sent and what came back, and the price when the gateway names
- * one. Only the counts it did report are read as zero, so a provider that omits
- * a field is not made to look like a provider that charged nothing.
+ * into what was sent and what came back, how much of the prompt the provider
+ * already had, and the price when the gateway names one. Only the counts it did
+ * report are read as zero, so a provider that omits a field is not made to look
+ * like a provider that charged nothing.
  */
 function consumption(usage: Usage): string {
+  // A response OpenRouter replayed from its own cache: nothing was billed, and
+  // every counter it reported is a zero, so the counts below would read "0
+  // tokens" and mean nothing by it.
+  if (usage.cache_status === "HIT") return "cached response · nothing billed";
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
   const total = usage.total_tokens ?? prompt + completion;
@@ -69,6 +74,14 @@ function consumption(usage: Usage): string {
     `${total.toLocaleString()} tokens`,
     `${prompt.toLocaleString()} in, ${completion.toLocaleString()} out`,
   ];
+  // The prompt cache's hit rate: how much of what was sent the provider already
+  // held, which is what is not paid for again. Reported only where the gateway
+  // says — a provider whose model has no such cache leaves the count out rather
+  // than reporting nothing cached.
+  const cached = usage.prompt_tokens_details?.cached_tokens;
+  if (cached != null && prompt > 0) {
+    parts.push(`${Math.round((cached / prompt) * 100)}% cached`);
+  }
   if (usage.cost != null) parts.push(price(usage.cost));
   return parts.join(" · ");
 }

@@ -7,8 +7,14 @@
  */
 
 export interface AppConfig {
-  /** A provider's name, or the endpoint itself — kept as written in the file. */
+  /** `openrouter`, or `custom` — the two the settings' selector offers. */
   provider: string;
+  /**
+   * Where a custom provider is: the base URL of an OpenAI-compatible API, with
+   * `/chat/completions` hung off it. Not read while the provider is OpenRouter,
+   * whose endpoint the backend knows.
+   */
+  endpoint: string;
   apiKey: string;
   /**
    * The models to choose between, in the order the picker shows them. The first
@@ -151,6 +157,13 @@ export interface Usage {
   cost?: number;
   /** True when the caller's own provider credentials were used. */
   is_byok?: boolean;
+  /**
+   * The gateway's own word on whether it answered from its cache: `HIT`, when
+   * OpenRouter replayed an identical earlier request — free, and with every
+   * count above reported as zero — or `MISS`, when the request went on to the
+   * model. Absent from a gateway that has no such verdict.
+   */
+  cache_status?: string;
   cost_details?: {
     upstream_inference_cost?: number;
     upstream_inference_prompt_cost?: number;
@@ -163,6 +176,16 @@ export interface Usage {
  * The timing fields are display-only; the backend ignores unknown keys.
  */
 export interface UiMessage extends ChatMessage {
+  /**
+   * When this prompt was sent, in epoch milliseconds.
+   *
+   * The window's own field, and the one the request's header is written from:
+   * the backend heads every user message with the time it was sent and how long
+   * after the previous one, resolved from this. It is kept with the message so
+   * that header is the same bytes on every later request — the prefix a
+   * provider's prompt cache has to find to be able to reuse any of it.
+   */
+  sentAt?: number;
   /** Wall-clock ms from sending the request to the model's first token. */
   waitMs?: number;
   /** Wall-clock ms the model spent thinking: from that first token to the answer. */
