@@ -103,7 +103,14 @@ export function toolsFor(state: LazyState, tools: McpTool[]): McpTool[] {
   const here = new Set(offeredServers(servers, chosen));
   const open = new Set(loaded);
   const lazy = new Set(servers.filter((server) => server.lazy).map((server) => server.id));
-  const sent = tools.filter((tool) => here.has(tool.server) && (!lazy.has(tool.server) || open.has(tool.server)));
+  // A tool with no server on it is the app's own — what manages the app rather
+  // than a server — and it is in every request: not a chat's to choose, and not
+  // a server's to be reached for.
+  const sent = tools.filter(
+    (tool) =>
+      (here.has(tool.server) || tool.server === "") &&
+      (!lazy.has(tool.server) || open.has(tool.server)),
+  );
   return lazyHere(state).length === 0 ? sent : [...sent, LOAD_TOOL];
 }
 

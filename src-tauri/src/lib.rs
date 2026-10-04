@@ -1,4 +1,5 @@
 pub mod logging;
+pub mod manage;
 pub mod mcp;
 pub mod settings;
 pub mod store;
@@ -162,10 +163,14 @@ fn get_config(state: State<'_, AppState>) -> AppConfig {
     state.config.lock().clone()
 }
 
-#[tauri::command]
-fn save_config(app: tauri::AppHandle, state: State<'_, AppState>, config: AppConfig) -> Result<AppConfig, String> {
+/// Writes the settings out and lets the rest of the app know.
+///
+/// One path for both the settings window's Save and the app's own tools: the
+/// file, the copy the commands read, and the other windows all move together, so
+/// a tool that adds a model is a save like any other.
+fn apply_config(app: &tauri::AppHandle, state: &AppState, config: AppConfig) -> Result<AppConfig, String> {
     if let Err(e) = persist_config(&config) {
-        log(&app, "error", format!("failed to save settings: {e}"));
+        log(app, "error", format!("failed to save settings: {e}"));
         return Err(e);
     }
     *state.config.lock() = config.clone();
@@ -173,16 +178,53 @@ fn save_config(app: tauri::AppHandle, state: State<'_, AppState>, config: AppCon
     // the visible consequence.
     let _ = app.emit("config-changed", ());
     log(
-        &app,
+        app,
         "info",
         format!(
             "settings saved; models=[{}] provider={} endpoint={}",
             config.models.join(", "),
             config.provider,
-            settings::endpoint(&config.provider, &config.endpoint),
+            settings::endpoint(&config.provider, &config.endpoint)
         ),
     );
     Ok(config)
+}
+
+#[tauri::command]
+fn save_config(app: tauri::AppHandle, state: State<'_, AppState>, config: AppConfig) -> Result<AppConfig, String> {
+    apply_config(&app, &state, config)
+}
+
+/// Writes the servers out, lets go of the connections they were declared from,
+/// and tells the window the tools have changed.
+///
+/// As with the settings, one path for the MCP page's Save and the app's own
+/// tools: a server a tool declares is reachable without a restart, because the
+/// connection cache and the window are told about it exactly as they are told
+/// about one the user typed in.
+fn apply_servers(app: &tauri::AppHandle, state: &AppState, servers: Vec<mcp::Server>) -> Result<Vec<mcp::Server>, String> {
+    let path = mcp::path()?;
+    mcp::write_to(&path, &servers).map_err(|e| {
+        log(app, "error", format!("failed to save the servers: {e}"));
+        e
+    })?;
+    // A connection is made from a declaration. One whose declaration has changed
+    // is no longer the server the user asked for, so it is let go of here and
+    // opened again — from what was just written — when it is next used.
+    state.mcp.forget(&servers);
+    // The chat window re-reads the tools: what the servers offer is what every
+    // request after this one is sent with.
+    let _ = app.emit("servers-changed", ());
+    log(
+        app,
+        "info",
+        format!(
+            "servers saved; {} declared, {} enabled",
+            servers.len(),
+            servers.iter().filter(|server| server.enabled).count()
+        ),
+    );
+    Ok(servers)
 }
 
 /// Shows and focuses one of the app's windows.
@@ -607,28 +649,7 @@ fn mcp_save_servers(
     state: State<'_, AppState>,
     servers: Vec<mcp::Server>,
 ) -> Result<Vec<mcp::Server>, String> {
-    let path = mcp::path()?;
-    mcp::write_to(&path, &servers).map_err(|e| {
-        log(&app, "error", format!("failed to save the servers: {e}"));
-        e
-    })?;
-    // A connection is made from a declaration. One whose declaration has changed
-    // is no longer the server the user asked for, so it is let go of here and
-    // opened again — from what was just written — when it is next used.
-    state.mcp.forget(&servers);
-    // The chat window re-reads the tools: what the servers offer is what every
-    // request after this one is sent with.
-    let _ = app.emit("servers-changed", ());
-    log(
-        &app,
-        "info",
-        format!(
-            "servers saved; {} declared, {} enabled",
-            servers.len(),
-            servers.iter().filter(|server| server.enabled).count()
-        ),
-    );
-    Ok(servers)
+    apply_servers(&app, &state, servers)
 }
 
 /// Connects to one server as the settings window has it, and reports what it
@@ -678,8 +699,25 @@ async fn mcp_tools(
 /// Calls one tool, by the name the request offered it under. `args` is the
 /// arguments as the JSON text the model sent.
 #[tauri::command]
-async fn mcp_call(state: State<'_, AppState>, name: String, args: Option<String>) -> Result<mcp::Call, String> {
+async fn mcp_call(app: tauri::AppHandle, state: State<'_, AppState>, name: String, args: Option<String>) -> Result<mcp::Call, String> {
+    // The app's own tools are answered here rather than by a server: they are
+    // not a server's, and they manage this app — its settings, its servers —
+    // against the very files the settings window writes.
+    if manage::owns(&name) {
+        return manage::call(&app, &state, &name, args.as_deref()).await;
+    }
     state.mcp.call(&name, args).await
+}
+
+/// The app's own tools, as the window offers them.
+///
+/// They are in every request there is rather than a chat's choice, so the window
+/// asks for them once: the schemas and the answers both live in `manage`, which
+/// is what keeps a tool the model is offered and the code that runs it from
+/// drifting apart.
+#[tauri::command]
+fn manage_tools() -> Vec<mcp::ToolOffer> {
+    manage::tools()
 }
 
 /// The body of one completion: the chat's model and transcript, streamed, with
@@ -1005,7 +1043,8 @@ pub fn run() {
             mcp_save_servers,
             mcp_test,
             mcp_tools,
-            mcp_call
+            mcp_call,
+            manage_tools
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
