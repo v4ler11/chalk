@@ -57,6 +57,15 @@ export const startChat = (
 ) => invoke<void>("chat", { messages, model, reasoning, tools, lazy, onEvent });
 export const stopStream = () => invoke<void>("stop_stream");
 
+/**
+ * The transcript as the request would carry it: the system prompt resolved and
+ * put in front of it, and the lazily imported servers named under it. It is the
+ * backend's own assembly of the request, and the only place the JSON view gets
+ * it — the window's transcript is not what the model is sent.
+ */
+export const requestPreview = (messages: UiMessage[], lazy: LazyServer[]) =>
+  invoke<UiMessage[]>("request_preview", { messages, lazy });
+
 /** The model context protocol servers, as `mcp.json` holds them. */
 export const mcpServers = () => invoke<McpServer[]>("mcp_servers");
 /** Writes the servers back to `mcp.json`, and answers with what was written. */
@@ -76,6 +85,5 @@ export const mcpTools = (refresh = false) => invoke<McpTools>("mcp_tools", { ref
 export const mcpCall = (name: string, args: string) =>
   invoke<McpCallResult>("mcp_call", { name, args });
 
-export const openSettings = () => invoke<void>("open_settings");
 export const openLogs = () => invoke<void>("open_logs");
 export const getLogs = () => invoke<LogEntry[]>("get_logs");

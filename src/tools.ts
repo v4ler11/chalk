@@ -1,3 +1,40 @@
+import type { McpTool } from "./types";
+
+/**
+ * One tool as the endpoint is sent it: a function, its name, the description it
+ * has — an empty one is no description at all rather than an empty string — and
+ * the JSON Schema of its arguments. The shape mirrors the backend's own
+ * `ToolOffer::as_tool`, since that is what these bytes are counted against.
+ */
+function asTool(tool: McpTool) {
+  return {
+    type: "function",
+    function: {
+      name: tool.name,
+      ...(tool.description === "" ? {} : { description: tool.description }),
+      parameters: tool.parameters,
+    },
+  };
+}
+
+/**
+ * What a set of tools costs a request, in bytes: the `tools` array as compact
+ * UTF-8 JSON, over the shape the endpoint receives. The backend counts a
+ * server's price the same way, so the two agree.
+ */
+export function toolBytes(tools: McpTool[]): number {
+  return new TextEncoder().encode(JSON.stringify(tools.map(asTool))).length;
+}
+
+/**
+ * A byte count as tokens: a token is about a quarter of the JSON they are sent
+ * as, and anything worth thousands is rounded to one decimal — `4.3k`, `145`.
+ */
+export function tokens(bytes: number): string {
+  const count = Math.round(bytes / 4);
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : `${count}`;
+}
+
 /**
  * Tool names and arguments, as the transcript shows them.
  *

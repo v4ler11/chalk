@@ -23,18 +23,6 @@
         "transparent": true
       },
       {
-        "label": "settings",
-        "title": "Settings",
-        "url": "index.html?view=settings",
-        "width": 952,
-        "height": 640,
-        "minWidth": 420,
-        "minHeight": 360,
-        "decorations": false,
-        "transparent": true,
-        "visible": false
-      },
-      {
         "label": "logs",
         "title": "Logs",
         "url": "index.html?view=logs",

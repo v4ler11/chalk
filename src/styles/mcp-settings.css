@@ -1,0 +1,414 @@
+/* ------------------------------------------------------------ mcp settings */
+
+/* The MCP page is two panes, not one form: the servers down the left, the one
+   that is open on the right. It takes the whole page, so each column scrolls
+   on its own and neither can push the other's Save off the bottom. */
+.mcp {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+
+/* The list of servers: a row each, the way the window's own sidebar lists its
+   sections, with New server kept at its head. */
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  /* Wide enough for the question a row asks before it is removed — the same
+     one the history's rows ask, in the same words. */
+  width: 240px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.mcp-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mcp-new:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.mcp-new svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.mcp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.mcp-row:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.mcp-row.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* The name is the button that opens the server, and it is the whole row: the
+   click target stretches over the row — under the actions included — so a click
+   anywhere on the pill opens it, the way a chat row's does. */
+.mcp-row-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+button.mcp-row-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* A server that is switched off is still listed, and says so in passing. */
+.mcp-row-off {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* The open server: its fields, then its report and its own actions. The gaps
+   are the form's own, one step tighter: a server is a handful of fields, and the
+   whole of it — with its actions at the foot — is meant to fit without the
+   column scrolling under the pointer. */
+.mcp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.mcp-detail .settings {
+  gap: 12px;
+}
+
+/* Two fields on one line, where they are both short: a name and the id it is
+   named by. It keeps a server's whole form inside the column. */
+.settings-row {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-row > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* The type is chosen from a list rather than typed, so it wears the fields'
+   shape without their freedom. */
+.mcp-detail select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.mcp-detail select:focus {
+  border-color: var(--text-muted);
+}
+
+/* The switch: an empty square when it is off, and a filled square with a tick on
+   it when it is on. The box is the app's own rather than the platform's, because
+   the platform draws that one in its own colours while every other control here
+   is the app's — and it reads the same in both schemes, since the tick is the
+   page's colour and so is light on the dark fill and dark on the light one. The
+   input keeps the click, the keyboard and the accessibility tree; only its box
+   is replaced. */
+.mcp-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mcp-check input {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  opacity: 0;
+}
+
+.mcp-check-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--bg);
+}
+
+.mcp-check input:checked + .mcp-check-box {
+  border-color: var(--text-primary);
+  background-color: var(--text-primary);
+}
+
+.mcp-check input:focus-visible + .mcp-check-box {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mcp-check-box svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+/* Headers and environment are the same list: a name, a value, and a way to drop
+   the row, with the way to add one beside the label above them. */
+.mcp-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-kv-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-kv-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-kv-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.mcp-kv-remove:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.mcp-kv-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The label and the way to add a row, on one line: a list of headers costs its
+   rows and not a row of its own. */
+.mcp-kv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mcp-kv-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mcp-kv-add:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.mcp-kv-add svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Test does not commit, whatever it finds: it is outlined so the filled Save is
+   the only button in the pane that looks like it writes. */
+.mcp-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mcp-secondary:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  background-color: var(--sidebar-hover);
+}
+
+.mcp-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mcp-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The one filled button in the pane: what writes `mcp.json`. */
+.mcp-actions .mcp-primary {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mcp-actions .mcp-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mcp-saved {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* What a verify or test answered: the server, the revision it agreed to, and
+   the tools it offers. */
+.mcp-report {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--input-bg);
+}
+
+.mcp-report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mcp-report-name {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mcp-report-protocol {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mcp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mcp-tool-title {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+/* The name the model calls: the one thing here that is not prose. */
+.mcp-tool-name {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mcp-tool-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}

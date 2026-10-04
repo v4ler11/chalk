@@ -1,0 +1,923 @@
+/* ---------------------------------------------------------------- json view */
+
+/* The bar a taken-over pane draws under the chat panel's own nav: what the pane
+   is on the left, the way out on the right. Its rule is what separates it from
+   the sections and the pane below. */
+.mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  min-height: 42px;
+  padding: 5px 24px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg);
+  user-select: none;
+}
+
+.mode-title {
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+/* The way out, named for the key that does the same: a light red outline and no
+   fill, so it says what it does without shouting it. */
+.json-esc {
+  padding: 4px 9px;
+  border: 1px solid var(--danger-border);
+  border-radius: 7px;
+  background-color: transparent;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+}
+
+.json-esc:hover {
+  border-color: var(--danger);
+}
+
+/* --------------------------------------------------------------------- main */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg);
+}
+
+/* The chat panel's nav: this strip drags the window wherever the window's
+   controls are not, it names the model in use, and its rule is what separates
+   the nav from the transcript below it. */
+.chat-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+  height: var(--titlebar);
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg);
+  user-select: none;
+}
+
+/* The nav's own menu: the three-dots at its right, holding the window's view
+   switches. It is positioned so the menu below it hangs off its own edge. */
+.nav-menu {
+  position: relative;
+}
+
+/* The plain JSON standing in the transcript's place: the pane holds the scroll
+   and the Copy button, which keeps the bottom-right corner whatever is under
+   it. */
+.json-pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  /* `min-width: 0` is what lets the pane be narrower than a long `pre`: without
+     it, a flex item's automatic minimum is its content's width, so the pane
+     grows to the widest line, the scroller inside never scrolls, and the Copy
+     button rides off the right edge with it. */
+  min-width: 0;
+  min-height: 0;
+}
+
+.json-view {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: none;
+  /* The foot is deeper than the head so the Copy button never covers the last
+     line of a long document. */
+  padding: 24px 24px 72px;
+  scrollbar-gutter: stable both-edges;
+  background-color: var(--bg);
+}
+
+.json-pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  /* Pretty-printed JSON reads down the page; a long value — an image data URL,
+     a tool's arguments — runs off the side and is scrolled to, not wrapped
+     into something that no longer looks like JSON. */
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* The JSON's own colours: a key, a string, a number and the three literals each
+   take one, in both schemes. */
+.json-key {
+  color: var(--json-key);
+}
+
+.json-string {
+  color: var(--json-string);
+}
+
+.json-number {
+  color: var(--json-number);
+}
+
+.json-literal {
+  color: var(--json-literal);
+}
+
+/* Copy: the pane's bottom-right corner, and never anywhere else. */
+.json-copy {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background-color: var(--sidebar);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.json-copy:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.json-copy .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The tools, grouped by the server that offers them: a collapsible section each,
+   headed by the server's name and the truth about this chat's request — sent,
+   withheld until loaded, or not called. */
+.tool-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--sidebar);
+  overflow: hidden;
+}
+
+.tool-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style: none;
+  /* A header is a control, not text to copy: the JSON below it is what there is
+     to select. The prefix is for the webview, which still wants it. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tool-group-head *,
+.tool-group-chevron,
+.tool-group-name,
+.tool-group-meta {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tool-group-head::-webkit-details-marker {
+  display: none;
+}
+
+.tool-group-chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 120ms ease;
+  transform: rotate(-90deg);
+}
+
+.tool-group[open] .tool-group-chevron {
+  transform: rotate(0deg);
+}
+
+.tool-group-name {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.tool-group-meta {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* The group's own JSON, framed inside the section rather than around it. The
+   section clips its children to its rounded corners, so a line too wide for the
+   group scrolls within the group rather than running off it — the outer pane
+   never sees the overflow to scroll for it. */
+.tool-group .json-pre {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background-color: var(--bg);
+  overflow-x: auto;
+  overscroll-behavior: none;
+}
+
+.json-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.messages-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.messages {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* The transcript is the only thing that scrolls, and a gesture past its end
+     dies here: nothing chains to the window, and the panel itself does not
+     rubber-band. */
+  overscroll-behavior: none;
+  padding: 32px 24px;
+  /* The centred column has to stay centred on the pane when the platform draws
+     a classic scrollbar, which takes width from this box alone. Reserving the
+     gutter at both edges keeps it symmetric — and with the overlay scrollbars
+     macOS draws by default the gutter is nothing, so this costs nothing. */
+  scrollbar-gutter: stable both-edges;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The space between messages is a margin rather than a gap, so that a turn's own
+   steps can close themselves up against their neighbours: a gap is the
+   container's and cannot be spent differently by one of the things in it. */
+.messages > * + * {
+  margin-top: 28px;
+}
+
+/* A message that ends in an offered row already ends in space: that row is the
+   gap under it, so what follows starts right after it. */
+.msg:has(.msg-actions) + * {
+  margin-top: 2px;
+}
+
+/* A round that only asked for tools, and a tool row whose call is not in the
+   transcript at all: steps inside a turn rather than messages of their own, so
+   they are held close to what surrounds them and a run of rounds reads as one
+   stretch of work instead of a stack of replies. */
+.msg.calls-only,
+.msg.tool,
+.msg.calls-only + .msg,
+.msg.tool + .msg {
+  margin-top: 0;
+}
+
+/* What a turn's calls are followed by — the message that answers for them — is
+   prose rather than another row, so it keeps a little more of the gap: someone
+   reading down the calls should not find the answer's own line inside them. */
+.msg.calls-only + .msg:has(.thinking),
+.msg.tool + .msg:has(.thinking) {
+  margin-top: 10px;
+}
+
+/* Centred on the pane and at the foot of the transcript, so it lands over the
+   composer's own centre and directly above it. It is centred with `auto`
+   margins rather than a translate, so the hover lift and the entry animation
+   keep the shorthand to themselves. */
+.to-bottom {
+  position: absolute;
+  right: 0;
+  left: 0;
+  bottom: 12px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  /* It arrives with the scroll it announces, rather than blinking into place. */
+  animation: to-bottom-in 160ms ease-out;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.to-bottom svg {
+  display: block;
+}
+
+.to-bottom:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+
+.to-bottom:active {
+  transform: translateY(0);
+}
+
+@keyframes to-bottom-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.msg {
+  display: flex;
+  width: 100%;
+  max-width: var(--content-w);
+}
+
+.msg.user {
+  justify-content: flex-end;
+}
+
+.msg.assistant,
+.msg.developer,
+.msg.tool,
+.msg.function {
+  justify-content: flex-start;
+}
+
+/* A new prompt is set apart from the answer above it. */
+.msg.assistant + .msg.user {
+  margin-top: 28px;
+}
+
+.bubble {
+  min-width: 0;
+}
+
+/* A prompt is a fixed measure, right-aligned, ruled off by its own wavy line. */
+.msg.user .bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: var(--prompt);
+  color: var(--text-primary);
+  /* The prompt's actions hang from its right-hand edge. */
+  position: relative;
+}
+
+.plain-text {
+  width: 100%;
+  /* A step in from the wave below, so the two do not start on the same edge. */
+  padding-left: 5px;
+  font-family: var(--font-message);
+  font-size: 17px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The images a prompt was sent with, above the rule that ends it — square, and
+   wrapped onto as many rows as they need. */
+.msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding-left: 5px;
+}
+
+.msg-image {
+  display: block;
+  width: 104px;
+  height: 104px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+/* The design rules off every prompt with a wavy line. It is drawn as one path
+   spanning the whole rule, not a tile: a tiled stroke breaks at every join,
+   where the tile's edge clips the round cap. The humps vary in width and
+   amplitude, so the wave reads as drawn rather than repeated, and the mask is
+   stretched to the prompt's measure so the wave keeps pace with it. */
+.prompt-rule {
+  width: 100%;
+  height: 10px;
+  background-color: var(--rule);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 10px;
+  mask-size: 100% 10px;
+}
+
+/* What a prompt offers — copy it, ask again, rewrite it — hanging under its
+   right-hand edge, and the same row for an answer under its left.
+   
+   The row holds its own place in the flow rather than floating in the gap under
+   the message. A row taken out of the flow is drawn over whatever comes next,
+   which for a prompt is the first calls of the turn it asked for: invisible
+   buttons over rows that cannot then be pressed. Holding the space also keeps
+   the transcript the same height whether or not a pointer is in it — only the
+   drawing of the row changes, and only for a message that can act. */
+.msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 27px;
+  padding-top: 5px;
+  box-sizing: border-box;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+/* Hidden rather than absent: a row that is not offered takes no click and no
+   place in the tab order, and one that is, is drawn under the pointer. */
+.msg.acting .bubble:hover .msg-actions,
+.msg.acting .msg-actions:focus-within {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* An answer's row hangs from its left edge, under the start of the text it acts
+   on; a prompt's stays at the right, where the prompt itself sits. */
+.msg.assistant .msg-actions {
+  justify-content: flex-start;
+}
+
+.msg-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.msg-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.msg-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* A message action's tip hangs over the message rather than under the row, at
+   the row's own outer edge — the right for a prompt, whose row sits at the
+   right, and the left for an answer — so it grows inward and never past the
+   transcript's edge, where nobody could scroll to it. */
+.msg-actions .key-hint {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
+}
+
+.msg.user .msg-actions .key-hint {
+  left: auto;
+  right: 0;
+}
+
+/* An answer's tokens are read rather than clicked: the icon is what there is to
+   hover, so it takes no click of its own. */
+.msg-action.usage {
+  cursor: default;
+}
+
+/* An answer is the content of the transcript, not a card in it: it takes the
+   wide measure and shows nothing but its own text. */
+.msg.assistant .bubble {
+  width: 100%;
+  font-family: var(--font-message);
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  /* The answer's actions hang from its own edge, the way a prompt's do. */
+  position: relative;
+}
+
+.msg.error {
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+}
+
+.bubble p:first-child {
+  margin-top: 0;
+}
+
+/* The block the actions hang under keeps no bottom margin, so the row sits just
+   below the text and not a paragraph's gap below it. It is not `:last-child`:
+   what a message offers is positioned out of the flow but is still a child, so
+   the last block is named as the child before it — and as the plain last child
+   while an answer is still live, when there are no actions yet. */
+.bubble > :nth-last-child(2):has(+ .msg-actions),
+.bubble > :last-child:not(.msg-actions) {
+  margin-bottom: 0;
+}
+
+.msg h1,
+.msg h2,
+.msg h3,
+.msg h4,
+.msg h5,
+.msg h6 {
+  font-family: var(--font-display);
+  line-height: 1.3;
+  margin: 16px 0 6px;
+}
+
+.msg h1 {
+  font-size: 24px;
+}
+
+.msg h2 {
+  font-size: 20px;
+}
+
+.msg h3 {
+  font-size: 18px;
+}
+
+.msg h4,
+.msg h5,
+.msg h6 {
+  font-size: 17px;
+}
+
+.msg ul,
+.msg ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.msg li {
+  margin: 2px 0;
+}
+
+.msg a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.msg blockquote {
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.msg hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* Thinking is UI chrome: the sans face at UI sizes, and none of it is prose to
+   be selected — not the timings, not the chevron, not the reasoning. The summary
+   is the one line the block reads from: how long the model took to say anything,
+   and, where it reasoned at all, how long it spent thinking, with the chevron
+   that opens the reasoning under them. */
+.thinking {
+  margin-bottom: 8px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.thinking summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+/* The thinking time and its chevron, held together as the one thing they are.
+   They are not a line of their own: the two times read as one line, and this is
+   the second half of it. */
+.thinking-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.thinking .chevron {
+  flex: none;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  transition: transform 150ms ease;
+}
+
+/* The chevron points at the reasoning while the block is shut, and turns down
+   onto it when it opens. */
+.thinking[open] .chevron {
+  transform: rotate(90deg);
+}
+
+.thinking-body {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+
+.timer {
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  /* Chrome, not content: a drag across one should start no selection. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The tools a message called. A call and what it answered with are one fact, so
+   they are one row of the transcript rather than two: the row, and the card it
+   opens into.
+   
+   A list only in markup: it is indented like the message's own text rather than
+   like the bullets inside it, so the rows stand on the same edge the answer and
+   its timers do — which is what the second class in the selector is for, the
+   markdown lists inside a message having taken the first. */
+.msg .tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* Held close to the message above and to each other: the calls of a turn are
+     one stretch of work, not a stack of paragraphs. */
+  margin: 1px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The rows are items of a list in markup only: the markdown list's item spacing
+   is not theirs to wear. It is what kept them a paragraph apart — two pixels
+   above each row and two below, more than the row's own padding, which is what
+   the eye read as the space between one call and the next. */
+.msg .tool-calls li {
+  margin: 0;
+}
+
+/* The row: how long the server took, what was called, and the arguments as they
+   were sent — one line, cut off rather than wrapped, with the whole of it in the
+   card below. It is a record of an identifier being invoked, so it is set as
+   code. Under the pointer, or with the caret in it, the line takes the
+   transcript's own tint and its text comes up to the reading colour: it is then
+   plainly the thing to press. */
+.tool-call-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* The text sits on the message's own edge, and the tint under the pointer
+     bleeds a little past it on the left — the negative margin and the padding
+     are mirrors of each other. Only on the left: a row wider than the column it
+     stands in would give the transcript a sideways scroll of its own. */
+  width: calc(100% + 8px);
+  margin-left: -8px;
+  /* The padding is the tint's room and stays what it always was; what is taken
+     out is the leading — a 12px line set in a 19px one, which is where three
+     rows' worth of dead air a turn was hiding. Rows then sit one line apart,
+     which is what reading a record down should look like. */
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-call-row:hover,
+.tool-call-row:focus-visible {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+}
+
+/* The timer, in the app's one voice for durations, held at a width so the names
+   below it line up. */
+.tool-call-timer {
+  flex: none;
+  min-width: 44px;
+}
+
+.tool-call-id {
+  flex: none;
+  white-space: nowrap;
+}
+
+.tool-call-sep {
+  margin: 0 3px;
+  color: var(--text-muted);
+}
+
+.tool-call .tool-call-args {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The chevron onto the card: out of the way until the row is under the pointer
+   or has the caret, since an idle transcript is a record rather than a list of
+   controls — and turned down while the card is open, as a chevron onto
+   something always is. */
+.tool-call-chevron {
+  flex: none;
+  align-self: center;
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.tool-call-row:hover .tool-call-chevron,
+.tool-call-row:focus-visible .tool-call-chevron,
+.tool-call.open .tool-call-chevron {
+  opacity: 1;
+}
+
+.tool-call.open .tool-call-chevron {
+  transform: rotate(90deg);
+}
+
+/* What the row opens into: which server, which tool, with what arguments, and
+   what came back. The sections are divided by the hairline the app draws
+   everywhere else, so the two halves read as one card. */
+.tool-call-card {
+  margin: 4px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tool-call-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.tool-call-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+.tool-call-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tool-call-head .tool-call-tool {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.tool-call-section {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-call-section-name {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The JSON as it was sent and answered: wrapped rather than scrolled sideways,
+   a long string usually being the whole of what is being read. A tall result
+   scrolls inside the card rather than pushing the conversation off the screen. */
+.tool-call .tool-call-json {
+  margin: 8px 0 0;
+  padding: 0;
+  border-radius: 0;
+  max-height: 220px;
+  overflow: auto;
+  background-color: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg code {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  background-color: var(--input-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+
+.msg pre {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.msg pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Display math is centered and never wraps, so a formula wider than the bubble
+   scrolls inside its own box for the same reason a table does; its own margins
+   are dropped at the edges of the bubble, as a paragraph's are. */
+.bubble .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.bubble .katex-display:first-child {
+  margin-top: 0;
+}
+
+.bubble .katex-display:last-child {
+  margin-bottom: 0;
+}
+
+/* Tables scroll inside their own box, so a wide one cannot push the transcript
+   sideways; a narrow one still lays out as a table. */
+.msg table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.msg th,
+.msg td {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.msg th {
+  background-color: var(--input-bg);
+  font-weight: 600;
+}
+

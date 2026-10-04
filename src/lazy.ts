@@ -68,16 +68,29 @@ export interface LazyState {
 }
 
 /**
+ * The lazily imported servers this chat calls and can reach: the ones it has
+ * still to load, and the ones it has already loaded.
+ *
+ * The loader is offered while any of them is here — loaded or not — so a server
+ * this chat loaded stays callable by name for the rest of the thread, and the
+ * tool does not vanish the moment the last one is loaded. What the loader does
+ * with an already-loaded one is nothing: the load is one-way, and saying it is
+ * loaded is the whole of the answer.
+ */
+export function lazyHere({ servers, chosen, failed }: LazyState): McpServer[] {
+  const here = new Set(offeredServers(servers, chosen));
+  return servers.filter(
+    (server) => server.lazy && server.enabled && here.has(server.id) && !failed.includes(server.id),
+  );
+}
+
+/**
  * The lazy servers this chat has still to load: the ones the prompt lists and
  * the ones the loader is offered for.
  */
-export function waiting({ servers, chosen, loaded, failed }: LazyState): McpServer[] {
-  const here = new Set(offeredServers(servers, chosen));
-  const open = new Set(loaded);
-  return servers.filter(
-    (server) =>
-      server.lazy && server.enabled && here.has(server.id) && !open.has(server.id) && !failed.includes(server.id),
-  );
+export function waiting(state: LazyState): McpServer[] {
+  const open = new Set(state.loaded);
+  return lazyHere(state).filter((server) => !open.has(server.id));
 }
 
 /**
@@ -91,7 +104,7 @@ export function toolsFor(state: LazyState, tools: McpTool[]): McpTool[] {
   const open = new Set(loaded);
   const lazy = new Set(servers.filter((server) => server.lazy).map((server) => server.id));
   const sent = tools.filter((tool) => here.has(tool.server) && (!lazy.has(tool.server) || open.has(tool.server)));
-  return waiting(state).length === 0 ? sent : [...sent, LOAD_TOOL];
+  return lazyHere(state).length === 0 ? sent : [...sent, LOAD_TOOL];
 }
 
 /**
@@ -120,7 +133,9 @@ export function promptFor(state: LazyState, tools: McpTool[]): LazyServer[] {
  */
 export function loadable(state: LazyState, wanted: string): McpServer | null {
   const asked = name_less(wanted);
-  const list = waiting(state);
+  // Loaded or not: a server this chat already loaded is one the loader answers
+  // for, since answering nothing would read as a server that does not exist.
+  const list = lazyHere(state);
   return (
     list.find((server) => name_less(call(server)) === asked) ??
     list.find((server) => name_less(server.id) === asked) ??
@@ -132,4 +147,40 @@ export function loadable(state: LazyState, wanted: string): McpServer | null {
     load of the same server changes nothing. */
 export function withLoaded(loaded: string[], server: string): string[] {
   return loaded.includes(server) ? loaded : [...loaded, server];
+}
+
+/** One server's tools, as the JSON view's Tools tab reads them. */
+export interface ToolGroup {
+  /** The server's id, or `""` for the app's own tools. */
+  id: string;
+  /** What the group is headed with: the server's name, or the app's. */
+  name: string;
+  tools: McpTool[];
+}
+
+/**
+ * The tools a request carries, grouped by the server that offers them — the
+ * app's own loader first, since it belongs to no server.
+ *
+ * What is grouped is the request's own list, and nothing else: a lazily imported
+ * server that has not been loaded is not in the request, so it is not here
+ * either — listing it would show the window's pool under the request's name.
+ * What the model is told about it is the prompt's own addendum, which the
+ * History tab shows.
+ */
+export function groupTools(tools: McpTool[]): ToolGroup[] {
+  const byServer = new Map<string, McpTool[]>();
+  for (const tool of tools) {
+    const own = byServer.get(tool.server);
+    if (own) own.push(tool);
+    else byServer.set(tool.server, [tool]);
+  }
+
+  const groups: ToolGroup[] = [];
+  for (const [id, own] of byServer) {
+    groups.push({ id, name: own[0].serverName || (id === "" ? "Chalk" : id), tools: own });
+  }
+  // The loader belongs to the app, not to a server, so its group stands first.
+  groups.sort((a, b) => (a.id === "" ? -1 : b.id === "" ? 1 : 0));
+  return groups;
 }

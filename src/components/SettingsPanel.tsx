@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { FileText, Plug, Plus, Settings2, X } from "lucide-react";
 import type { AppConfig } from "../types";
 import { McpSettings } from "./McpSettings";
+import { SectionNav } from "./SectionNav";
 
 interface Props {
   config: AppConfig;
@@ -91,28 +92,21 @@ export function SettingsPanel({
 
   return (
     <>
-      <nav className="settings-nav" aria-label="Settings sections">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={`settings-tab${id === tab ? " active" : ""}`}
-            aria-current={id === tab ? "page" : undefined}
-            onClick={() => setTab(id)}
-          >
-            <Icon className="settings-tab-icon" />
-            <span>{label}</span>
-          </button>
-        ))}
-
-        {/* The log window is not a setting, so it does not take a tab: it keeps
-            the foot of the list, where the app's own sidebar keeps Settings. */}
-        <div className="settings-nav-spacer" />
-        {onOpenLogs && (
-          <button className="settings-open-logs" onClick={onOpenLogs}>
-            Logs
-          </button>
-        )}
-      </nav>
+      <SectionNav
+        label="Settings sections"
+        sections={[...TABS]}
+        active={tab}
+        onSelect={(id) => setTab(id as TabId)}
+        // The log window is not a setting, so it does not take a tab: it keeps
+        // the foot of the list, where the app's own sidebar keeps Settings.
+        footer={
+          onOpenLogs && (
+            <button className="settings-open-logs" onClick={onOpenLogs}>
+              Logs
+            </button>
+          )
+        }
+      />
 
       <div className="settings-main">
         {notice}
@@ -219,7 +213,7 @@ function CustomizationTab({
 }) {
   return (
     <div className="settings">
-      <label>
+      <label className="settings-prompt">
         <span>System prompt</span>
         <textarea
           value={config.systemPrompt}

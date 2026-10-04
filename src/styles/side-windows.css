@@ -1,0 +1,403 @@
+/* ---------------------------------------------- settings, and the log window */
+
+/* The settings' own body, and the log window's. */
+.settings-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: var(--titlebar);
+  padding: 0 16px;
+  background-color: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.settings-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* A row: the sections down the left, the page they open on the right. Each
+   column takes its own scroll, so moving between tabs never moves the tabs. */
+.settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The window's own sidebar. The tabs are its rows; the log window's button
+   keeps its foot, the way the app's sidebar keeps Settings. */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 168px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background-color: var(--sidebar);
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  background-color: var(--sidebar-hover);
+}
+
+.settings-tab.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.settings-tab-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.settings-nav-spacer {
+  flex: 1;
+}
+
+/* The page the open tab draws, and the Save that commits it. The pane does not
+   scroll: the page does, and the Save is the pane's own last line, so it holds
+   the bottom whatever the page is doing. */
+.settings-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* The form's page fills what the pane has left above the Save: the fields are
+   laid out in it, and scroll only when the pane is too short for them. The
+   MCP page is not this — it brings its own columns, each with its own scroll. */
+.settings-main > .settings {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+
+/* Before the settings file has been read there is no form to draw, only the
+   two things the window can still offer. */
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-saved {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* A page's fields, laid out in the pane itself rather than boxed inside it: the
+   pane's padding is the frame, and the same gap runs inside the page as between
+   the page and the Save under it. */
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.settings input:focus {
+  border-color: var(--text-muted);
+}
+
+/* The system prompt is prose, so it takes a textarea: the fields' own shape,
+   taller, and free to grow with what is written in it. */
+.settings textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.settings textarea:focus {
+  border-color: var(--text-muted);
+}
+
+/* The system prompt takes every line the page has left, so the whole of it is
+   read where it is written rather than through a box of its own. It is sized by
+   the page, so it has nothing to scroll and nothing to resize by hand. */
+.settings-prompt {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-prompt textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+}
+
+/* The models are a list rather than a field: a row each, in the picker's order,
+   with the first as what a new chat starts from. */
+.settings-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-model input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-model-remove {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.settings-model-remove:hover:not(:disabled) {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* The list cannot be emptied, so the last row keeps its button and says why. */
+.settings-model-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings-model-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-model-add {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-model-add:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.settings-model-add svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The variable a prompt may hold, worn the way a shortcut is: a token of its
+   own inside the sentence. */
+.settings-note code {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* The panel's one filled button. Scoped to the actions so the list's own
+   buttons — add and remove — are not painted like it. */
+.settings-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* The way to the log window, at the foot of the sections: a row of the same
+   sidebar, since it opens a window rather than writing anything. */
+.settings-open-logs {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-open-logs:hover {
+  background-color: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+.logs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background-color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The log window is the log: the panel takes it whole rather than sitting in a
+   capped card the way it did inside the settings window. */
+.logs-body {
+  overflow: hidden;
+}
+
+.logs-body .logs {
+  flex: 1;
+  max-height: none;
+}
+
+.logs-empty {
+  color: var(--text-muted);
+}
+
+.log-line {
+  display: flex;
+  gap: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.log-time {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.log-level {
+  flex: none;
+  width: 42px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.log-line.info .log-level {
+  color: var(--text-secondary);
+}
+
+.log-line.warn .log-level {
+  color: #b54708;
+}
+
+.log-line.error .log-level {
+  color: #d92d20;
+}
+
+.log-message {
+  flex: 1;
+}
+

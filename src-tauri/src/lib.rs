@@ -215,12 +215,6 @@ fn show_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Shows and focuses the settings window.
-#[tauri::command]
-fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
-    show_window(&app, "settings")
-}
-
 /// Shows and focuses the log window.
 #[tauri::command]
 fn open_logs(app: tauri::AppHandle) -> Result<(), String> {
@@ -365,6 +359,26 @@ fn with_system_prompt(prompt: &str, lazy: &[mcp::Lazy], messages: &mut Vec<Messa
     if !said.trim().is_empty() {
         messages.insert(0, Message::system(said));
     }
+}
+
+/// The transcript as the request will carry it: the configured system prompt
+/// resolved and put in front of it, and the lazily imported servers named under
+/// it — the very assembly `chat` does on its way out, run here for the window.
+///
+/// The JSON view reads this rather than rendering the transcript itself, because
+/// the window's copy is not the request: it holds the prompt as written, with
+/// `@{{…}}` unresolved and none of the lazy addendum, and it carries timings and
+/// usage the model is never sent. What the model reads is what this returns.
+#[tauri::command]
+fn request_preview(
+    state: State<'_, AppState>,
+    messages: Vec<Message>,
+    lazy: Option<Vec<mcp::Lazy>>,
+) -> Vec<Message> {
+    let config = state.config.lock().clone();
+    let mut messages = messages;
+    with_system_prompt(&config.system_prompt, &lazy.unwrap_or_default(), &mut messages);
+    messages
 }
 
 /// Starts one completion and returns immediately: the stream, its failures and
@@ -610,13 +624,25 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
         "{}/chat/completions",
         settings::endpoint(&config.provider).trim_end_matches('/')
     );
+    // The names, not only the count: whether a particular tool is being offered
+    // is the thing worth being able to check, and a count cannot say.
+    let offered = tools
+        .as_ref()
+        .map(|tools| {
+            tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_else(|| "none".to_owned());
     let post = completion(model, messages, reasoning, tools);
 
     log(
         &app,
         "info",
         format!(
-            "POST {url} (model={}, messages={}, reasoning={}, tools={})",
+            "POST {url} (model={}, messages={}, reasoning={}, tools=[{offered}])",
             post.model,
             post.messages.len(),
             // Read back off the body itself, so the line names what was sent.
@@ -624,7 +650,6 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
                 .as_ref()
                 .and_then(|config| config.effort.as_deref())
                 .unwrap_or("off"),
-            post.tools.as_ref().map_or(0, Vec::len),
         ),
     );
 
@@ -769,9 +794,9 @@ pub fn run() {
             get_config,
             save_config,
             get_logs,
-            open_settings,
             open_logs,
             chat,
+            request_preview,
             stop_stream,
             list_chats,
             load_chat,
