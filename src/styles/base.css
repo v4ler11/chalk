@@ -1,0 +1,90 @@
+:root {
+  /* Chalk colour tokens, taken from the design file's variables. */
+  --bg: #ffffff;
+  --sidebar: #f7f7f4;
+  --sidebar-hover: #fdfdfc;
+  --sidebar-active: #ebebe7;
+  --border: #e7e7e2;
+  --text-primary: #1c1c1a;
+  --text-secondary: #6e6e68;
+  --text-muted: #a2a29b;
+  --accent: #1c1c1a;
+  --accent-contrast: #ffffff;
+  --input-bg: #f4f4f1;
+  /* The wavy prompt rule and the error notice are not in the design's tokens. */
+  --rule: #c4c4bc;
+  --danger: #b00020;
+  --danger-bg: #fdecea;
+  --danger-border: #f1cbc5;
+  /* The reasoning level in force: the pill the composer's brain turns into.
+     Not one of the design file's tokens — the levels are the app's own. */
+  --reasoning: #2563eb;
+  --reasoning-bg: #e7eefc;
+  --reasoning-divider: #b9cdf5;
+  /* The JSON view's token colours: a key, a string, a number, and the three
+     literals. Chosen to read on either scheme's panel. */
+  --json-key: #0b62c4;
+  --json-string: #0a7f4b;
+  --json-number: #b45309;
+  --json-literal: #7c3aed;
+
+  --font-display: "Space Grotesk Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-body: "DM Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-message: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* The content measure: a share of the window, capped, shared by the composer
+     and the transcript so the two always agree. Then the fixed measure a prompt
+     is set to, and the sidebar width — which the title bar's rail matches so
+     their borders line up. */
+  --content-w: clamp(420px, 72vw, 1120px);
+  --prompt: 326px;
+  --sidebar-w: 246px;
+  /* The rail while the sidebar is shut — its own padding and its controls,
+     16 + 52 + 12 + 64 + 16 — so the chrome covers only what it needs of the
+     chat panel's corner. */
+  --rail-collapsed: 160px;
+  --titlebar: 48px;
+  /* How much the composer grows past its design size: nothing at the 820px
+     minimum window, 2px of extra type by 1600px. */
+  --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
+
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  /* The window is transparent so its corners are ours to round; .app paints. */
+  background-color: transparent;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: transparent;
+  /* macOS rubber-bands the whole window when a gesture outruns the content
+     under it. Nothing scrolls at this level — the panels say so themselves —
+     so the window must never take the gesture. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* The transparent window shows the desktop through the corners of this box. */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--bg);
+}
+

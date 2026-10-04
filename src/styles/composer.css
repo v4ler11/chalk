@@ -1,0 +1,544 @@
+/* ----------------------------------------------------------------- composer */
+
+/* The bar's horizontal padding is the transcript's, so both columns take the
+   same measure out of the pane and their edges meet at every width — not just
+   when the measure is capped rather than the pane. */
+.composer-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 6px 24px 8px;
+  /* The transcript reserves a scrollbar gutter at both edges; the bar reserves
+     the same, so the two keep one centre and one measure. */
+  overflow: hidden;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* The line that says the composer holds an earlier prompt rather than a new
+   one, with the way out of it on the far right. */
+.composer-editing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.composer-editing-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-editing-label svg {
+  width: 13px;
+  height: 13px;
+}
+
+.composer-editing-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.composer-editing-cancel:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.composer-editing-cancel svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The bar takes the window's measure, and its own parts grow a little with it:
+   the same ramp carries the type, the padding, the paperclip and the button, so
+   a wide window gets a composer in proportion rather than a small one adrift in
+   a wide bar. */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: var(--content-w);
+  padding: calc(8px + var(--composer-grow) * 1.5) calc(12px + var(--composer-grow) * 2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background-color: var(--input-bg);
+}
+
+/* The images attached to the draft: a row of squares above it, scrolled
+   sideways when there are more than fit. Each carries its way out at the
+   top-right, and a spinner over it while it is being prepared. */
+.composer-attachments {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior: none;
+}
+
+.attachment {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--sidebar);
+  overflow: hidden;
+}
+
+.attachment-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Still being prepared: the picture is dimmed under the spinner rather than
+   hidden, so the tile keeps the shape the image will have. */
+.attachment.processing .attachment-image {
+  opacity: 0.4;
+}
+
+.attachment-spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: attachment-spin 700ms linear infinite;
+}
+
+@keyframes attachment-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.attachment.error {
+  border-color: var(--danger);
+}
+
+.attachment-failed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(20, 20, 20, 0.62);
+  color: #fff;
+  cursor: pointer;
+}
+
+.attachment-remove:hover {
+  background-color: rgba(20, 20, 20, 0.85);
+}
+
+.attachment-remove svg {
+  width: 10px;
+  height: 10px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 22px;
+  max-height: 140px;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: calc(15px + var(--composer-grow));
+  line-height: 1.5;
+}
+
+.composer textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.composer textarea:disabled {
+  opacity: 0.6;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.composer-tools svg {
+  width: calc(13px + var(--composer-grow));
+  height: calc(13px + var(--composer-grow));
+}
+
+/* The composer's tips are the rail's, drawn over each control rather than under
+   it: this row is the last of the window, and a tip below it would be the one
+   nobody could read. */
+.composer-tools .key-hint {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+/* The paperclip: it opens the file panel for images, drawn at the weight the
+   static mark always had. */
+.composer-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.composer-tool:hover {
+  color: var(--text-primary);
+}
+
+/* The reasoning control, beside the paperclip: the brain alone — in the tools'
+   own grey — while nothing is being asked for, and a pill while a level is, the
+   brain on its left and the level's letter and chevron on its right. The two
+   halves are two buttons: one gives the level up, the other opens the levels. */
+.reasoning-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.reasoning-pill.on {
+  padding: 2px 5px 2px 4px;
+  background-color: var(--reasoning-bg);
+  color: var(--reasoning);
+}
+
+.reasoning-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Off is the paperclip's own grey, brightening under the pointer. A level in
+   force keeps the pill's blue — the pill is a state, not a hint — and tints only
+   the half under the pointer, the two halves being the two buttons. */
+.reasoning-pill:not(.on) .reasoning-btn:hover {
+  color: var(--text-primary);
+}
+
+.reasoning-pill.on .reasoning-btn:hover {
+  background-color: var(--reasoning-divider);
+}
+
+.reasoning-pill.on .reasoning-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.reasoning-pill.on .reasoning-btn:last-child {
+  padding-left: 6px;
+  border-left: 1px solid var(--reasoning-divider);
+  border-radius: 0 999px 999px 0;
+}
+
+.reasoning-level {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.reasoning-btn .reasoning-chevron {
+  width: 11px;
+  height: 11px;
+}
+
+/* The tools control, beside the reasoning control: the hammer alone while this
+   chat calls no server, and a pill of two while it calls any — the hammer that
+   opens the servers, and the count of what they offer, which is also the button
+   that gives them all up. The two controls are the same shape and wear the same
+   colour: both say what the chat is asking with, one level and one count. */
+.tools-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 3px;
+  border-radius: 999px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tools-pill.on {
+  padding: 2px 5px 2px 4px;
+  background-color: var(--reasoning-bg);
+  color: var(--reasoning);
+}
+
+.tools-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.tools-pill:not(.on) .tools-btn {
+  color: var(--text-muted);
+}
+
+.tools-pill:not(.on) .tools-btn:hover {
+  color: var(--text-primary);
+}
+
+.tools-pill.on .tools-btn:hover {
+  background-color: var(--reasoning-divider);
+}
+
+/* Only while both halves are there: with nothing called the pill is the hammer
+   alone, which no divider may cut in two. */
+.tools-pill.on .tools-btn:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.tools-pill.on .tools-btn:last-child {
+  padding-left: 6px;
+  border-left: 1px solid var(--reasoning-divider);
+  border-radius: 0 999px 999px 0;
+}
+
+/* How many servers the chat calls, worn where the reasoning pill wears its
+   level's letter, and the chevron onto the list that switches them. */
+.tools-count {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tools-chevron {
+  width: 11px;
+  height: 11px;
+}
+
+.composer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* What the chat has cost, beside the send button: every answer's price, summed,
+   in the money format of two decimals. Tabular figures keep it from twitching as
+   the total grows, and it is chrome rather than content — a drag across it should
+   start no selection. */
+.composer-cost {
+  font-size: calc(11px + var(--composer-grow));
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The button holds its place whether or not there is a draft — an empty one
+   sends nothing — and the animation marks the swap between Send and Stop. */
+@keyframes send-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(26px + var(--composer-grow) * 2);
+  height: calc(26px + var(--composer-grow) * 2);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  animation: send-in 120ms ease-out;
+}
+
+.send-btn svg {
+  width: calc(13px + var(--composer-grow));
+  height: calc(13px + var(--composer-grow));
+}
+
+/* Held back while an image is still being prepared: it says so, and takes no
+   click, so a request cannot go out missing its picture. */
+.send-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------ tool approval */
+
+/* The calls a turn is waiting on, above the composer. It spans the same measure
+   the transcript and the composer do — the two share a centre — so it reads as
+   part of the conversation rather than as another bar of chrome. */
+.tool-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--content-w);
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--sidebar);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.tool-approval-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tool-approval-question {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.tool-approval-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.tool-approval-run,
+.tool-approval-decline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+/* The one that does something is the one that is filled in. */
+.tool-approval-run {
+  background-color: var(--text-primary);
+  color: var(--bg);
+  border: 1px solid var(--text-primary);
+}
+
+.tool-approval-decline {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.tool-approval-decline:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.tool-approval-run svg,
+.tool-approval-decline svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tool-approval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Long argument lists scroll: the card is a prompt, not a page. */
+  max-height: 200px;
+  overflow: auto;
+}
+
+.tool-approval-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background-color: var(--input-bg);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.tool-approval-name {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.tool-approval-args {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+

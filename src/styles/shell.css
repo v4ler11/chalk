@@ -1,0 +1,443 @@
+/* --------------------------------------------------------------------- shell */
+
+/* The window is a row: the sidebar's own column on the left, and the chat panel
+   taking everything else. The column shuts to nothing, and the window's chrome
+   floats over the panel instead, so a shut sidebar leaves the panel the whole
+   window — which is the space the composer is centred in. */
+.shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.left {
+  flex: none;
+  width: var(--sidebar-w);
+  overflow: hidden;
+  transition: width 130ms ease;
+}
+
+.left:not(.open) {
+  width: 0;
+}
+
+/* Frameless window: this rail is the window's chrome, so it drags the window and
+   its traffic lights drive the real one. It is taken out of the row, so it costs
+   the chat panel no width; while the sidebar is open it sits over that sidebar's
+   head, and its right edge is the border the sidebar carries on below it. */
+.rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: var(--sidebar-w);
+  height: var(--titlebar);
+  padding: 0 16px;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+  /* Reserved, never toggled in width: the rail must not resize its own contents
+     when the sidebar opens or shuts, or the controls would jump by a pixel. */
+  border-bottom: 1px solid transparent;
+  transition:
+    width 130ms ease,
+    background-color 200ms ease,
+    border-right-color 200ms ease,
+    border-bottom-color 200ms ease;
+  user-select: none;
+}
+
+/* Shut, the rail is only as wide as its controls and wears the chat panel's own
+   colour, so it reads as the panel's corner rather than a column of its own —
+   and it draws the nav's rule across its own width, starting the line that
+   separates the nav from the transcript at the window's edge. */
+.shell:not(:has(.left.open)) .rail {
+  width: var(--rail-collapsed);
+  background-color: var(--bg);
+  border-right-color: transparent;
+  border-bottom-color: var(--border);
+}
+
+/* The chip names the model in use and leads to where it is chosen: no box
+   around it, just the name and a chevron. Its measure is generous enough that an
+   id like `deepseek/deepseek-v4.1-flash` is shown whole. */
+.model-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.model-chip:hover {
+  color: var(--text-primary);
+}
+
+.model-chip .chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.model-name {
+  /* Wide enough for the model ids in use, so the name is not cut off; past it,
+     the ellipsis is there so a very long id cannot crowd the nav. */
+  max-width: 360px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.light {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.light.close {
+  background-color: #ff5f57;
+}
+
+.light.min {
+  background-color: #febc2e;
+}
+
+.light.max {
+  background-color: #28c840;
+}
+
+.window-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.icon-btn:hover,
+.icon-btn.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}
+
+.icon-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* A button's name and its shortcut, under the button and under the pointer. It
+   is out of the flow so the rail is the same width whether or not it is drawn,
+   and it takes no clicks, so it never stands between the pointer and the button
+   it belongs to. */
+.hint {
+  position: relative;
+  display: flex;
+}
+
+.key-hint {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.hint:hover .key-hint,
+.hint:focus-within .key-hint {
+  opacity: 1;
+}
+
+/* The chip opens the list of models rather than the settings window: a chat's
+   model is the chat's own, so choosing one belongs beside the chat — and the
+   menu still leads to where the list itself is written. */
+.model-picker {
+  position: relative;
+}
+
+/* Anywhere else closes the menu, which is what a click outside one is for. */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+
+/* A menu of choices: the model list under the chip that opened it, and the
+   reasoning levels beside the composer's brain. Held at the window rather than
+   in the card, since the levels are placed from the control's own rect — the
+   composer's bar clips whatever would hang out of it. */
+.menu {
+  position: fixed;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg);
+}
+
+/* Hanging under the chip that opened it, at the nav's own right edge. */
+.menu.below {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+}
+
+.model-menu {
+  min-width: 260px;
+}
+
+.view-menu {
+  min-width: 168px;
+}
+
+.reasoning-menu {
+  min-width: 132px;
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-option.active {
+  color: var(--text-primary);
+}
+
+.menu-option:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.menu-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu-option-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.menu-option.empty {
+  color: var(--text-muted);
+}
+
+/* The servers this chat calls: a row each, its switch at the right. Nothing in
+   a row leads to the settings, since what a server *is* is edited there and
+   whether this conversation calls it is decided here. */
+.servers-menu {
+  min-width: 236px;
+  padding: 6px;
+  gap: 2px;
+}
+
+.menu-server {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-server:hover {
+  background-color: var(--sidebar);
+}
+
+/* The name and, under it, what the server has to say for itself: two lines that
+   are cut rather than wrapped, since a row is a row. */
+.menu-server-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-server-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+}
+
+.menu-server-count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.menu-server-count.failed {
+  color: var(--danger);
+}
+
+/* A lazily imported server this chat has not loaded: not a count but a state, so
+   it is italic, and blue — the composer's own blue, the one its controls wear
+   when they are holding something up. */
+.menu-server-count.lazy {
+  color: var(--reasoning);
+  font-style: italic;
+}
+
+/* The switch: a track and a knob — grey and to the left while the server is out
+   of this chat, filled and to the right while it is in. The fill and the knob
+   swap places with the theme the way the filled buttons do, so it reads in
+   either scheme without a colour of its own. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--sidebar-active);
+  transition: background-color 150ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+.menu-server[aria-pressed="true"] .switch {
+  background-color: var(--text-primary);
+}
+
+.menu-server[aria-pressed="true"] .switch::after {
+  transform: translateX(14px);
+  background-color: var(--bg);
+}
+
+/* Asking every server again: the one thing a list of switches needs, and the
+   only way to see a tool a server has grown since the window was opened. */
+.menu-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 5px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.menu-refresh:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.menu-refresh:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.menu-refresh svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* The icon turning while the servers are asked: the same motion the attachment
+   being prepared uses, which is the app's one way of saying "working". */
+.menu-refresh svg.spinning {
+  animation: attachment-spin 900ms linear infinite;
+}
+
+.menu-note {
+  margin: 0;
+  padding: 10px 8px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.key-hint kbd,
+.menu-option kbd,
+.sidebar-settings kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+

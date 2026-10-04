@@ -8,11 +8,14 @@ import { Composer } from "./components/Composer";
 import { ChatMessage } from "./components/ChatMessage";
 import { Sidebar } from "./components/Sidebar";
 import { ChatNav } from "./components/ChatNav";
+import { JsonView } from "./components/JsonView";
+import { promptFor, toolsFor } from "./lazy";
 import { MessageList } from "./components/MessageList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import type {
   AppConfig,
   ChatSummary,
+  LazyServer,
   McpCost,
   McpFailure,
   McpServer,
@@ -125,6 +128,20 @@ const COSTS: McpCost[] = [
 /** What this chat has loaded: nothing, so the lazy server's row reads as lazy.
  *  Put `"notes"` here to see the same row once it has been loaded. */
 const LOADED: string[] = [];
+
+/** The lazily imported servers the prompt would name: nothing is loaded, so the
+ *  Notes server is listed. */
+const LAZY: LazyServer[] = promptFor(
+  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
+  TOOLS,
+);
+
+/** The tools a request carries: the pool minus what laziness holds back, plus
+ *  the loader while the Notes server is still waiting. */
+const SENT: McpTool[] = toolsFor(
+  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
+  TOOLS,
+);
 
 /** A turn that went round three times: a lazily imported server loaded first,
  *  then a long query the way a model writes them and a plain call, then the
@@ -250,7 +267,13 @@ function Harness() {
           />
         </div>
         <main className="main">
-          <ChatNav model={config.models[0]} models={config.models} onPick={() => {}} />
+          <ChatNav
+            model={config.models[0]}
+            models={config.models}
+            onPick={() => {}}
+            jsonView={false}
+            onJsonView={() => {}}
+          />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
               message={assistant}
@@ -285,6 +308,30 @@ function Harness() {
             />
           </div>
           <ScrollHarness />
+          {/* The plain-JSON view over the same turn: the system prompt in front,
+              then every message with its calls, results and timings. */}
+          <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>
+            <JsonView
+              tab="history"
+              messages={TOOL_TURN}
+              systemPrompt={config.systemPrompt}
+              tools={SENT}
+              costs={COSTS}
+              lazy={LAZY}
+            />
+          </div>
+          {/* And the other tab: every tool, grouped by its server, which is what
+              the navbar's Tools tab puts in the pane. */}
+          <div style={{ display: "flex", flex: "none", height: 320, minHeight: 0 }}>
+            <JsonView
+              tab="tools"
+              messages={TOOL_TURN}
+              systemPrompt={config.systemPrompt}
+              tools={SENT}
+              costs={COSTS}
+              lazy={LAZY}
+            />
+          </div>
           <div className="settings-body" style={{ flex: "none", height: 420 }}>
             <SettingsPanel
               config={config}

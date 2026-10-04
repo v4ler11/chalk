@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { tokens } from "../tools";
 import type { McpCost, McpFailure, McpServer, McpTool } from "../types";
 
 export interface ServersProps {
@@ -36,16 +37,6 @@ export function offeredServers(declared: McpServer[], chosen: string[] | null): 
   return chosen === null
     ? enabled.map((server) => server.id)
     : chosen.filter((id) => enabled.some((server) => server.id === id));
-}
-
-/**
- * What a server's tools cost, in the unit a row is read in: a token is about a
- * quarter of the JSON they are sent as, and a server that offers enough of them
- * to be worth the reading is rounded to thousands — `~4.3k`.
- */
-function tokens(bytes: number): string {
-  const count = Math.round(bytes / 4);
-  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : `${count}`;
 }
 
 /**

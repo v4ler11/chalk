@@ -1,0 +1,39 @@
+/* -------------------------------------------------------------- dark scheme */
+
+/* The design defines a single light theme; these are the same tokens inverted
+   for the OS dark scheme the app already honoured. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a18;
+    --sidebar: #141412;
+    --sidebar-hover: #1b1b18;
+    --sidebar-active: #24241f;
+    --border: #2e2e29;
+    --text-primary: #f2f2ee;
+    --text-secondary: #a8a8a0;
+    --text-muted: #6e6e68;
+    --accent: #f2f2ee;
+    --accent-contrast: #141412;
+    --input-bg: #232320;
+    --rule: #4a4a44;
+    --danger: #ff8a80;
+    --danger-bg: #3a1d1d;
+    --danger-border: #6b2b2b;
+    --reasoning: #6f9dff;
+    --reasoning-bg: #1d2b4a;
+    --reasoning-divider: #34507f;
+    --json-key: #7fb0ff;
+    --json-string: #7ddc9a;
+    --json-number: #f0c674;
+    --json-literal: #c4a7ff;
+  }
+
+  .log-line.warn .log-level {
+    color: #fdba74;
+  }
+
+  .log-line.error .log-level {
+    color: #ff8a80;
+  }
+}
+
