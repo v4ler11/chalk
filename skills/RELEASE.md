@@ -26,10 +26,15 @@ every dependency again in the `release` profile (about 2 minutes warm).
 
 ## 1. Version
 
-`0.1.0` lives in two files and must agree — it is also the dmg's filename:
+`0.1.0` lives in three files and must agree — it is also the dmg's filename:
 
 - `package.json` → `version`
 - `src-tauri/tauri.conf.json` → `version`
+- `src-tauri/Cargo.toml` → `version`
+
+The third is not what names the artifact, but it is what the app reports as its
+own client version to every MCP server it speaks to, so leaving it behind ships
+a 0.1.1 build that calls itself 0.1.0.
 
 ## 2. No secrets in the tree
 
