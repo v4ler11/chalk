@@ -153,7 +153,11 @@
   color: var(--text-secondary);
 }
 
-.settings input {
+/* A field of a page: the text ones, and the provider's own selector, which is
+   the platform's control and so is dressed to match rather than drawn again —
+   a list of two is not worth a hand-built menu. */
+.settings input,
+.settings select {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -164,7 +168,8 @@
   font-size: 15px;
 }
 
-.settings input:focus {
+.settings input:focus,
+.settings select:focus {
   border-color: var(--text-muted);
 }
 

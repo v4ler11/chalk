@@ -90,7 +90,12 @@
 
 .json-view {
   flex: 1;
+  /* Both minimums are what let this box be the scroller it is: as a flex item its
+     automatic minimum is its content's size, so without them a long line makes
+     it as wide as the line and a tall one makes it as tall as the text — and a
+     box that is the size of its content has nothing to scroll. */
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: none;
   /* The foot is deeper than the head so the Copy button never covers the last
@@ -228,14 +233,20 @@
 
 /* The group's own JSON, framed inside the section rather than around it. The
    section clips its children to its rounded corners, so a line too wide for the
-   group scrolls within the group rather than running off it — the outer pane
-   never sees the overflow to scroll for it. */
+   group scrolls across within the group rather than running off it — the outer
+   pane never sees the overflow to scroll for it.
+   
+   Only sideways, though: `overflow-x` makes this box a scroll container on both
+   axes, and a blanket `overscroll-behavior: none` would then swallow the wheel
+   — the group would be the last container a gesture could reach, and the pane
+   under it could never be scrolled through. The horizontal gesture is contained
+   here; the vertical one is left to chain out to the pane. */
 .tool-group .json-pre {
   padding: 10px 12px 12px;
   border-top: 1px solid var(--border);
   background-color: var(--bg);
   overflow-x: auto;
-  overscroll-behavior: none;
+  overscroll-behavior-x: contain;
 }
 
 .json-note {

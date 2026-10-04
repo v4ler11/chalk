@@ -230,6 +230,7 @@ function Harness() {
   const [events, setEvents] = useState<string[]>([]);
   const [config, setConfig] = useState<AppConfig>({
     provider: "openrouter",
+    endpoint: "",
     apiKey: "sk-or-v1-abcdefghijklmnop",
     models: ["deepseek/deepseek-v4.1-flash"],
     systemPrompt: "Answer in one line.",

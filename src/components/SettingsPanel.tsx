@@ -29,11 +29,17 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 /**
- * The variable the backend fills in, written the way the prompt writes it. It is
- * named here only so the field can say what is available: the window sends the
- * prompt as typed, and the substitution happens on the way out (`lib.rs`).
+ * Where OpenRouter's name sends requests. The backend is what really holds it —
+ * and what turns its response cache on — so this is the same URL written out
+ * for the page to name, not a second source of it.
  */
-const TODAY = "@{{TODAY}}";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+
+/** The two providers the selector offers, in the order it lists them. */
+const PROVIDERS = [
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "custom", label: "Custom" },
+] as const;
 
 /** Characters of the key left in the clear while the field is not focused. */
 const VISIBLE = 5;
@@ -151,13 +157,37 @@ function GeneralTab({
     <div className="settings">
       <label>
         <span>Provider</span>
-        <input
-          type="text"
+        <select
           value={config.provider}
-          placeholder="openrouter, or an endpoint"
           onChange={(e) => onChange({ provider: e.target.value })}
-        />
+        >
+          {PROVIDERS.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.label}
+            </option>
+          ))}
+        </select>
       </label>
+      {/* Where a custom provider is, and — for OpenRouter — where it is going
+          anyway, said out loud: the cache that comes with it is worth knowing
+          about, since it is what makes a repeated request free. */}
+      {config.provider === "custom" ? (
+        <label>
+          <span>Endpoint</span>
+          <input
+            type="text"
+            value={config.endpoint}
+            placeholder="https://example.com/v1"
+            onChange={(e) => onChange({ endpoint: e.target.value })}
+          />
+        </label>
+      ) : (
+        <p className="settings-note">
+          Requests go to <code>{OPENROUTER_URL}</code>. A request identical to one made within the
+          last five minutes is answered from OpenRouter's own cache — free, and without waiting for
+          a model.
+        </p>
+      )}
       <label>
         <span>API key</span>
         <SecretInput value={config.apiKey} onChange={(apiKey) => onChange({ apiKey })} />
@@ -224,11 +254,6 @@ function CustomizationTab({
           onChange={(e) => onChange({ systemPrompt: e.target.value })}
         />
       </label>
-      <p className="settings-note">
-        Prepended to every request as a system message. It is not part of the transcript, so it is
-        never saved with a chat. <code>{TODAY}</code> is filled in at send time — with the date and
-        time of that send, not of this save.
-      </p>
     </div>
   );
 }

@@ -95,6 +95,14 @@ pub struct Post {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+
+    /// OpenRouter's own key for a conversation, which pins its requests to one
+    /// upstream provider endpoint. A provider's prompt cache lives at that
+    /// endpoint, so a conversation that keeps coming back to the same one keeps
+    /// its cache — and without this, OpenRouter only learns which endpoint a
+    /// conversation belongs to after it has already had a cache hit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// `stop`: a single sequence or a list of them.
@@ -416,6 +424,13 @@ pub struct Usage {
     pub is_byok: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_details: Option<CostDetails>,
+    /// What `X-OpenRouter-Cache-Status` said of the response this usage came
+    /// with: `HIT` when OpenRouter answered from its own response cache — every
+    /// counter above is then zero, and nothing was billed — and `MISS` when the
+    /// request went on to the model. Absent from a gateway that has no such
+    /// header, and from a request made before caching was asked for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_status: Option<String>,
 }
 
 /// Per-upstream cost breakdown reported alongside [`Usage`].

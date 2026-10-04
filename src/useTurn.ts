@@ -326,7 +326,10 @@ export function useTurn({
       // A turn of its own replaces whatever was waiting to be allowed: the
       // transcript it belonged to is gone from under it.
       setAwaiting(null);
-      await runTurn([...(base ?? live.current.messages), { role: "user", content }]);
+      // When the prompt was sent. It is kept with the message so the header the
+      // request carries on it is the same bytes on every later request — which
+      // is the only way a provider's prompt cache can find the prefix again.
+      await runTurn([...(base ?? live.current.messages), { role: "user", content, sentAt: Date.now() }]);
     },
     [runTurn],
   );

@@ -4,7 +4,7 @@ pub mod settings;
 pub mod store;
 pub mod types;
 
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, FixedOffset, Local, TimeDelta, TimeZone};
 use futures_util::StreamExt;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use logging::{now_millis, LogEntry, Logger};
 use settings::{AppConfig, Settings};
 use store::{ChatRecord, ChatSummary, Store};
 use types::chat::{Chunk, Post, ReasoningConfig, StreamOptions, Tool, Usage};
-use types::chat_message::{Message, ToolCallChunk};
+use types::chat_message::{Content, Message, Part, Role, ToolCallChunk};
 
 #[derive(Serialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -115,10 +115,13 @@ fn carried_over(app: &tauri::AppHandle) -> Option<Settings> {
     let dir = app.path().app_config_dir().ok()?;
     let raw = std::fs::read_to_string(dir.join("config.json")).ok()?;
     let old: Legacy = serde_json::from_str(&raw).ok()?;
-    // The old base URL becomes the provider, which an endpoint passes through,
-    // and its one model becomes the list's first entry.
+    // The old file wrote the endpoint itself, which is what the custom provider
+    // is — unless it is OpenRouter's own, which is read as the name it now is.
+    // Its one model becomes the list's first entry.
+    let (provider, endpoint) = settings::provider_from(&old.api_base, String::new());
     Some(Settings {
-        provider: old.api_base,
+        provider,
+        endpoint,
         api_key: old.api_key,
         models: vec![old.model],
         system_prompt: String::new(),
@@ -173,9 +176,10 @@ fn save_config(app: tauri::AppHandle, state: State<'_, AppState>, config: AppCon
         &app,
         "info",
         format!(
-            "settings saved; models=[{}] provider={}",
+            "settings saved; models=[{}] provider={} endpoint={}",
             config.models.join(", "),
-            config.provider
+            config.provider,
+            settings::endpoint(&config.provider, &config.endpoint),
         ),
     );
     Ok(config)
@@ -317,6 +321,95 @@ fn expand(prompt: &str) -> String {
     expand_at(prompt, Local::now().fixed_offset())
 }
 
+/// What the model is told about the header every prompt it reads will carry.
+///
+/// Written here rather than left to the configured prompt because the header is
+/// the client's: a model that takes the time in a user's message for something
+/// the user typed has been misled by this app, and the sentence that prevents it
+/// belongs where the header is written.
+const PROMPT_NOTE: &str = "Each user message begins with a machine-generated header: the date and time it was sent, and how long after the previous one — or that it is the first — then a line of three dashes, then what the user wrote. The header is written by the client, not by the user.";
+
+/// How long a gap reads: seconds under a minute, then minutes, then hours and
+/// minutes, then days and hours — two units at most, which is as much as anyone
+/// needs to know how long they were away.
+fn gap(elapsed: TimeDelta) -> String {
+    let seconds = elapsed.num_seconds().max(0);
+    match seconds {
+        0..=59 => format!("{seconds}s"),
+        60..=3599 => format!("{}m", seconds / 60),
+        3600..=86_399 => format!("{}h {}m", seconds / 3600, (seconds % 3600) / 60),
+        _ => format!("{}d {}h", seconds / 86_400, (seconds % 86_400) / 3600),
+    }
+}
+
+/// The header on one prompt, from the moment it was sent and the moment the
+/// prompt before it was.
+///
+/// Both moments are the transcript's own, so the header is the same bytes on
+/// every later request that carries it — which is the whole reason it is written
+/// from what was stored rather than from the clock: a provider's prompt cache is
+/// a prefix cache, and a header that shifted with the clock would make every
+/// request a different prefix and nothing would ever be reused.
+fn header(sent_at: i64, previous: Option<i64>) -> Option<String> {
+    let at = Local.timestamp_millis_opt(sent_at).single()?;
+    let when = at.format(STAMP);
+    Some(match previous.and_then(|before| Local.timestamp_millis_opt(before).single()) {
+        Some(before) => format!("{when} · {} since the previous message", gap(at - before)),
+        None => format!("{when} · the first message"),
+    })
+}
+
+/// The header in front of what a message carries, in whichever shape it carries
+/// it: a text prompt reads as the header, the rule, then the words, and one that
+/// carries images keeps them where they were — the header is a part of its own
+/// rather than being merged into the user's own words.
+fn starting(header: &str, content: Option<Content>) -> Option<Content> {
+    match content {
+        Some(Content::Text(text)) => Some(Content::Text(format!("{header}\n---\n{text}"))),
+        Some(Content::Parts(mut parts)) => {
+            parts.insert(0, Part::text(format!("{header}\n---\n")));
+            Some(Content::Parts(parts))
+        }
+        // Nothing to head: a prompt with no content is not one to invent any.
+        None => None,
+    }
+}
+
+/// Writes the header onto every prompt that carries the moment it was sent.
+///
+/// This is where a prompt becomes the message the model reads. What the user
+/// typed stays what the user typed — the transcript keeps it that way, which is
+/// what an edit hands back to the composer — and the client's own line is put in
+/// front of it here, on the way out, the way the system prompt is.
+fn stamp_prompts(messages: &mut [Message]) {
+    let mut previous: Option<i64> = None;
+    for message in messages.iter_mut() {
+        if message.role != Role::User {
+            continue;
+        }
+        let Some(sent_at) = message.sent_at else { continue };
+        let Some(header) = header(sent_at, previous) else { continue };
+        previous = Some(sent_at);
+        message.content = starting(&header, message.content.take());
+    }
+}
+
+/// The name a conversation is known by at the gateway, for its sticky routing:
+/// the moment its first prompt was sent, which every request in the chat shares
+/// and no other chat has.
+///
+/// It is not the chat's row id because the row is written once an answer has
+/// landed, and a conversation has to be pinned from its first request on: the
+/// point of the pin is the second request, and by then the provider's cache has
+/// already been written to whichever endpoint answered the first.
+fn session_name(messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .find(|message| message.role == Role::User)
+        .and_then(|first| first.sent_at)
+        .map(|at| format!("chalk-{at}"))
+}
+
 /// Puts the configured system prompt in front of a transcript, when there is
 /// one, and names the lazily imported servers under it.
 ///
@@ -326,6 +419,10 @@ fn expand(prompt: &str) -> String {
 /// not a prompt. Its variables are resolved here too, so a prompt stored as
 /// `@{{TODAY}}` carries the time of each send rather than the time it was saved.
 ///
+/// [`PROMPT_NOTE`] goes under it whatever it says — even when nothing is
+/// configured — because every request carries the header that note explains, and
+/// a prompt of the app's own is cheaper than a model left guessing at it.
+///
 /// The lazy servers are named after it, because that is the whole of what the
 /// model is told about them: their tools are not in the request, so all it can
 /// be given is what they are called and what they are for. A server this chat
@@ -334,11 +431,12 @@ fn expand(prompt: &str) -> String {
 /// what the `load_lazy_mcp` tool is for.
 fn with_system_prompt(prompt: &str, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
     let mut said = expand(prompt).trim_end().to_string();
+    if !said.is_empty() {
+        said.push_str("\n\n");
+    }
+    said.push_str(PROMPT_NOTE);
     if !lazy.is_empty() {
-        if !said.is_empty() {
-            said.push('\n');
-        }
-        said.push_str("Lazy Imported MCPs:");
+        said.push_str("\nLazy Imported MCPs:");
         for server in lazy {
             said.push('\n');
             // A description is the user's to write, and a server may be declared
@@ -356,19 +454,74 @@ fn with_system_prompt(prompt: &str, lazy: &[mcp::Lazy], messages: &mut Vec<Messa
             }
         }
     }
-    if !said.trim().is_empty() {
-        messages.insert(0, Message::system(said));
+    messages.insert(0, Message::system(said));
+}
+
+/// Marks the end of the prefix a gateway is allowed to reuse.
+///
+/// Some providers work the reuse out for themselves, and some do not: through
+/// OpenRouter, Gemini and Anthropic cache nothing at all unless the request says
+/// where a reusable prefix ends. The mark goes on the last block of text in the
+/// request — the newest prompt, or what a tool answered with — because
+/// everything before it is what the next request will repeat, and because the
+/// system message can carry a tail (the lazily imported servers) that changes
+/// under it.
+///
+/// A provider that bills cache writes charges for the write, which is what the
+/// read on every later turn of the same conversation is for.
+fn mark_cacheable(messages: &mut [Message]) {
+    for message in messages.iter_mut().rev() {
+        match message.content.take() {
+            Some(Content::Text(text)) => {
+                let mut part = Part::text(text);
+                part.cached();
+                message.content = Some(Content::Parts(vec![part]));
+                return;
+            }
+            Some(Content::Parts(mut parts)) => {
+                if let Some(part) = parts.iter_mut().rev().find(|part| part.is_text()) {
+                    part.cached();
+                    message.content = Some(Content::Parts(parts));
+                    return;
+                }
+                // A prompt of images alone: the mark belongs on the text before
+                // it, if the conversation has any.
+                message.content = Some(Content::Parts(parts));
+            }
+            None => {}
+        }
     }
 }
 
-/// The transcript as the request will carry it: the configured system prompt
-/// resolved and put in front of it, and the lazily imported servers named under
-/// it — the very assembly `chat` does on its way out, run here for the window.
+/// The request's own assembly, in one place so the two callers cannot drift: the
+/// header on every prompt, the mark that ends the reusable prefix, then the
+/// system message in front of them.
+///
+/// Every one of them is added on the way out and none is in the transcript the
+/// window holds, which is what keeps a prompt the user's own text — what an edit
+/// hands back, and what the store keeps — while what the model reads is the
+/// whole of what it is being told.
+fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
+    stamp_prompts(messages);
+    // Only OpenRouter is asked to reuse a prefix this way: the mark means
+    // nothing to a gateway that does not know it, and a custom endpoint's own
+    // API is not this app's to decorate.
+    if is_openrouter(config) {
+        mark_cacheable(messages);
+    }
+    with_system_prompt(&config.system_prompt, lazy, messages);
+}
+
+/// The transcript as the request will carry it: every prompt headed with the
+/// time it was sent, the configured system prompt resolved and put in front of
+/// them, and the lazily imported servers named under it — the very assembly
+/// `chat` does on its way out, run here for the window.
 ///
 /// The JSON view reads this rather than rendering the transcript itself, because
 /// the window's copy is not the request: it holds the prompt as written, with
-/// `@{{…}}` unresolved and none of the lazy addendum, and it carries timings and
-/// usage the model is never sent. What the model reads is what this returns.
+/// `@{{…}}` unresolved, the headers unwritten, and none of the lazy addendum,
+/// and it carries timings and usage the model is never sent. What the model
+/// reads is what this returns.
 #[tauri::command]
 fn request_preview(
     state: State<'_, AppState>,
@@ -377,7 +530,7 @@ fn request_preview(
 ) -> Vec<Message> {
     let config = state.config.lock().clone();
     let mut messages = messages;
-    with_system_prompt(&config.system_prompt, &lazy.unwrap_or_default(), &mut messages);
+    assembled(&config, &lazy.unwrap_or_default(), &mut messages);
     messages
 }
 
@@ -414,7 +567,7 @@ fn chat(app: tauri::AppHandle, state: State<'_, AppState>, messages: Vec<Message
     let reasoning = reasoning_level(reasoning);
 
     let mut messages = messages;
-    with_system_prompt(&config.system_prompt, &lazy.unwrap_or_default(), &mut messages);
+    assembled(&config, &lazy.unwrap_or_default(), &mut messages);
 
     // One stream at a time: a new request replaces whatever is still running.
     if let Some(previous) = state.inflight.lock().take() {
@@ -564,6 +717,29 @@ fn offered(tools: Vec<mcp::ToolOffer>) -> Vec<Tool> {
     tools.iter().map(mcp::ToolOffer::as_tool).collect()
 }
 
+/// Whether requests go to OpenRouter, which is the one gateway this app knows
+/// things about: the response cache it asks for below, and the word it reads
+/// back off the response.
+fn is_openrouter(config: &AppConfig) -> bool {
+    config.provider.trim() == settings::OPENROUTER
+}
+
+/// Asks OpenRouter to answer a repeated request from its own cache.
+///
+/// The header is what turns response caching on; a request identical to an
+/// earlier one — same model, same body, same key — is then served from the cache
+/// for five minutes without reaching a model, which is free and immediate. The
+/// gateway's verdict comes back on `X-OpenRouter-Cache-Status`, which
+/// [`stream_chat`] keeps with the response's usage. No other gateway has this,
+/// so nothing is sent anywhere else.
+fn with_cache(request: reqwest::RequestBuilder, config: &AppConfig) -> reqwest::RequestBuilder {
+    if is_openrouter(config) {
+        request.header("X-OpenRouter-Cache", "true")
+    } else {
+        request
+    }
+}
+
 /// Joins a frame's tool-call fragments into the calls they belong to.
 ///
 /// A provider names a call once and sends its arguments in pieces, each tagged
@@ -622,7 +798,7 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
     let client = app.state::<AppState>().client.clone();
     let url = format!(
         "{}/chat/completions",
-        settings::endpoint(&config.provider).trim_end_matches('/')
+        settings::endpoint(&config.provider, &config.endpoint).trim_end_matches('/')
     );
     // The names, not only the count: whether a particular tool is being offered
     // is the thing worth being able to check, and a count cannot say.
@@ -636,13 +812,20 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
                 .join(", ")
         })
         .unwrap_or_else(|| "none".to_owned());
-    let post = completion(model, messages, reasoning, tools);
+    let mut post = completion(model, messages, reasoning, tools);
+    // A conversation is pinned to one upstream for as long as it keeps asking:
+    // OpenRouter's sticky routing is what keeps a provider's prompt cache warm
+    // between one prompt and the next, and it is the conversation's own key that
+    // pins it. Only OpenRouter has one, and only OpenRouter is told.
+    if is_openrouter(&config) {
+        post.session_id = session_name(&post.messages);
+    }
 
     log(
         &app,
         "info",
         format!(
-            "POST {url} (model={}, messages={}, reasoning={}, tools=[{offered}])",
+            "POST {url} (model={}, messages={}, reasoning={}, tools=[{offered}], cache={})",
             post.model,
             post.messages.len(),
             // Read back off the body itself, so the line names what was sent.
@@ -650,10 +833,12 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
                 .as_ref()
                 .and_then(|config| config.effort.as_deref())
                 .unwrap_or("off"),
+            if is_openrouter(&config) { "on" } else { "off" },
         ),
     );
 
-    let resp = match client.post(&url).bearer_auth(&config.api_key).json(&post).send().await {
+    let request = with_cache(client.post(&url).bearer_auth(&config.api_key), &config);
+    let resp = match request.json(&post).send().await {
         Ok(resp) => resp,
         Err(e) => {
             log(&app, "error", format!("request failed: {e}"));
@@ -668,6 +853,18 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
         log(&app, "error", message.clone());
         let _ = on_event.send(StreamEvent::Error { message });
         return;
+    }
+
+    // What the gateway said about its own cache, kept to be sent along with the
+    // usage. A hit reports every counter as zero, which would otherwise read as
+    // a response that used nothing.
+    let cache = resp
+        .headers()
+        .get("x-openrouter-cache-status")
+        .and_then(|status| status.to_str().ok())
+        .map(str::to_owned);
+    if let Some(status) = &cache {
+        log(&app, "info", format!("openrouter cache: {status}"));
     }
 
     // Stream SSE frames. `buffer` accumulates bytes across chunk boundaries so a
@@ -723,7 +920,8 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
                 return; // channel closed by frontend; stop cleanly
             }
             // Usage rides on the final frame, alongside the closing choice.
-            if let Some(usage) = chunk.usage {
+            if let Some(mut usage) = chunk.usage {
+                usage.cache_status = cache.clone();
                 let _ = on_event.send(StreamEvent::Usage { usage });
             }
         }
@@ -753,7 +951,7 @@ pub fn run() {
                 "models=[{}] provider={} endpoint={}",
                 config.models.join(", "),
                 config.provider,
-                settings::endpoint(&config.provider)
+                settings::endpoint(&config.provider, &config.endpoint)
             );
             // The protocol client's own lines go to the same log as everything
             // else: a server that will not start says why on its stderr, and a
@@ -833,9 +1031,11 @@ mod tests {
         assert_eq!(reasoning_level(Some("extreme".into())), "none");
     }
 
-    /// The prompt belongs to the request, not to the transcript: put in front of
-    /// what the window sent, ahead of the first message, and left out entirely
-    /// when nothing — or only whitespace — is configured.
+    /// The prompt belongs to the request, not to the transcript: resolved and
+    /// put in front of what the window sent, ahead of the first message. A
+    /// prompt of nothing is not a request with nothing to say — the note about
+    /// the headers every prompt carries goes in whatever it says, since the
+    /// header is written whether or not a prompt is.
     #[test]
     fn the_system_prompt_goes_in_front_of_the_transcript() {
         let user: Message = serde_json::from_value(json!({ "role": "user", "content": "hi" })).unwrap();
@@ -848,18 +1048,20 @@ mod tests {
         assert_eq!(
             body["messages"],
             json!([
-                { "role": "system", "content": "Be brief." },
+                { "role": "system", "content": format!("Be brief.\n\n{PROMPT_NOTE}") },
                 { "role": "user", "content": "hi" },
             ])
         );
 
+        // A prompt of nothing is not a request with nothing to say: the note is
+        // what the model is told about the header on every prompt it reads.
         let mut blank = vec![user.clone()];
         with_system_prompt("  \n ", &[], &mut blank);
-        assert_eq!(blank, vec![user.clone()]);
+        assert_eq!(blank, vec![Message::system(PROMPT_NOTE), user.clone()]);
 
         let mut none = vec![user.clone()];
         with_system_prompt("", &[], &mut none);
-        assert_eq!(none, vec![user]);
+        assert_eq!(none, vec![Message::system(PROMPT_NOTE), user]);
     }
 
     /// A lazily imported server is named in the prompt rather than offered as
@@ -888,21 +1090,222 @@ mod tests {
         with_system_prompt("Be brief.", &lazy, &mut asked);
         assert_eq!(
             serde_json::to_value(&asked[0]).unwrap()["content"],
-            json!(
-                "Be brief.\nLazy Imported MCPs:\nledger: Accounts, transactions and receipts\n  \
+            json!(format!(
+                "Be brief.\n\n{PROMPT_NOTE}\nLazy Imported MCPs:\nledger: Accounts, transactions and receipts\n  \
                  tools: ledger__add_account, ledger__run_query\nnotes"
-            )
+            ))
         );
 
         let mut listed = vec![user];
         with_system_prompt("", &lazy, &mut listed);
         assert_eq!(
             serde_json::to_value(&listed[0]).unwrap()["content"],
-            json!(
-                "Lazy Imported MCPs:\nledger: Accounts, transactions and receipts\n  \
+            json!(format!(
+                "{PROMPT_NOTE}\nLazy Imported MCPs:\nledger: Accounts, transactions and receipts\n  \
                  tools: ledger__add_account, ledger__run_query\nnotes"
-            )
+            ))
         );
+    }
+
+    /// How a gap between two prompts reads: one unit while it is seconds or
+    /// minutes, two while it is hours or days — as much as anyone needs to know
+    /// how long they were away, and never a negative age when a clock goes back.
+    #[test]
+    fn a_gap_between_prompts_reads_in_two_units_at_most() {
+        use chrono::Duration;
+
+        assert_eq!(gap(Duration::seconds(0)), "0s");
+        assert_eq!(gap(Duration::seconds(45)), "45s");
+        assert_eq!(gap(Duration::seconds(90)), "1m");
+        assert_eq!(gap(Duration::seconds(3599)), "59m");
+        assert_eq!(gap(Duration::seconds(3600)), "1h 0m");
+        assert_eq!(gap(Duration::seconds(3900)), "1h 5m");
+        assert_eq!(gap(Duration::seconds(86_400)), "1d 0h");
+        assert_eq!(gap(Duration::seconds(90_000)), "1d 1h");
+        assert_eq!(gap(Duration::seconds(-5)), "0s");
+    }
+
+    /// What a header says: the moment the prompt was sent, then how long after
+    /// the one before it — or that it is the first. The moment is written in the
+    /// shape a prompt's `@{{TODAY}}` is, since both are the same clock read the
+    /// same way.
+    #[test]
+    fn a_header_names_the_moment_and_what_came_before() {
+        let at = 1_760_000_000_000_i64;
+        let when = |ms: i64| Local.timestamp_millis_opt(ms).unwrap().format(STAMP).to_string();
+
+        assert_eq!(header(at, None).unwrap(), format!("{} · the first message", when(at)));
+        assert_eq!(
+            header(at + 725_000, Some(at)).unwrap(),
+            format!("{} · 12m since the previous message", when(at + 725_000))
+        );
+    }
+
+    /// Every prompt that carries the moment it was sent is headed with it, on
+    /// the wire and only there: the message the user wrote stays their words —
+    /// which is what the store keeps and what an edit hands back — and the
+    /// header, not the moment, is what a request carries.
+    #[test]
+    fn the_header_is_written_over_the_prompt_on_the_way_out() {
+        let at = 1_760_000_000_000_i64;
+        let when = |ms: i64| Local.timestamp_millis_opt(ms).unwrap().format(STAMP).to_string();
+        let mut messages = vec![
+            serde_json::from_value::<Message>(json!({ "role": "user", "content": "hi", "sentAt": at })).unwrap(),
+            serde_json::from_value::<Message>(json!({ "role": "assistant", "content": "hello" })).unwrap(),
+            serde_json::from_value::<Message>(json!({
+                "role": "user",
+                "content": [
+                    { "type": "text", "text": "look" },
+                    { "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } },
+                ],
+                "sentAt": at + 725_000,
+            }))
+            .unwrap(),
+            // A prompt from a transcript written before the window kept the
+            // moment: it is left as it is rather than given one it never had.
+            serde_json::from_value::<Message>(json!({ "role": "user", "content": "older" })).unwrap(),
+        ];
+        stamp_prompts(&mut messages);
+
+        assert_eq!(
+            messages[0].content,
+            Some(Content::Text(format!("{} · the first message\n---\nhi", when(at))))
+        );
+        assert_eq!(
+            messages[1].content,
+            Some(Content::Text("hello".into())),
+            "only a prompt is headed"
+        );
+        // A prompt that carries images keeps them where they were: the header is
+        // a part of its own rather than a preface to the user's own words.
+        assert_eq!(
+            messages[2].content,
+            Some(Content::Parts(vec![
+                Part::text(format!("{} · 12m since the previous message\n---\n", when(at + 725_000))),
+                Part::text("look"),
+                Part::ImageUrl {
+                    image_url: types::chat_message::ImageUrl {
+                        url: "data:image/png;base64,AAAA".into(),
+                        detail: None,
+                    }
+                },
+            ]))
+        );
+        assert_eq!(messages[3].content, Some(Content::Text("older".into())));
+
+        // The moment is the window's own bookkeeping, and the API knows nothing
+        // of it: the header is what goes out.
+        let wire = serde_json::to_value(&messages[0]).unwrap();
+        assert!(wire.get("sentAt").is_none(), "{wire}");
+        assert!(wire.get("sent_at").is_none(), "{wire}");
+    }
+
+    /// The key a conversation is pinned to at the gateway is the moment its
+    /// first prompt was sent: the same on every request the chat makes, and no
+    /// other chat's.
+    #[test]
+    fn a_conversation_is_pinned_by_its_first_prompt() {
+        let user = |at: Option<i64>| -> Message {
+            serde_json::from_value(match at {
+                Some(at) => json!({ "role": "user", "content": "hi", "sentAt": at }),
+                None => json!({ "role": "user", "content": "hi" }),
+            })
+            .unwrap()
+        };
+        let assistant: Message = serde_json::from_value(json!({ "role": "assistant", "content": "hello" })).unwrap();
+
+        assert_eq!(
+            session_name(&[user(Some(1_760_000_000_000)), assistant.clone(), user(Some(1_760_000_060_000))]),
+            Some("chalk-1760000000000".to_owned()),
+            "the first prompt names the conversation, whatever came after it"
+        );
+        // Nothing to pin a chat that has no moment to name it by: a transcript
+        // read back from before the window kept one.
+        assert_eq!(session_name(&[user(None)]), None);
+        assert_eq!(session_name(&[assistant]), None);
+        assert_eq!(session_name(&[]), None);
+    }
+
+    /// Where a reusable prefix ends is written into the request and nowhere
+    /// else: only for OpenRouter, which is the gateway that needs to be told,
+    /// and only on the last block of text — the newest prompt, or what a tool
+    /// answered with, with the images of a prompt left where they were.
+    #[test]
+    fn only_openrouter_is_told_where_the_prefix_ends() {
+        let openrouter = AppConfig {
+            provider: settings::OPENROUTER.into(),
+            endpoint: String::new(),
+            api_key: "sk-1".into(),
+            models: vec!["a/model".into()],
+            system_prompt: "Be brief.".into(),
+        };
+        let custom = AppConfig {
+            provider: settings::CUSTOM.into(),
+            endpoint: "https://example.com/v1".into(),
+            ..openrouter.clone()
+        };
+        let asked = || {
+            vec![
+                serde_json::from_value::<Message>(json!({ "role": "user", "content": "hi", "sentAt": 1_760_000_000_000i64 })).unwrap(),
+                serde_json::from_value::<Message>(json!({ "role": "assistant", "content": "hello" })).unwrap(),
+                serde_json::from_value::<Message>(json!({ "role": "user", "content": "and?", "sentAt": 1_760_000_060_000i64 })).unwrap(),
+            ]
+        };
+
+        let mut marked = asked();
+        assembled(&openrouter, &[], &mut marked);
+        let wire = serde_json::to_value(&marked).unwrap();
+        // The last prompt, as one block that ends the prefix — the header still
+        // on it, since that is what the model reads.
+        assert_eq!(wire[3]["content"][0]["cache_control"], json!({ "type": "ephemeral" }));
+        assert_eq!(wire[3]["content"][0]["type"], json!("text"));
+        assert!(
+            wire[3]["content"][0]["text"].as_str().unwrap().ends_with("---\nand?"),
+            "{}",
+            wire[3]["content"][0]["text"]
+        );
+        // The system message is not the block that carries it: its tail is the
+        // lazily imported servers, which change under it.
+        assert_eq!(wire[0]["content"], json!(format!("Be brief.\n\n{PROMPT_NOTE}")));
+        // Only one block is marked — the provider takes the last breakpoint, and
+        // a second would say nothing more.
+        assert_eq!(wire.to_string().matches("cache_control").count(), 1);
+
+        // A gateway that is not OpenRouter is never told anything of the sort.
+        let mut plain = asked();
+        assembled(&custom, &[], &mut plain);
+        assert!(!serde_json::to_value(&plain).unwrap().to_string().contains("cache_control"));
+
+        // A prompt that carries images ends its prefix with its own header —
+        // the text the client wrote — rather than with the picture.
+        let mut images = vec![
+            serde_json::from_value::<Message>(json!({ "role": "user", "content": "hi", "sentAt": 1_760_000_000_000i64 })).unwrap(),
+            serde_json::from_value::<Message>(json!({
+                "role": "user",
+                "content": [{ "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } }],
+                "sentAt": 1_760_000_060_000i64,
+            }))
+            .unwrap(),
+        ];
+        assembled(&openrouter, &[], &mut images);
+        let wire = serde_json::to_value(&images).unwrap();
+        assert_eq!(wire[2]["content"][0]["cache_control"], json!({ "type": "ephemeral" }));
+        assert_eq!(wire[2]["content"][1]["type"], json!("image_url"));
+
+        // A prompt with no moment on it has no header either, so a picture alone
+        // leaves nothing to end at: the mark goes on the text before it instead.
+        let mut older = vec![
+            serde_json::from_value::<Message>(json!({ "role": "user", "content": "hi" })).unwrap(),
+            serde_json::from_value::<Message>(json!({
+                "role": "user",
+                "content": [{ "type": "image_url", "image_url": { "url": "data:image/png;base64,AAAA" } }],
+            }))
+            .unwrap(),
+        ];
+        assembled(&openrouter, &[], &mut older);
+        let wire = serde_json::to_value(&older).unwrap();
+        assert_eq!(wire[1]["content"][0]["cache_control"], json!({ "type": "ephemeral" }));
+        assert_eq!(wire[2]["content"][0]["type"], json!("image_url"));
     }
 
     /// A variable is resolved at the moment of the send, in the shape the prompt
@@ -968,6 +1371,45 @@ mod tests {
 
         let off = serde_json::to_value(completion("a/model".into(), Vec::new(), "none".into(), None)).unwrap();
         assert_eq!(off["reasoning"], json!({ "effort": "none" }));
+    }
+
+    /// The response cache is OpenRouter's alone, so the header that asks for it
+    /// goes to OpenRouter and nowhere else: another gateway was given the URL
+    /// for a reason, and a header it does not know is not part of the request
+    /// it was written to receive.
+    #[test]
+    fn the_response_cache_is_asked_for_only_at_openrouter() {
+        let sent = |provider: &str, endpoint: &str| {
+            let config = AppConfig {
+                provider: provider.into(),
+                endpoint: endpoint.into(),
+                api_key: "sk-1".into(),
+                models: vec!["a/model".into()],
+                system_prompt: String::new(),
+            };
+            with_cache(reqwest::Client::new().post("http://example.com/v1/chat/completions"), &config)
+                .build()
+                .unwrap()
+        };
+
+        let openrouter = sent(settings::OPENROUTER, "");
+        assert_eq!(openrouter.headers().get("x-openrouter-cache").unwrap(), "true");
+        assert_eq!(
+            openrouter.url().as_str(),
+            "http://example.com/v1/chat/completions",
+            "the header does not move the request"
+        );
+
+        // Even pointed at OpenRouter's own endpoint, a custom provider is taken
+        // at its word: what the app knows about OpenRouter hangs off its name.
+        assert!(sent(settings::CUSTOM, settings::OPENROUTER_URL)
+            .headers()
+            .get("x-openrouter-cache")
+            .is_none());
+        assert!(sent(settings::CUSTOM, "http://localhost:11434/v1")
+            .headers()
+            .get("x-openrouter-cache")
+            .is_none());
     }
 
     /// A chat with tools offers them the way the endpoint takes them — a
@@ -1104,7 +1546,7 @@ mod tests {
         }))
         .unwrap()];
         let post = completion(model.clone(), asked, "none".into(), Some(tools));
-        let url = format!("{}/chat/completions", settings::endpoint(&settings.provider).trim_end_matches('/'));
+        let url = format!("{}/chat/completions", settings::endpoint(&settings.provider, &settings.endpoint).trim_end_matches('/'));
 
         let body = tauri::async_runtime::block_on(async {
             let resp = reqwest::Client::new()
@@ -1139,5 +1581,146 @@ mod tests {
         let arguments: serde_json::Value =
             serde_json::from_str(&calls[0].arguments).expect("arguments that are JSON");
         assert_eq!(arguments["text"], json!("hello"));
+    }
+
+    /// Opt-in, and it spends two requests — the second is answered from the
+    /// provider's cache, and so is free. The app's own assembly, sent twice: the
+    /// first prompt of a conversation, then that conversation one prompt later.
+    /// The second request repeats almost everything the first carried, so almost
+    /// everything comes back as cached tokens — which is what makes a long
+    /// conversation cost a fraction of its length, and what a system prompt that
+    /// changes between requests takes away entirely.
+    ///
+    /// The configured prompt goes out with `@{{TODAY}}` taken out of it: the
+    /// time of a send belongs to the prompt's own header now, and a token
+    /// resolving to the second would make every request a different prefix.
+    #[test]
+    #[ignore = "spends two requests against the configured provider"]
+    fn a_live_conversation_is_served_from_the_prompt_cache() {
+        let settings = settings::load().expect("the settings file");
+        let model = settings.models.first().cloned().expect("a model");
+        let url = format!(
+            "{}/chat/completions",
+            settings::endpoint(&settings.provider, &settings.endpoint).trim_end_matches('/')
+        );
+        let client = reqwest::Client::new();
+        let mut config = AppConfig::from(&settings);
+        config.system_prompt = config.system_prompt.replace("@{{TODAY}}", "");
+
+        let turn = |messages: &[Message]| {
+            let mut asked = messages.to_vec();
+            assembled(&config, &[], &mut asked);
+            let mut post = completion(model.clone(), asked, "none".into(), None);
+            if is_openrouter(&config) {
+                post.session_id = session_name(&post.messages);
+            }
+            tauri::async_runtime::block_on(async {
+                let resp = with_cache(client.post(&url).bearer_auth(&settings.api_key), &config)
+                    .json(&post)
+                    .send()
+                    .await
+                    .expect("the request");
+                assert!(resp.status().is_success(), "{}", resp.status());
+                let body = resp.text().await.expect("the body");
+                let usage = body
+                    .lines()
+                    .filter_map(|line| line.strip_prefix("data:"))
+                    .filter_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
+                    .filter_map(|frame| frame.get("usage").cloned())
+                    .next_back()
+                    .unwrap_or_else(|| json!({}));
+                (
+                    usage["prompt_tokens"].as_u64().unwrap_or(0),
+                    usage["prompt_tokens_details"]["cached_tokens"].as_u64().unwrap_or(0),
+                )
+            })
+        };
+
+        let start = 1_760_000_000_000_i64;
+        let first = vec![
+            serde_json::from_value::<Message>(json!({
+                "role": "user", "content": "Say hello in one word.", "sentAt": start
+            }))
+            .unwrap(),
+        ];
+        let next = vec![
+            first[0].clone(),
+            serde_json::from_value::<Message>(json!({ "role": "assistant", "content": "Hello." })).unwrap(),
+            serde_json::from_value::<Message>(json!({
+                "role": "user", "content": "And once more.", "sentAt": start + 60_000
+            }))
+            .unwrap(),
+        ];
+
+        let (prompt, cached) = turn(&first);
+        eprintln!("first turn:  {cached} of {prompt} tokens cached");
+        // A provider writes its cache once it has answered, so the second
+        // request is not made the instant the first returns.
+        std::thread::sleep(std::time::Duration::from_secs(6));
+        let (prompt, cached) = turn(&next);
+        eprintln!("second turn: {cached} of {prompt} tokens cached");
+
+        assert!(
+            cached * 2 > prompt,
+            "the second turn of a conversation was not served from the cache: {cached} of {prompt}"
+        );
+    }
+
+    /// Opt-in, and it spends one request: the first of the two. The second is
+    /// the point of it, and is free. OpenRouter's cache is OpenRouter's own, so
+    /// there is nothing to check it against but OpenRouter: the same request is
+    /// made twice, and its verdict on each — `MISS`, then `HIT` — is the whole
+    /// of what this asks.
+    #[test]
+    #[ignore = "spends a request against the configured provider"]
+    fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
+        let settings = settings::load().expect("the settings file");
+        // Nothing to ask a gateway that is not OpenRouter: the header is not
+        // its own, and the verdict is not one it reports.
+        if settings.provider.trim() != settings::OPENROUTER {
+            eprintln!("the settings are not pointed at OpenRouter; nothing asked");
+            return;
+        }
+        let config = AppConfig::from(&settings);
+        let model = settings.models.first().cloned().expect("a model");
+        let asked = vec![serde_json::from_value::<Message>(json!({
+            "role": "user",
+            "content": "Say hello in one word."
+        }))
+        .unwrap()];
+        let post = completion(model, asked, "none".into(), None);
+        let url = format!("{}/chat/completions", settings::endpoint(&config.provider, &config.endpoint).trim_end_matches('/'));
+
+        let statuses = tauri::async_runtime::block_on(async {
+            let mut statuses = Vec::new();
+            // One after the other: the first is what populates the cache the
+            // second is answered from, and asking both at once would make them
+            // two misses.
+            for _ in 0..2 {
+                let resp = with_cache(reqwest::Client::new().post(&url).bearer_auth(&settings.api_key), &config)
+                    .json(&post)
+                    .send()
+                    .await
+                    .expect("the request");
+                assert!(resp.status().is_success(), "{}", resp.status());
+                statuses.push(
+                    resp.headers()
+                        .get("x-openrouter-cache-status")
+                        .and_then(|status| status.to_str().ok())
+                        .map(str::to_owned),
+                );
+                // Read the stream to its end, so the response is finished with
+                // — and cached — before the next request is made.
+                let _ = resp.text().await;
+            }
+            statuses
+        });
+
+        eprintln!("openrouter said: {statuses:?}");
+        assert_eq!(
+            statuses,
+            vec![Some("MISS".to_owned()), Some("HIT".to_owned())],
+            "the second identical request was not answered from the cache"
+        );
     }
 }
