@@ -155,16 +155,21 @@ server — and read its stdout:
 sleep 12; kill $pid; cat /tmp/chalk-release.log
 ```
 
-Expect:
+Expect the three lines, with numbers that are this machine's own — how many
+servers are declared, and a tool count that includes the app's own eight, which
+is why 0.1.1's read 25 where 0.1.0's read 11:
 
 ```
-[info] app started; models=[…] provider=https://openrouter.ai/api/v1 endpoint=https://openrouter.ai/api/v1
-[info] mcp: 1 server(s) declared, 1 enabled
-[info] tools offered: 11 from 1 enabled server(s), 0 unreachable
+[info] app started; models=[…] provider=openrouter endpoint=https://openrouter.ai/api/v1
+[info] mcp: 2 server(s) declared, 2 enabled
+[info] tools offered: 25 from 2 enabled server(s), 0 unreachable
 ```
 
-That proves the signature, the settings file, and the MCP client all survived
-packaging. Detach afterwards: `hdiutil detach /Volumes/Chalk`.
+What matters is that all three are there and that `unreachable` is 0: that is
+the signature, the settings file, and the MCP client surviving packaging. A
+server that logs its own lines is the proof its transport was spawned at all —
+0.1.1's run showed the filesystem server printing both of its allowed
+directories. Detach afterwards: `hdiutil detach /Volumes/Chalk`.
 
 ## 7. Authenticate `gh`
 
