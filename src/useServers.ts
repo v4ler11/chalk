@@ -5,7 +5,10 @@ import * as api from "./api";
 
 /**
  * The model context protocol servers and their tools, read on the way in and
- * again whenever the settings save a change.
+ * again whenever the settings save a change — with the app's own tools among
+ * them, the ones that manage the app rather than a server. They arrive from the
+ * same read because they are offered the same way; what tells them apart is that
+ * they have no server on them.
  *
  * They are read here rather than per request because reading them starts
  * servers: the first read is what pays for that, and every request after it is
@@ -31,9 +34,17 @@ export function useServers(onError: (e: unknown) => void) {
     async (refresh = false) => {
       setReading(true);
       try {
-        const [declared, found] = await Promise.all([api.mcpServers(), api.mcpTools(refresh)]);
+        const [declared, found, own] = await Promise.all([
+          api.mcpServers(),
+          api.mcpTools(refresh),
+          api.manageTools(),
+        ]);
         setServers(declared);
-        setTools(found.tools);
+        // The app's own tools stand first and belong to no server: they are in
+        // every request there is, and an empty `server` is what says so — the
+        // same mark the launcher carries, and what the JSON view groups under
+        // **Chalk**.
+        setTools([...own, ...found.tools]);
         setFailures(found.failures);
         setCosts(found.costs);
       } catch (e) {

@@ -85,5 +85,14 @@ export const mcpTools = (refresh = false) => invoke<McpTools>("mcp_tools", { ref
 export const mcpCall = (name: string, args: string) =>
   invoke<McpCallResult>("mcp_call", { name, args });
 
+/**
+ * The app's own tools: the ones that manage its settings and its servers rather
+ * than a server's own. They are in every request rather than a chat's choice, so
+ * the window asks for them once — and they come from the backend, beside the
+ * code that answers them, so a tool the model is offered and the code that runs
+ * it cannot drift apart.
+ */
+export const manageTools = () => invoke<McpTool[]>("manage_tools");
+
 export const openLogs = () => invoke<void>("open_logs");
 export const getLogs = () => invoke<LogEntry[]>("get_logs");

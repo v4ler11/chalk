@@ -361,3 +361,105 @@ fn the_client_reaches_servers_of_both_eras_over_both_transports() {
     }
     let _ = std::fs::remove_file(&script);
 }
+
+/// The real filesystem server, declared the way the app would: `npx -y
+/// @modelcontextprotocol/server-filesystem <dir>`, spoken to through the client
+/// this app ships. Kept out of the default run for the reason above, and
+/// because the first run fetches the package from npm.
+#[test]
+#[ignore = "spawns npx and fetches a package; run with --ignored"]
+fn the_filesystem_server_is_one_the_app_can_declare() {
+    let dir = std::env::temp_dir().join("chalk-mcp-filesystem-smoke");
+    std::fs::create_dir_all(&dir).expect("the smoke directory");
+    std::fs::write(dir.join("read me.txt"), "the filesystem server reads this").expect("a file");
+
+    // What the app would have in ~/.chalk/mcp.json: a server that reads and
+    // writes, so it is not run without being asked, and one that is imported
+    // lazily, since its fourteen tools are not wanted in every request.
+    let server = Server {
+        id: "filesystem".into(),
+        name: "filesystem".into(),
+        enabled: true,
+        auto_run: false,
+        lazy: true,
+        description: String::new(),
+        transport: Transport::Stdio {
+            command: "npx".into(),
+            args: vec![
+                "-y".into(),
+                "@modelcontextprotocol/server-filesystem".into(),
+                dir.display().to_string(),
+            ],
+            env: BTreeMap::new(),
+        },
+    };
+
+    let client = Client::new(Arc::new(|level: &str, message: String| {
+        eprintln!("[{level}] {message}");
+    }));
+
+    tauri::async_runtime::block_on(async {
+        let offered = client.tools(std::slice::from_ref(&server)).await;
+        assert!(offered.failures.is_empty(), "{:?}", offered.failures);
+
+        // This row stops for approval, and the tools that only read run anyway:
+        // the server says so on each of them. A tool that writes is left for
+        // the user to allow, and one that says nothing about itself is too.
+        let auto_run = |name: &str| {
+            offered
+                .tools
+                .iter()
+                .find(|tool| tool.name == name)
+                .unwrap_or_else(|| panic!("{name} was not offered"))
+                .auto_run
+        };
+        assert!(auto_run("filesystem__read_text_file"));
+        assert!(auto_run("filesystem__read_multiple_files"));
+        assert!(auto_run("filesystem__list_directory"));
+        assert!(auto_run("filesystem__list_allowed_directories"));
+        assert!(auto_run("filesystem__search_files"));
+        assert!(auto_run("filesystem__directory_tree"));
+        assert!(auto_run("filesystem__get_file_info"));
+        assert!(!auto_run("filesystem__write_file"));
+        assert!(!auto_run("filesystem__edit_file"));
+        assert!(!auto_run("filesystem__move_file"));
+        assert!(!auto_run("filesystem__create_directory"));
+        let read: Vec<&str> = offered
+            .tools
+            .iter()
+            .filter(|tool| tool.auto_run)
+            .map(|tool| tool.name.as_str())
+            .collect();
+        println!("runs unasked: {read:?}");
+
+        let report = client.verify(&server).await.expect("the filesystem server answers");
+        let mut names: Vec<&str> = report.tools.iter().map(|tool| tool.name.as_str()).collect();
+        names.sort();
+        println!(
+            "agreed revision {} · {} · {} tools: {names:?}",
+            report.protocol,
+            report.server_name,
+            names.len()
+        );
+        assert_eq!(names.len(), 14);
+        assert!(names.contains(&"read_text_file"));
+        assert!(names.contains(&"list_allowed_directories"));
+
+        // A file read back through the name a request would offer it under —
+        // which is the whole point: the client runs it, not this test.
+        let path = dir.join("read me.txt").display().to_string();
+        let read = client
+            .call("filesystem__read_text_file", Some(format!(r#"{{"path":"{path}"}}"#)))
+            .await
+            .unwrap();
+        assert!(!read.is_error, "{}", read.text);
+        assert_eq!(read.text.trim(), "the filesystem server reads this");
+
+        // The directories it was given on the command line, kept rather than
+        // replaced: this app lists no roots, so its arguments are the scope.
+        let allowed = client.call("filesystem__list_allowed_directories", None).await.unwrap();
+        assert!(allowed.text.contains(&dir.display().to_string()), "{}", allowed.text);
+    });
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

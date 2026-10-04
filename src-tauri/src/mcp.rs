@@ -27,6 +27,7 @@ use parking_lot::Mutex;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, ClientCapabilities, ClientConfig, ContentBlock,
     Implementation, ProtocolVersion, ResourceContents, ServerPeerInfo, Tool as RemoteTool,
+    ToolAnnotations,
 };
 use rmcp::service::{ClientLifecycleMode, ClientServiceExt, RunningService};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
@@ -80,6 +81,9 @@ pub struct Server {
     /// first. On unless the file says otherwise, like `enabled`: a server that
     /// is declared is one the user wants reached, and a call is stopped only
     /// where they have said it should be.
+    ///
+    /// Off is not the whole server, though: a tool the server itself declares
+    /// read-only runs as the model asks anyway — see `runs_unasked`.
     #[serde(default = "on")]
     pub auto_run: bool,
     /// A server imported lazily: its tools are not offered to a chat at all
@@ -254,7 +258,9 @@ pub struct ToolOffer {
     pub description: String,
     /// The tool's arguments, as the JSON Schema the server gave.
     pub parameters: Value,
-    /// Whether the server runs its tools without asking first.
+    /// Whether this tool runs as the model asks, or the round that calls it
+    /// stops for the user first: the server's own setting, or the tool's own
+    /// word that it only reads — a read is not what the gate is for.
     pub auto_run: bool,
 }
 
@@ -358,6 +364,20 @@ pub struct Client {
     index: Mutex<HashMap<String, (String, String)>>,
 }
 
+/// Whether a server's tool runs as the model asks, or stops for the user first.
+///
+/// The server's own setting decides it, and a tool the server itself declares
+/// read-only is let through either way: that hint is what tells a read from a
+/// write in the protocol, and stopping for a read is stopping for nothing. It
+/// is the server's own word, taken as given — a server that lies about its own
+/// tools is a server that would lie about their answers.
+fn runs_unasked(auto_run: bool, annotations: Option<&ToolAnnotations>) -> bool {
+    auto_run
+        || annotations
+            .and_then(|annotations| annotations.read_only_hint)
+            .unwrap_or(false)
+}
+
 impl Client {
     pub fn new(log: Log) -> Self {
         Client {
@@ -408,7 +428,7 @@ impl Client {
                     description: tool.description.clone().unwrap_or_default().to_string(),
                     parameters: serde_json::to_value(&*tool.input_schema)
                         .unwrap_or_else(|_| Value::Object(Map::new())),
-                    auto_run: server.auto_run,
+                    auto_run: runs_unasked(server.auto_run, tool.annotations.as_ref()),
                 });
             }
             costs.push(Cost {
@@ -788,6 +808,24 @@ fn explain(error: &ServiceError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A server that stops for approval still lets a read through, because the
+    /// tool says so itself: that is what the protocol's hint is for.
+    #[test]
+    fn a_read_only_tool_runs_unasked_even_where_its_server_asks() {
+        let mut reads = ToolAnnotations::default();
+        reads.read_only_hint = Some(true);
+        let mut writes = ToolAnnotations::default();
+        writes.read_only_hint = Some(false);
+
+        assert!(runs_unasked(true, None), "a server that runs its own tools");
+        assert!(!runs_unasked(false, None), "and one that stops for the user");
+        assert!(runs_unasked(true, Some(&reads)));
+        assert!(runs_unasked(false, Some(&reads)), "a read is not what the gate is for");
+        assert!(!runs_unasked(false, Some(&writes)), "a write is asked about");
+        // Saying nothing is not saying read-only.
+        assert!(!runs_unasked(false, Some(&ToolAnnotations::default())));
+    }
 
     fn temp(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("chalk-mcp-{name}-{}.json", std::process::id()));
