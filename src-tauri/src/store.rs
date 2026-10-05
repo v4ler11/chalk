@@ -53,6 +53,39 @@ const V3: &str = "ALTER TABLE chats ADD COLUMN reasoning TEXT NOT NULL DEFAULT '
 /// next time it was read.
 const V4: &str = "ALTER TABLE chats ADD COLUMN servers TEXT NOT NULL DEFAULT '';";
 
+/// The schema, at `user_version` 5: when a chat was made, and the prompt it was
+/// made of.
+///
+/// `id` used to be enough to order the history by creation, and it no longer is:
+/// the channel draws threads in the order they were posted, and a thread that is
+/// answered again must not jump to the end of that order — which is exactly what
+/// `updated_at`, rewritten on every answer, would do. `root` is the first prompt
+/// as written, kept rather than derived, so a list can draw a thread without the
+/// transcript it came from; how much follows it is still read off the transcript,
+/// where it cannot drift.
+const V5_COLUMNS: &str = "
+ALTER TABLE chats ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE chats ADD COLUMN root TEXT NOT NULL DEFAULT '';
+";
+
+/// The rows that were already there: their creation is not recorded anywhere, so
+/// the last write is the best account of it, and their first prompt is in the
+/// transcript under a key the window writes.
+///
+/// Run apart from the columns and without its failures raised: a database
+/// without the JSON functions still gets the columns, and a `root` left empty is
+/// a row the window draws by its title — which is the same prompt, cut to what a
+/// row holds.
+const V5_BACKFILL: &str = "
+UPDATE chats SET created_at = updated_at WHERE created_at = 0;
+UPDATE chats SET root = COALESCE(
+    CASE json_type(messages, '$[0].content')
+        WHEN 'text' THEN json_extract(messages, '$[0].content')
+        ELSE json_extract(messages, '$[0].content[0].text')
+    END, '')
+WHERE root = '';
+";
+
 /// One row of the history list: what a list shows, without the transcript.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +100,17 @@ pub struct ChatSummary {
     /// The reasoning level this chat is asking with; empty is off, which is
     /// every row written before there was a control for it.
     pub reasoning: String,
+    /// Unix time in milliseconds of the chat's creation, which is what a channel
+    /// orders by: a thread posted an hour ago stays above one posted a minute
+    /// ago, however late either of them is answered.
+    pub created_at: i64,
+    /// The first prompt as it was written, or empty on a row whose transcript
+    /// does not say — a list falls back to the title, which is that same prompt
+    /// cut to what a row holds.
+    pub root: String,
+    /// How many messages follow that first one: what a thread has said since it
+    /// was posted, and zero while nothing has come back.
+    pub replies: i64,
 }
 
 /// A chat and its transcript.
@@ -82,6 +126,48 @@ pub struct ChatRecord {
     pub servers: Option<Vec<String>>,
     /// The transcript exactly as it was written.
     pub messages: Value,
+}
+
+/// The columns a list is drawn from, in the order [`summary_row`] reads them.
+/// How many replies a thread has is read off the transcript here rather than
+/// kept beside it: it is the one value in a row that can be derived without
+/// guessing, so it is derived.
+const SUMMARY: &str =
+    "id, title, updated_at, model, reasoning, created_at, root, MAX(json_array_length(messages) - 1, 0)";
+
+/// One row of that list.
+fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatSummary> {
+    Ok(ChatSummary {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        updated_at: row.get(2)?,
+        model: row.get(3)?,
+        reasoning: row.get(4)?,
+        created_at: row.get(5)?,
+        root: row.get(6)?,
+        replies: row.get(7)?,
+    })
+}
+
+/// The first prompt in a transcript, as written: what a list draws a thread as.
+/// A prompt with a picture in it is still a prompt that was written, so its
+/// words are what is kept and the parts that are not words are not.
+fn first_prompt(messages: &Value) -> String {
+    let Some(first) = messages.as_array().and_then(|all| {
+        all.iter()
+            .find(|message| message.get("role").and_then(Value::as_str) == Some("user"))
+    }) else {
+        return String::new();
+    };
+    match first.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(|part| part.get("text").and_then(Value::as_str))
+            .collect::<Vec<&str>>()
+            .join(" "),
+        _ => String::new(),
+    }
 }
 
 pub struct Store {
@@ -138,28 +224,25 @@ impl Store {
             conn.execute_batch(V4).map_err(err)?;
             conn.pragma_update(None, "user_version", 4).map_err(err)?;
         }
+        if version < 5 {
+            conn.execute_batch(V5_COLUMNS).map_err(err)?;
+            let _ = conn.execute_batch(V5_BACKFILL);
+            conn.pragma_update(None, "user_version", 5).map_err(err)?;
+        }
         Ok(())
     }
 
-    /// The chats, most recently written first.
+    /// The chats, most recently made first. Not most recently written: a thread
+    /// answered just now belongs where it was posted, not at the top of a list
+    /// that is ordered by what happened last to it.
     pub fn list(&self) -> Result<Vec<ChatSummary>, String> {
         let conn = self.conn.lock();
         let mut stmt = conn
-            .prepare(
-                "SELECT id, title, updated_at, model, reasoning FROM chats ORDER BY updated_at DESC, id DESC",
-            )
+            .prepare(&format!(
+                "SELECT {SUMMARY} FROM chats ORDER BY created_at DESC, id DESC"
+            ))
             .map_err(err)?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(ChatSummary {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    updated_at: row.get(2)?,
-                    model: row.get(3)?,
-                    reasoning: row.get(4)?,
-                })
-            })
-            .map_err(err)?;
+        let rows = stmt.query_map([], summary_row).map_err(err)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(err)
     }
 
@@ -234,8 +317,8 @@ impl Store {
             Some(id) => {
                 let changed = conn
                     .execute(
-                        "UPDATE chats SET title = ?2, model = ?3, reasoning = ?4, servers = ?5, messages = ?6, updated_at = ?7 WHERE id = ?1",
-                        params![id, title, model, reasoning, ids, raw, now],
+                        "UPDATE chats SET title = ?2, model = ?3, reasoning = ?4, servers = ?5, messages = ?6, updated_at = ?7, root = ?8 WHERE id = ?1",
+                        params![id, title, model, reasoning, ids, raw, now, first_prompt(messages)],
                     )
                     .map_err(err)?;
                 // The row was deleted in another window, or by an older save that
@@ -247,20 +330,22 @@ impl Store {
             }
             None => {
                 conn.execute(
-                    "INSERT INTO chats (title, model, reasoning, servers, messages, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    params![title, model, reasoning, ids, raw, now],
+                    "INSERT INTO chats (title, model, reasoning, servers, messages, updated_at, created_at, root) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7)",
+                    params![title, model, reasoning, ids, raw, now, first_prompt(messages)],
                 )
                 .map_err(err)?;
                 conn.last_insert_rowid()
             }
         };
-        Ok(ChatSummary {
-            id,
-            title: title.to_owned(),
-            updated_at: now,
-            model: model.to_owned(),
-            reasoning: reasoning.to_owned(),
-        })
+        // Read back rather than assembled from the arguments: the row a write
+        // answers with has to say what the row says, and what it says about when
+        // it was made and how much follows its first prompt are the row's own.
+        conn.query_row(
+            &format!("SELECT {SUMMARY} FROM chats WHERE id = ?1"),
+            [id],
+            summary_row,
+        )
+        .map_err(err)
     }
 
     /// Renames a chat, leaving its transcript alone.

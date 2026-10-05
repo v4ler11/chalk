@@ -101,9 +101,10 @@ fn a_chats_servers_round_trip_and_its_silence_is_not_a_choice() {
 }
 
 /// The frontend reads `id`, `title` and `updatedAt` off a row, the model it
-/// is holding, and the reasoning level it is asking with. Renaming a field,
-/// or losing the attribute that camel-cases it, would leave the sidebar
-/// sorting and grouping by nothing at all.
+/// is holding, and the reasoning level it is asking with. The channel reads
+/// three more: when the thread was posted, the prompt it was posted as, and how
+/// much has come back since. Renaming a field, or losing the attribute that
+/// camel-cases it, would leave the feed drawing threads with nothing to draw.
 #[test]
 fn a_row_crosses_to_the_frontend_as_it_is_read() {
     let store = Store::in_memory().unwrap();
@@ -121,8 +122,81 @@ fn a_row_crosses_to_the_frontend_as_it_is_read() {
             "updatedAt": 42,
             "model": "test/model",
             "reasoning": "low",
+            // The row above holds no transcript, which is the one case where a
+            // thread has neither a prompt of its own nor anything after it.
+            "createdAt": 42,
+            "root": "",
+            "replies": 0,
         })
     );
+}
+
+/// A thread answered again keeps the place it was posted in: a feed orders by
+/// when a thread was made, not by what happened to it last, so an answer
+/// arriving in the background cannot shuffle the channel under the reader.
+#[test]
+fn a_thread_keeps_its_place_when_it_is_answered_again() {
+    let store = Store::in_memory().unwrap();
+    let first = store
+        .save(None, "first", "m", "", None, &json!([]), 10)
+        .unwrap();
+    let second = store
+        .save(None, "second", "m", "", None, &json!([]), 20)
+        .unwrap();
+
+    assert_eq!(store.list().unwrap()[0].id, second.id);
+
+    // The older one is written again, later. It is still the older one.
+    store
+        .save(
+            Some(first.id),
+            "first",
+            "m",
+            "",
+            None,
+            &json!([{ "role": "user", "content": "hello" }]),
+            30,
+        )
+        .unwrap();
+
+    let rows = store.list().unwrap();
+    assert_eq!(rows[0].id, second.id);
+    assert_eq!(rows[1].id, first.id);
+    // And what the row says about itself follows its transcript, not its order.
+    assert_eq!(rows[1].created_at, 10);
+    assert_eq!(rows[1].updated_at, 30);
+}
+
+/// A thread is drawn by the prompt it was posted as, and says how much has come
+/// back since. The words of a prompt with a picture in it are the words, and a
+/// count read off the transcript cannot drift from it.
+#[test]
+fn a_thread_is_named_by_its_prompt_and_counts_what_follows() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "what is this",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": [
+                    { "type": "text", "text": "what is this" },
+                    { "type": "image_url", "image_url": { "url": "data:image/png;base64,AA" } },
+                ] },
+                { "role": "assistant", "content": "a picture" },
+            ]),
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(chat.root, "what is this");
+    assert_eq!(chat.replies, 1);
+    // And the list, which reads the same row through a different query, agrees.
+    let listed = &store.list().unwrap()[0];
+    assert_eq!(listed.root, "what is this");
+    assert_eq!(listed.replies, 1);
 }
 
 /// A database written before there were models to hold, or a reasoning level
