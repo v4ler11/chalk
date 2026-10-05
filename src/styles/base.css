@@ -48,11 +48,11 @@
   --content-w: clamp(420px, 72vw, 1120px);
   --prompt: 326px;
   --sidebar-w: 246px;
-  /* The rail: its own padding and its controls — the three lights, and the
-     three buttons it may carry (back, settings) with the gap between them —
-     16 + 52 + 12 + 98 + 16. Only as wide as what it holds, so the chrome covers
-     just the corner of the panel beneath it. */
-  --rail-collapsed: 196px;
+  /* The rail: its own padding and its controls — the three lights, and the gap
+     after them — 16 + 52 + 16. Only as wide as what it holds, so the chrome
+     covers just the corner of the panel beneath it; the panel's own bar reserves
+     the same strip, and the two read as one band. */
+  --rail-collapsed: 84px;
   --titlebar: 48px;
   /* How much the composer grows past its design size: nothing at the 820px
      minimum window, 2px of extra type by 1600px. */

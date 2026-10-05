@@ -138,12 +138,13 @@ function App() {
     threadOpen,
   ]);
 
-  // The panel's own bar, drawn once per pane: it belongs to the pane it stands
-  // on, so a thread's bar arrives and leaves with that pane while a channel's
-  // stays where it is.
-  const nav = (
+  // The panel's own bar, built for the pane it stands on: a thread's bar carries
+  // the way back and offers the JSON view, and a channel's carries neither, so
+  // nothing appears on one bar because of what another pane is doing.
+  const nav = (thread: boolean) => (
     <ChatNav
-      thread={threadOpen}
+      thread={thread}
+      onBack={conversation.backToChannel}
       jsonView={conversation.jsonView}
       onJsonView={conversation.showJson}
       onOpenSettings={conversation.toggleSettings}
@@ -153,9 +154,9 @@ function App() {
   return (
     <div className="app">
       <div className="shell">
-        {/* The rail carries the way back to the feed while a thread is open.
-            The settings are the panel's own now, behind its three-dots. */}
-        <TitleBar thread={threadOpen} onBack={conversation.backToChannel} />
+        {/* The rail is the window's own corner now: the controls and the drag
+            region, and nothing that belongs to a pane. */}
+        <TitleBar />
 
         <main className="main">
           {/* The panes share one box so the feed can stay mounted under a thread
@@ -164,7 +165,7 @@ function App() {
               draws the panel's bar itself, at its own top edge. */}
           <div className="pane-stack">
             <div className={`pane${channelVisible ? "" : " off"}`} inert={!channelVisible}>
-              {nav}
+              {nav(false)}
               <Channel
                 rows={conversation.rows}
                 error={error}
@@ -209,7 +210,7 @@ function App() {
             {threadPane && (
               <div className={`pane thread${holding ? " off" : ""}`} inert={!threadVisible}>
                 <ChatPane
-                  nav={nav}
+                  nav={nav(true)}
                   messages={threadVisible ? conversation.messages : held.current.messages}
                   pending={threadVisible ? conversation.pending : held.current.pending}
                   error={error || conversation.threadError || conversation.unreachable}
@@ -250,7 +251,7 @@ function App() {
                 open on the right. */}
             {conversation.settingsView ? (
               <div className="pane">
-                {nav}
+                {nav(threadOpen)}
                 <ModeBar title="Settings" onClose={conversation.leaveSettings} />
                 {config ? (
                   <SettingsView config={config} onSaved={setConfig} />
@@ -264,7 +265,7 @@ function App() {
               </div>
             ) : threadOpen && conversation.jsonView ? (
               <div className="pane">
-                {nav}
+                {nav(threadOpen)}
                 <ModeBar title="JSON" onClose={conversation.closeJson} />
                 <div className="settings-body">
                   <SectionNav

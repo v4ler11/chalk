@@ -51,9 +51,10 @@
   background-color: var(--bg);
 }
 
-/* The chat panel's nav: this strip drags the window wherever the window's
-   controls are not, it names the model in use, and its rule is what separates
-   the nav from the transcript below it. */
+/* A pane's own bar: the strip that drags the window wherever the window's
+   controls are not, and whose rule is what separates the bar from the pane below
+   it. Its controls begin clear of the rail's own: 16 of padding, the three lights
+   at 52, and the 12 the rail puts between them. */
 .chat-nav {
   display: flex;
   align-items: center;
@@ -61,10 +62,16 @@
   gap: 6px;
   flex: none;
   height: var(--titlebar);
-  padding: 0 24px;
+  padding: 0 24px 0 80px;
   border-bottom: 1px solid var(--border);
   background-color: var(--bg);
   user-select: none;
+}
+
+/* The way back to the feed sits at the bar's left, with the three-dots kept at
+   its right. */
+.chat-nav > .hint {
+  margin-right: auto;
 }
 
 /* The nav's own menu: the three-dots at its right, holding the window's view

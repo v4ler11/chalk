@@ -272,6 +272,7 @@ function Harness() {
         <main className="main">
           <ChatNav
             thread
+            onBack={() => setEvents((e) => [...e, "back"])}
             jsonView={false}
             onJsonView={() => {}}
             onOpenSettings={() => setEvents((e) => [...e, "settings"])}
