@@ -426,15 +426,28 @@
   transition: visibility 0s linear 180ms;
 }
 
-/* What a thread is written on: a sheet a shade off the window's own, so the
-   slide reads as a sheet moving over the channel rather than as the window
-   redrawing. It covers the whole pane, the strip behind the composer included,
-   so the space under the composer travels with the thread while the composer's
-   card itself stays where it is. */
+/* A pane on its way out keeps its place for one slide, and it takes no hover with
+   it. The pointer is on the pane arriving over it, and the browser only clears
+   what a hover put there a few frames later; with no transition in the way, the
+   chrome goes the moment it does, rather than fading while the other pane slides
+   across. `transition` is set by none of the rules that reveal these, so this
+   needs no weight of its own to win. */
+.pane.off .row-actions,
+.pane.off .msg-actions,
+.pane.off .key-hint {
+  transition: none;
+}
+
+/* What a thread is written on: a sheet in the window's own colour, with a border
+   along the edge that leads, so the slide reads as one pane passing over another
+   rather than as the window redrawing. It covers the whole pane, the strip behind
+   the composer included, so the space under the composer travels with the thread
+   while the composer's card itself stays where it is. */
 .transcript-sheet {
   position: absolute;
   inset: 0;
-  background-color: var(--sidebar);
+  background-color: var(--bg);
+  border-left: 1px solid var(--border);
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
