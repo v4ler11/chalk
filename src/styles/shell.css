@@ -377,12 +377,15 @@
 
 /* The panes share one box so the channel can stay mounted under a thread: a
    thread opened and left again must not rebuild the feed, whose scroll and
-   half-typed draft live in its own DOM. The stack fills what the nav leaves. */
+   half-typed draft live in its own DOM. The stack fills what the nav leaves, and
+   it clips: the thread's transcript arrives from the right edge of the window and
+   would otherwise hang off it and drag a scrollbar along. */
 .pane-stack {
   position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 /* Every pane covers the stack, on screen or off, and that is the point: showing
@@ -392,7 +395,11 @@
    fits in a frame — and the frame it misses is the text blinking out and back.
    It would also move the geometry under the pointer for that frame, which reads
    as the hover flicking on and off. Laid out once, showing a pane is a paint of
-   what is already there. */
+   what is already there.
+
+   A pane is opaque, so it covers what is beneath it; the thread's is the
+   exception, since the channel it slides over has to be seen until it is
+   covered. */
 .pane {
   position: absolute;
   inset: 0;
@@ -400,15 +407,48 @@
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  background-color: var(--bg);
+}
+
+.pane.thread {
+  background-color: transparent;
 }
 
 /* Off, the pane keeps its place and its layout — `visibility`, not
    `display: none`, which would leave a scroll container with a scrollable area
-   of zero and bring it back at the top. It is off the pointer's path, so nothing
-   hidden is hovered, and inert, so nothing hidden is reachable by keyboard or by
-   a screen reader. */
+   of zero and bring it back at the top. It leaves the pointer's path at once and
+   is inert, and it goes out of sight at the *end* of a slide rather than at the
+   start: that is what keeps a pane in the picture while the other slides over it,
+   and while it slides away itself. */
 .pane.off {
   visibility: hidden;
   pointer-events: none;
+  transition: visibility 0s linear 180ms;
+}
+
+/* What a thread is written on: a surface a shade off the window's own, so the
+   slide reads as a sheet moving over the channel rather than as the window
+   redrawing. The transcript is its child, which is what binds the two: the
+   messages travel with the surface, and the composer below it does not move at
+   all. It arrives from the right edge, moving left, and leaves the same way, so
+   going in and coming back are one movement read forwards and backwards. */
+.transcript {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-color: var(--sidebar);
+  animation: thread-in 180ms ease-out;
+  transition: transform 180ms ease-out;
+}
+
+.pane.thread.off .transcript {
+  transform: translateX(100%);
+}
+
+@keyframes thread-in {
+  from {
+    transform: translateX(100%);
+  }
 }
 

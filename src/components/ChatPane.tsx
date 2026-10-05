@@ -94,16 +94,21 @@ export function ChatPane({
 }: Props) {
   return (
     <>
-      <MessageList
-        messages={messages}
-        pending={pending}
-        error={error}
-        follow={follow}
-        onFollowChange={onFollowChange}
-        canAct={canAct}
-        onRegenerate={onRegenerate}
-        onEdit={onEdit}
-      />
+      {/* The transcript is the half that slides: the surface under it is a colour
+          of its own and travels with it, so the messages go with the sheet they
+          are written on. The composer below is furniture and stays where it is. */}
+      <div className="transcript">
+        <MessageList
+          messages={messages}
+          pending={pending}
+          error={error}
+          follow={follow}
+          onFollowChange={onFollowChange}
+          canAct={canAct}
+          onRegenerate={onRegenerate}
+          onEdit={onEdit}
+        />
+      </div>
 
       <footer className="composer-bar">
         {/* A server's tool calls are what a turn may stop on: the calls are
