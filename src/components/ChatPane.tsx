@@ -30,6 +30,11 @@ interface Props {
   onRun: () => void;
   onDecline: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
+  /** The model the open chat is holding, named in the composer's chip. */
+  model: string;
+  /** The models the settings offer, in their order. */
+  models: string[];
+  onModel: (model: string) => void;
   reasoning: ReasoningLevel;
   onReasoning: (level: ReasoningLevel) => void;
   spent: number;
@@ -69,6 +74,9 @@ export function ChatPane({
   onRun,
   onDecline,
   composerRef,
+  model,
+  models,
+  onModel,
   reasoning,
   onReasoning,
   spent,
@@ -106,6 +114,9 @@ export function ChatPane({
         <Composer
           textareaRef={composerRef}
           streaming={pending !== null}
+          model={model}
+          models={models}
+          onModel={onModel}
           reasoning={reasoning}
           onReasoning={onReasoning}
           spent={spent}

@@ -1,14 +1,8 @@
 import { useState } from "react";
-import { Check, ChevronDown, EllipsisVertical } from "lucide-react";
+import { Check, EllipsisVertical } from "lucide-react";
 import { MOD } from "../keybinds";
 
 interface Props {
-  /** The model the open thread is holding, named in the chip — or, on the
-   *  channel, the one the next thread will be posted with. */
-  model: string;
-  /** The models the settings offer, in their order. */
-  models: string[];
-  onPick: (model: string) => void;
   /** Whether a thread is open. The JSON view is a thread's own — there is no
    *  request to show for a channel — so its menu is not offered without one. */
   thread: boolean;
@@ -19,60 +13,18 @@ interface Props {
 
 /**
  * The chat panel's own nav: the strip across the top of the panel, which drags
- * the window wherever the controls are not, the model in use at its right, and
- * the three-dots beside it — the window's view switches, which outlive the chat
- * they are taken in.
+ * the window wherever the controls are not, and the three-dots at its right —
+ * the window's view switches, which outlive the chat they are taken in.
  *
- * The chip opens the list of models: choosing one is a per-chat act and belongs
- * beside the chat, while the list itself is written in Settings, which the
- * sidebar's own row opens.
- *
- * The rule under it is what separates this nav from the transcript below.
+ * The model that used to be named here is in the composer now, beside the
+ * message it applies to. The rule under this strip is what separates the nav
+ * from the transcript below it.
  */
-export function ChatNav({ model, models, onPick, thread, jsonView, onJsonView }: Props) {
-  const [open, setOpen] = useState(false);
+export function ChatNav({ thread, jsonView, onJsonView }: Props) {
   const [viewOpen, setViewOpen] = useState(false);
 
   return (
     <div className="chat-nav" data-tauri-drag-region="deep">
-      <div className="model-picker">
-        <button
-          className="model-chip"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <span className="model-name">{model || "model"}</span>
-          <ChevronDown className="chevron" />
-        </button>
-
-        {open && (
-          <>
-            {/* Anywhere else closes the list, which is what a click outside a
-                menu is for. */}
-            <div className="menu-backdrop" onClick={() => setOpen(false)} />
-            <div className="menu below model-menu" role="listbox">
-              {models.map((name) => (
-                <button
-                  key={name}
-                  className={`menu-option${name === model ? " active" : ""}`}
-                  role="option"
-                  aria-selected={name === model}
-                  onClick={() => {
-                    onPick(name);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="menu-option-name">{name}</span>
-                  {name === model && <Check className="menu-option-check" />}
-                </button>
-              ))}
-              {models.length === 0 && <span className="menu-option empty">No models yet</span>}
-            </div>
-          </>
-        )}
-      </div>
-
       {/* The view switches, of which there is one: the conversation as plain
           JSON instead of the transcript and the composer. It belongs to a thread
           rather than to the window now: a channel has no request to show, so

@@ -270,14 +270,7 @@ function Harness() {
           />
         </div>
         <main className="main">
-          <ChatNav
-            model={config.models[0]}
-            models={config.models}
-            onPick={() => {}}
-            thread
-            jsonView={false}
-            onJsonView={() => {}}
-          />
+          <ChatNav thread jsonView={false} onJsonView={() => {}} />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
               message={assistant}
@@ -334,6 +327,9 @@ function Harness() {
             <Composer
               textareaRef={textareaRef}
               streaming={false}
+              model={config.models[0] ?? ""}
+              models={config.models}
+              onModel={(name) => setEvents((e) => [...e, `model ${name}`])}
               reasoning={reasoning}
               spent={0.00428}
               onReasoning={(level) => {

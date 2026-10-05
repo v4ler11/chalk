@@ -380,6 +380,46 @@
   gap: 8px;
 }
 
+/* The model in use, in the bar's right corner: no box around it, just the name
+   and a chevron, the way the rail used to name it. Choosing one is a per-chat
+   act, so it belongs beside the message being written, and the list it opens is
+   the one Settings writes. The cost sits between it and the send button, so the
+   chip stays where it is whether or not there is a cost to show. */
+.model-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: calc(12px + var(--composer-grow));
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.model-chip:hover {
+  color: var(--text-primary);
+}
+
+.model-chip .chevron {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.model-name {
+  /* Wide enough for the ids in use, so the name is not cut off; past it the
+     ellipsis keeps a long one from crowding the send button. */
+  max-width: 260px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* What the chat has cost, beside the send button: every answer's price, summed,
    in the money format of two decimals. Tabular figures keep it from twitching as
    the total grows, and it is chrome rather than content — a drag across it should

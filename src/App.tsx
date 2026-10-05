@@ -37,6 +37,9 @@ function App() {
   const conversation = useConversation({ config, servers, failures, setError, setFollow, composerRef });
 
   const view = conversation.view;
+  // The models Settings offers, in their order, read here once: both composers
+  // name the one in use and open this list.
+  const models = config?.models ?? [];
   const threadOpen = view.kind === "thread";
   // The feed stays mounted while a thread or the settings are showing, hidden
   // rather than unmounted, so its scroll and its half-typed draft survive the
@@ -109,9 +112,6 @@ function App() {
               a thread is open. It is not drawn while the settings take the pane. */}
           {!conversation.settingsView && (
             <ChatNav
-              model={conversation.model}
-              models={config?.models ?? []}
-              onPick={conversation.setModel}
               thread={threadOpen}
               jsonView={conversation.jsonView}
               onJsonView={conversation.showJson}
@@ -132,6 +132,9 @@ function App() {
                   <Composer
                     textareaRef={channelVisible ? composerRef : channelComposerRef}
                     streaming={false}
+                    model={conversation.model}
+                    models={models}
+                    onModel={conversation.setModel}
                     reasoning={conversation.reasoning}
                     onReasoning={conversation.setReasoning}
                     spent={0}
@@ -200,6 +203,9 @@ function App() {
                   onRun={conversation.allow}
                   onDecline={conversation.decline}
                   composerRef={composerRef}
+                  model={conversation.model}
+                  models={models}
+                  onModel={conversation.setModel}
                   reasoning={conversation.reasoning}
                   onReasoning={conversation.setReasoning}
                   spent={conversation.spent}

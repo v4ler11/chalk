@@ -16,6 +16,17 @@ interface Props {
   /** A response is in flight: the submit button becomes Stop. */
   streaming: boolean;
   /**
+   * The model this chat is holding, named in the chip beside the send button —
+   * or, on the channel, the one the next thread will be posted with. Choosing
+   * one is a per-chat act and belongs beside the message being written; the list
+   * it opens is written in Settings.
+   */
+  model: string;
+  /** The models the settings offer, in their order. */
+  models: string[];
+  /** The model to post with from the next request on. */
+  onModel: (model: string) => void;
+  /**
    * How hard the chat is asking the model to think. `""` is off, which is what a
    * request carries when nothing has been chosen.
    */
@@ -56,12 +67,16 @@ interface Props {
  * same shape and colour: the hammer alone while this chat calls no server —
  * which is then the way into the list — and, while it calls any, a pill of the
  * hammer and how many it calls, whose chevron opens that list and whose hammer
- * gives them all up. What the chat has cost sits beside the send button, its
- * newest message's change over the total.
+ * gives them all up. The model in use sits in the bar's right corner, beside the
+ * send button, and opens the list of them; what the chat has cost sits between
+ * the two, its newest message's change over the total.
  */
 export function Composer({
   textareaRef,
   streaming,
+  model,
+  models,
+  onModel,
   reasoning,
   onReasoning,
   spent,
@@ -74,13 +89,16 @@ export function Composer({
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Which of the two menus is open — the levels, or the servers — and where the
-  // control that opened it was: both are drawn at the window's edge rather than
-  // inside the composer, whose bar clips everything that would hang out of it.
-  const [menu, setMenu] = useState<"reasoning" | "servers" | null>(null);
+  // Which of the three menus is open — the models, the levels, or the servers —
+  // and where the control that opened it was: each is drawn at the window's edge
+  // rather than inside the composer, whose bar clips everything that would hang
+  // out of it.
+  const [menu, setMenu] = useState<"reasoning" | "servers" | "model" | null>(null);
   const [anchor, setAnchor] = useState({ left: 0, bottom: 0 });
   const levelRef = useRef<HTMLDivElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
+  // The chip in the bar's right corner, which the model list hangs above.
+  const modelRef = useRef<HTMLButtonElement>(null);
   const current = REASONING_LEVELS.find((option) => option.level === reasoning) ?? REASONING_LEVELS[0];
   // Which servers this chat calls, which is what the tools control shows and
   // counts — the servers themselves, since that is what the switches in its list
@@ -184,12 +202,12 @@ export function Composer({
   }
 
   /**
-   * Opens one of the two under the control that asked for it, closing the other;
-   * pressing the same control again gives it up. The menu is placed from that
-   * control's own rect, so it hangs where the button is.
+   * Opens one of the three under the control that asked for it, closing the
+   * others; pressing the same control again gives it up. The menu is placed from
+   * that control's own rect, so it hangs where the button is.
    */
-  function openMenu(which: "reasoning" | "servers") {
-    const el = (which === "reasoning" ? levelRef : toolsRef).current;
+  function openMenu(which: "reasoning" | "servers" | "model") {
+    const el = (which === "reasoning" ? levelRef : which === "servers" ? toolsRef : modelRef).current;
     if (el) {
       const rect = el.getBoundingClientRect();
       setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
@@ -379,6 +397,20 @@ export function Composer({
           </div>
         </div>
         <div className="composer-right">
+          {/* The model this chat is holding, or the one the next thread will be
+              posted with. It sits beside the send button because the choice
+              belongs to the message being written, and the list it opens is
+              written in Settings. */}
+          <button
+            ref={modelRef}
+            className="model-chip"
+            aria-haspopup="listbox"
+            aria-expanded={menu === "model"}
+            onClick={() => openMenu("model")}
+          >
+            <span className="model-name">{model || "model"}</span>
+            <ChevronDown className="chevron" />
+          </button>
           {/* What the chat has cost so far: every answer's price, summed, in the
               draft's own corner where the next request is sent from. */}
           {spent > 0 && <span className="composer-cost">{price(spent)}</span>}
@@ -441,6 +473,29 @@ export function Composer({
                     {option.level === reasoning && <Check className="menu-option-check" />}
                   </button>
                 ))}
+              </div>
+            ) : menu === "model" ? (
+              <div
+                className="menu model-menu"
+                role="listbox"
+                style={{ left: anchor.left, bottom: anchor.bottom }}
+              >
+                {models.map((name) => (
+                  <button
+                    key={name}
+                    className={`menu-option${name === model ? " active" : ""}`}
+                    role="option"
+                    aria-selected={name === model}
+                    onClick={() => {
+                      onModel(name);
+                      setMenu(null);
+                    }}
+                  >
+                    <span className="menu-option-name">{name}</span>
+                    {name === model && <Check className="menu-option-check" />}
+                  </button>
+                ))}
+                {models.length === 0 && <span className="menu-option empty">No models yet</span>}
               </div>
             ) : (
               <div
