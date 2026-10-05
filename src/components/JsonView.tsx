@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, History, Wrench } from "lucide-react";
 import * as api from "../api";
+import { copyText } from "../clipboard";
 import { groupTools } from "../lazy";
 import { tokens, toolBytes } from "../tools";
 import type { NavSection } from "./SectionNav";
@@ -32,26 +33,6 @@ interface Props {
   /** The lazily imported servers still waiting to be loaded, as the prompt will
    *  name them; the backend needs them to build the request's system message. */
   lazy: LazyServer[];
-}
-
-/**
- * Writes text to the clipboard, with the old selection copy as the fallback
- * where the async clipboard is unavailable — the same two ways the transcript's
- * own copy works.
- */
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
-  }
 }
 
 const TOKEN =
@@ -267,7 +248,7 @@ export function JsonView({
   );
 
   async function copy() {
-    await copyText(text);
+    if (!(await copyText(text))) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
   }

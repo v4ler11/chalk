@@ -26,6 +26,10 @@
     --json-string: #7ddc9a;
     --json-number: #f0c674;
     --json-literal: #c4a7ff;
+    /* The two code roles JSON has not got. The other three follow the JSON
+       view's tokens, which this scheme has already turned. */
+    --code-function: #c4a7ff;
+    --code-type: #5eead4;
   }
 
   .log-line.warn .log-level {

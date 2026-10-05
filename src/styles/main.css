@@ -911,6 +911,148 @@
   padding: 0;
 }
 
+/* A block of code is a card: what it was written in on the left of its head, the
+   way to copy it on the right, and the code scrolling sideways inside the card
+   rather than pushing the transcript. The card carries the fill and the corners
+   the `pre` used to, the head being part of it now. */
+.code-block {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  overflow: hidden;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 5px 3px 12px;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.code-language {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* The icon alone, with no border until the pointer is on it: the head is a quiet
+   bar, and this is the one thing in it that does anything. What it does is said
+   by the tooltip and read out by its label, and what it did is the tick. */
+.code-copy {
+  display: flex;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.code-copy:hover {
+  border-color: var(--border);
+  background-color: var(--bg);
+  color: var(--text-primary);
+}
+
+.code-copy .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The size is the card's, not the message's inline code's. A `code` inside a
+   fence is not the inline pill, but `.msg code` sizes every one of them alike,
+   and a rule on the element beats the size of the box it sits in — so without
+   this the block's own size never reached the text. */
+.code-block pre code {
+  font-size: inherit;
+}
+
+.code-block pre {
+  margin: 0;
+  border-radius: 0;
+  background-color: transparent;
+  /* Smaller than any other mono in the app — the message's own 15px code, and the
+     JSON pane's 12.5px: a block sits in a panel of its own with a head of its own
+     over it, and its lines are the long ones. */
+  font-size: 12px;
+  /* The code is the card's whole width and scrolls inside it, under a head that
+     stays where it is while it does. */
+  overflow-x: auto;
+}
+
+/* The block's own colours: the four roles the JSON view already has, a block and
+   a request being read the same way, plus the two a language needs that JSON has
+   not got — what is called, and what a thing is. A language the highlighter does
+   not know leaves its code in the message's own ink, which is a fine way to read
+   it and better than a wrong guess. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-selector-id,
+.hljs-meta,
+.hljs-doctag,
+.hljs-template-tag,
+.hljs-tag,
+.hljs-name,
+.hljs-variable.language_ {
+  color: var(--code-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-attribute,
+.hljs-addition,
+.hljs-template-variable,
+.hljs-selector-attr {
+  color: var(--code-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--code-number);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-function .hljs-title,
+.hljs-attr {
+  color: var(--code-function);
+}
+
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title,
+.hljs-selector-class {
+  color: var(--code-type);
+}
+
+/* A comment is the part of a block that is not the code. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
+}
+
+.hljs-deletion {
+  color: var(--danger);
+}
+
 /* Display math is centered and never wraps, so a formula wider than the bubble
    scrolls inside its own box for the same reason a table does; its own margins
    are dropped at the edges of the bubble, as a paragraph's are. */
