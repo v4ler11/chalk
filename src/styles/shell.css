@@ -23,15 +23,16 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  /* Only as wide as its controls, and wearing the chat panel's own colour: it is
-     the panel's corner rather than a column of its own, and its rule is the
-     beginning of the line the nav draws across the rest of the window. The
-     sidebar used to be this column's body; the channel is the window now, so
-     this corner is all of the chrome there is. */
+  /* Only as wide as its controls, and wearing no colour of its own: the pane's
+     bar is what shows behind it, so the band across the top is one surface from
+     the controls to the far edge, and a pane that slides takes its own corner
+     with it. Its rule is the beginning of the line the nav draws across the rest
+     of the window. The sidebar used to be this column's body; the channel is the
+     window now, so this corner is all of the chrome there is. */
   width: var(--rail-collapsed);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: var(--bg);
+  background-color: transparent;
   border-right: 1px solid transparent;
   border-bottom: 1px solid var(--border);
   user-select: none;
@@ -440,15 +441,16 @@
   transition: none;
 }
 
-/* What a thread is written on: a sheet a step off the window's own grey, so a
-   thread reads as its own pane rather than as the channel with other words in it.
-   It covers the whole pane, the strip behind the composer included, so the space
-   under the composer travels with the thread while the composer's card stays
-   where it is. */
+/* What a thread is written on: a step below the window's own grey, so a thread
+   reads as its own pane rather than as the channel with other words in it. The
+   bar above it takes the same surface, so a thread is one solid window from its
+   top edge down. The sheet covers the whole pane, the strip behind the composer
+   included, so the space under the composer travels with the thread while the
+   composer's card stays where it is. */
 .transcript-sheet {
   position: absolute;
   inset: 0;
-  background-color: var(--pane);
+  background-color: var(--sidebar);
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
@@ -473,12 +475,12 @@
   transition: transform 180ms ease-out;
 }
 
-/* The bar stays the window's own colour, which is what the rail is drawn in: the
-   two are one band across the top of the window, and a bar of a different tone
-   would cut that band in two. It is positioned so it is painted over the sheet
-   rather than under it. */
+/* The bar takes the pane's surface, so a thread is one piece rather than a bar
+   laid over a pane, and its whole width travels with it. It is positioned so it
+   is painted over the sheet rather than under it. */
 .pane.thread > .chat-nav {
   position: relative;
+  background-color: var(--sidebar);
 }
 
 /* Both are positioned so they are painted over the sheet rather than under it,
