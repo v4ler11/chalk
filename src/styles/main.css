@@ -136,6 +136,25 @@
   color: var(--json-literal);
 }
 
+/* What a value left out, after the beginning of it that is shown, and the way to
+   the rest of it: a button that wears none of a button's clothes, dim and
+   italic so it reads as the pane's note about the value rather than as part of
+   the JSON, and underlined under the pointer so it reads as the control it is. */
+.json-more {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: pointer;
+}
+
+.json-more:hover,
+.json-more:focus-visible {
+  text-decoration: underline;
+}
+
 /* Copy: the pane's bottom-right corner, and never anywhere else. */
 .json-copy {
   position: absolute;
