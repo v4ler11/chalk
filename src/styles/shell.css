@@ -426,23 +426,36 @@
   transition: visibility 0s linear 180ms;
 }
 
-/* What a thread is written on: a surface a shade off the window's own, so the
+/* What a thread is written on: a sheet a shade off the window's own, so the
    slide reads as a sheet moving over the channel rather than as the window
-   redrawing. The transcript is its child, which is what binds the two: the
-   messages travel with the surface, and the composer below it does not move at
-   all. It arrives from the right edge, moving left, and leaves the same way, so
-   going in and coming back are one movement read forwards and backwards. */
-.transcript {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+   redrawing. It covers the whole pane, the strip behind the composer included,
+   so the space under the composer travels with the thread while the composer's
+   card itself stays where it is. */
+.transcript-sheet {
+  position: absolute;
+  inset: 0;
   background-color: var(--sidebar);
+}
+
+/* The sheet and the transcript travel as one: the messages are the transcript's
+   children, so they are written on the sheet and go where it goes. It arrives
+   from the right edge, moving left, and leaves the same way, so going in and
+   coming back are one movement read forwards and backwards. */
+.transcript,
+.transcript-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
 }
 
-.pane.thread.off .transcript {
+/* Both are positioned so they are painted over the sheet rather than under it,
+   which is what an absolute box would otherwise do to a static one. */
+.transcript,
+.composer-bar {
+  position: relative;
+}
+
+.pane.thread.off .transcript,
+.pane.thread.off .transcript-sheet {
   transform: translateX(100%);
 }
 

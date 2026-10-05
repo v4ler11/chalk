@@ -57,31 +57,39 @@ function App() {
   // on screen: the channel's takes this spare while it is hidden.
   const channelComposerRef = useRef<HTMLTextAreaElement>(null);
 
-  // The thread's pane leaves by sliding, so it is held for the length of the
-  // slide, showing what it had. The view is the channel by then and the
-  // transcript is empty, and a blank sheet sliding away is not the chat leaving.
+  // The thread's pane outlives the view by one slide, and what it was showing
+  // outlives the thread's own state with it: the exit needs a pane that is still
+  // there and a transcript that has not been emptied, or the slide is a blank
+  // sheet going away.
   const held = useRef<{ messages: UiMessage[]; pending: Partial | null }>({
     messages: [],
     pending: null,
   });
-  const [leaving, setLeaving] = useState(false);
-  const wasThread = useRef(false);
+
+  // Leaving is decided while rendering the change rather than after it. A pane
+  // dropped on the render that flips the view and put back on the next one would
+  // never be seen to slide: it would leave the page and arrive again, playing the
+  // arrival's own animation a second time.
+  const [shownThread, setShownThread] = useState(threadOpen);
+  const [holding, setHolding] = useState(false);
+  if (shownThread !== threadOpen) {
+    setShownThread(threadOpen);
+    setHolding(!threadOpen);
+  }
+  const threadPane = threadOpen || holding;
 
   // What the pane last had, kept while the thread is the view.
   useEffect(() => {
     if (!threadOpen) return;
-    wasThread.current = true;
     held.current = { messages: conversation.messages, pending: conversation.pending };
   }, [threadOpen, conversation.messages, conversation.pending]);
 
-  // Back on the channel: one slide, then the pane is put away.
+  // One slide, then the pane is put away.
   useEffect(() => {
-    if (threadOpen || !wasThread.current) return;
-    wasThread.current = false;
-    setLeaving(true);
-    const done = window.setTimeout(() => setLeaving(false), LEAVE_MS);
+    if (!holding) return;
+    const done = window.setTimeout(() => setHolding(false), LEAVE_MS);
     return () => window.clearTimeout(done);
-  }, [threadOpen]);
+  }, [holding]);
 
   // The window's shortcuts, beside the buttons that do the same thing. Escape is
   // the taken-over pane's own: it leaves the settings or the JSON view first,
@@ -218,7 +226,7 @@ function App() {
                   <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
                 </div>
               </div>
-            ) : threadOpen || leaving ? (
+            ) : threadPane ? (
               <div className={`pane thread${threadVisible ? "" : " off"}`}>
                 <ChatPane
                   messages={threadVisible ? conversation.messages : held.current.messages}
