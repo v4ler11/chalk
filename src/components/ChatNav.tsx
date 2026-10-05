@@ -3,11 +3,15 @@ import { Check, ChevronDown, EllipsisVertical } from "lucide-react";
 import { MOD } from "../keybinds";
 
 interface Props {
-  /** The model the open chat is holding, named in the chip. */
+  /** The model the open thread is holding, named in the chip — or, on the
+   *  channel, the one the next thread will be posted with. */
   model: string;
   /** The models the settings offer, in their order. */
   models: string[];
   onPick: (model: string) => void;
+  /** Whether a thread is open. The JSON view is a thread's own — there is no
+   *  request to show for a channel — so its menu is not offered without one. */
+  thread: boolean;
   /** Whether the plain-JSON view is standing in for the transcript. */
   jsonView: boolean;
   onJsonView: (on: boolean) => void;
@@ -25,7 +29,7 @@ interface Props {
  *
  * The rule under it is what separates this nav from the transcript below.
  */
-export function ChatNav({ model, models, onPick, jsonView, onJsonView }: Props) {
+export function ChatNav({ model, models, onPick, thread, jsonView, onJsonView }: Props) {
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
 
@@ -70,43 +74,45 @@ export function ChatNav({ model, models, onPick, jsonView, onJsonView }: Props) 
       </div>
 
       {/* The view switches, of which there is one: the conversation as plain
-          JSON instead of the transcript and the composer. It is the window's
-          rather than the chat's — switching chats while it is on keeps showing
-          JSON, and the sidebar's own row is what leaves it. */}
-      <div className="nav-menu">
-        <button
-          className={`icon-btn${viewOpen ? " active" : ""}`}
-          aria-haspopup="menu"
-          aria-expanded={viewOpen}
-          aria-label="View"
-          onClick={() => setViewOpen((o) => !o)}
-        >
-          <EllipsisVertical className="icon" />
-        </button>
+          JSON instead of the transcript and the composer. It belongs to a thread
+          rather than to the window now: a channel has no request to show, so
+          there is nothing to switch to there. */}
+      {thread && (
+        <div className="nav-menu">
+          <button
+            className={`icon-btn${viewOpen ? " active" : ""}`}
+            aria-haspopup="menu"
+            aria-expanded={viewOpen}
+            aria-label="View"
+            onClick={() => setViewOpen((o) => !o)}
+          >
+            <EllipsisVertical className="icon" />
+          </button>
 
-        {viewOpen && (
-          <>
-            <div className="menu-backdrop" onClick={() => setViewOpen(false)} />
-            <div className="menu below view-menu" role="menu">
-              <button
-                className={`menu-option${jsonView ? " active" : ""}`}
-                role="menuitemcheckbox"
-                aria-checked={jsonView}
-                onClick={() => {
-                  onJsonView(!jsonView);
-                  setViewOpen(false);
-                }}
-              >
-                <span className="menu-option-name">JSON view</span>
-                {/* The shortcut is named where its command lives, as the rail's
-                    buttons name theirs. */}
-                <kbd>{MOD}J</kbd>
-                {jsonView && <Check className="menu-option-check" />}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          {viewOpen && (
+            <>
+              <div className="menu-backdrop" onClick={() => setViewOpen(false)} />
+              <div className="menu below view-menu" role="menu">
+                <button
+                  className={`menu-option${jsonView ? " active" : ""}`}
+                  role="menuitemcheckbox"
+                  aria-checked={jsonView}
+                  onClick={() => {
+                    onJsonView(!jsonView);
+                    setViewOpen(false);
+                  }}
+                >
+                  <span className="menu-option-name">JSON view</span>
+                  {/* The shortcut is named where its command lives, as the rail's
+                      buttons name theirs. */}
+                  <kbd>{MOD}J</kbd>
+                  {jsonView && <Check className="menu-option-check" />}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

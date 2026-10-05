@@ -119,16 +119,6 @@ export interface ToolCallRequest {
   arguments: string;
 }
 
-/** Events delivered over the `chat` command's channel. */
-export type StreamEvent =
-  | { type: "reasoning"; content: string }
-  | { type: "delta"; content: string }
-  | { type: "usage"; usage: Usage }
-  /** The calls the model asked for, once the stream has assembled them. */
-  | { type: "tool_calls"; calls: ToolCallRequest[] }
-  | { type: "done" }
-  | { type: "error"; message: string };
-
 /**
  * Token counts and price reported for a response. Every field is optional: what
  * arrives depends on the provider, and gateways add the billing fields.
@@ -205,8 +195,12 @@ export interface UiMessage extends ChatMessage {
   usage?: Usage;
 }
 
-/** The assistant response currently arriving. */
-export interface Pending {
+/**
+ * The assistant response currently arriving, as the run reports it: the answer
+ * so far, the reasoning behind it, and the timings the transcript draws. It is
+ * the run's own shape, so the window draws a response it did not assemble.
+ */
+export interface Partial {
   /** Epoch ms the request was sent. */
   startedAt: number;
   /** Epoch ms the first token of any kind arrived; `null` until then. */
@@ -221,11 +215,74 @@ export interface Pending {
   thinkingMs: number | null;
   /** What the provider reported about the response; `null` until it says. */
   usage: Usage | null;
+}
+
+/** Where a chat's turn stands. `idle` is also where a run that finished sits:
+ *  what it did is in the transcript, and how many answers it left there is what
+ *  a list counts. */
+export type RunStatus = "idle" | "running" | "awaiting" | "failed";
+
+/**
+ * What a list needs about a run: whether it is going, whether the model has said
+ * anything yet, and whether it is the user's move.
+ */
+export interface RunSummary {
+  chat: number;
+  status: RunStatus;
   /**
-   * The tools the model asked for, once the stream has said: `null` while the
-   * answer is still arriving, and `[]` for an answer that asked for none.
+   * True while the turn is going and no answer token has arrived — a run queued
+   * for a place among the requests is thinking, as far as a list is concerned.
    */
-  toolCalls: ToolCallRequest[] | null;
+  thinking: boolean;
+  /**
+   * How many messages the chat holds after its opening one: what is committed,
+   * so it stays still for the whole of a run and moves when the answer lands.
+   */
+  replies: number;
+  /** How many tool calls are waiting on the user. */
+  awaiting: number;
+}
+
+/**
+ * A chat as a window opened on it reads it: the run while there is one, and the
+ * row when there is not.
+ */
+export interface RunSnapshot {
+  chat: number;
+  status: RunStatus;
+  title: string;
+  model: string;
+  /** The level as the row holds it; `asReasoningLevel` is what reads it back. */
+  reasoning: string;
+  /**
+   * The ids of the servers this chat offers; `null` while it has never chosen,
+   * which offers every enabled one.
+   */
+  servers: string[] | null;
+  /** The ids of the servers this run has loaded lazily. */
+  loaded: string[];
+  replies: number;
+  /** The transcript: the run's own while it is live, the row's otherwise. */
+  messages: UiMessage[];
+  /** The answer arriving, or `null` when the run has none in flight. */
+  partial: Partial | null;
+  /** The calls nobody has answered: the ones a turn stopped on, held until the
+   *  user says. */
+  awaiting: ToolCallRequest[];
+  /** The last failure for this chat, or `null`. */
+  error: string | null;
+}
+
+/**
+ * The request as the model will read it, for the JSON view: the transcript with
+ * the system prompt resolved and the lazily imported servers named under it, and
+ * the tools the round would offer. It is the run's own assembly, read here
+ * rather than worked out a second way in the window.
+ */
+export interface RequestPreview {
+  messages: UiMessage[];
+  tools: McpTool[];
+  lazy: LazyServer[];
 }
 
 /** One row of the chat history list, as the store returns it. */
@@ -242,22 +299,16 @@ export interface ChatSummary {
    * one; `asReasoningLevel` is what reads it back.
    */
   reasoning: string;
-}
-
-/** A chat and its transcript, as the store returns it. */
-export interface ChatRecord {
-  id: number;
-  title: string;
-  model: string;
-  reasoning: string;
   /**
-   * The model context protocol servers this chat is sent with, as the ids of
-   * the servers it offers. `null` is a chat that has never chosen, which offers
-   * every enabled server — a distinction the store keeps, since "no server" and
-   * "no opinion" are two different chats.
+   * Unix time in ms the chat was created: what the channel's feed is ordered by,
+   * since a thread's own row moves under a reply where its place in the feed
+   * does not.
    */
-  servers: string[] | null;
-  messages: UiMessage[];
+  createdAt: number;
+  /** The chat's first user message, whole: what the channel's row shows. */
+  root: string;
+  /** How many messages the chat holds after its opening one. */
+  replies: number;
 }
 
 /** Flatten a message's content to display text. */
@@ -278,6 +329,13 @@ export function userContent(text: string, images: string[]): Content {
   const parts: ContentPart[] = images.map((url) => ({ type: "image_url", image_url: { url } }));
   if (text !== "") parts.unshift({ type: "text", text });
   return parts;
+}
+
+/** The images a content carries, in the order it carries them: what a prompt
+ *  re-sent as it was — a regenerate — hands back to `run_start` beside it. */
+export function imageUrls(content?: Content): string[] {
+  if (content == null || typeof content === "string") return [];
+  return content.flatMap((part) => (part.type === "image_url" ? [part.image_url.url] : []));
 }
 
 /** Flatten a message's reasoning (thinking) to display text, if any. */

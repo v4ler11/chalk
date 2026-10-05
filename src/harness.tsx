@@ -9,18 +9,16 @@ import { ChatMessage } from "./components/ChatMessage";
 import { Sidebar } from "./components/Sidebar";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
-import { promptFor, toolsFor } from "./lazy";
 import { MessageList } from "./components/MessageList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import type {
   AppConfig,
   ChatSummary,
-  LazyServer,
   McpCost,
   McpFailure,
   McpServer,
   McpTool,
-  Pending,
+  Partial,
   ReasoningLevel,
   UiMessage,
 } from "./types";
@@ -28,8 +26,26 @@ import "katex/dist/katex.min.css";
 import "./App.css";
 
 const CHATS: ChatSummary[] = [
-  { id: 1, title: "First chat", updatedAt: Date.now(), model: "m", reasoning: "" },
-  { id: 2, title: "Second chat", updatedAt: Date.now() - 10_000, model: "m", reasoning: "high" },
+  {
+    id: 1,
+    title: "First chat",
+    updatedAt: Date.now(),
+    model: "m",
+    reasoning: "",
+    createdAt: Date.now() - 60_000,
+    root: "First chat",
+    replies: 3,
+  },
+  {
+    id: 2,
+    title: "Second chat",
+    updatedAt: Date.now() - 10_000,
+    model: "m",
+    reasoning: "high",
+    createdAt: Date.now() - 20_000,
+    root: "Second chat",
+    replies: 1,
+  },
 ];
 
 /** The servers the tools control can hold: two that answer, one that answers and
@@ -128,20 +144,6 @@ const COSTS: McpCost[] = [
 /** What this chat has loaded: nothing, so the lazy server's row reads as lazy.
  *  Put `"notes"` here to see the same row once it has been loaded. */
 const LOADED: string[] = [];
-
-/** The lazily imported servers the prompt would name: nothing is loaded, so the
- *  Notes server is listed. */
-const LAZY: LazyServer[] = promptFor(
-  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
-  TOOLS,
-);
-
-/** The tools a request carries: the pool minus what laziness holds back, plus
- *  the loader while the Notes server is still waiting. */
-const SENT: McpTool[] = toolsFor(
-  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
-  TOOLS,
-);
 
 /** A turn that went round three times: a lazily imported server loaded first,
  *  then a long query the way a model writes them and a plain call, then the
@@ -272,6 +274,7 @@ function Harness() {
             model={config.models[0]}
             models={config.models}
             onPick={() => {}}
+            thread
             jsonView={false}
             onJsonView={() => {}}
           />
@@ -312,26 +315,12 @@ function Harness() {
           {/* The plain-JSON view over the same turn: the system prompt in front,
               then every message with its calls, results and timings. */}
           <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>
-            <JsonView
-              tab="history"
-              messages={TOOL_TURN}
-              systemPrompt={config.systemPrompt}
-              tools={SENT}
-              costs={COSTS}
-              lazy={LAZY}
-            />
+            <JsonView tab="history" chat={1} costs={COSTS} />
           </div>
           {/* And the other tab: every tool, grouped by its server, which is what
               the navbar's Tools tab puts in the pane. */}
           <div style={{ display: "flex", flex: "none", height: 320, minHeight: 0 }}>
-            <JsonView
-              tab="tools"
-              messages={TOOL_TURN}
-              systemPrompt={config.systemPrompt}
-              tools={SENT}
-              costs={COSTS}
-              lazy={LAZY}
-            />
+            <JsonView tab="tools" chat={1} costs={COSTS} />
           </div>
           <div className="settings-body" style={{ flex: "none", height: 420 }}>
             <SettingsPanel
@@ -387,13 +376,13 @@ function ScrollHarness() {
     { role: "user", content: "First prompt" },
     { role: "assistant", content: "An answer." },
   ]);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPending] = useState<Partial | null>(null);
   const [follow, setFollow] = useState(true);
   /** The pending answer as of this render, for the settle driver. */
   const pendingLive = useRef(pending);
   pendingLive.current = pending;
 
-  const started: Pending = {
+  const started: Partial = {
     startedAt: Date.now(),
     firstTokenAt: null,
     reasoning: "",
@@ -401,7 +390,6 @@ function ScrollHarness() {
     thinking: true,
     thinkingMs: null,
     usage: null,
-    toolCalls: null,
   };
 
   Object.assign(window, {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type WheelEvent } from "react";
 import { ArrowDown } from "lucide-react";
-import { contentText, reasoningText, type Pending, type Thought, type UiMessage } from "../types";
+import { contentText, reasoningText, type Partial, type Thought, type UiMessage } from "../types";
 import { ChatMessage } from "./ChatMessage";
 import { StreamingMessage } from "./StreamingMessage";
 
@@ -46,7 +46,7 @@ const LAND_MS = 120;
 interface Props {
   messages: UiMessage[];
   /** The response currently arriving, if any. */
-  pending: Pending | null;
+  pending: Partial | null;
   error: string;
   /** Whether the view follows new content; false once the reader moves away. */
   follow: boolean;

@@ -11,21 +11,10 @@
   min-height: 0;
 }
 
-.left {
-  flex: none;
-  width: var(--sidebar-w);
-  overflow: hidden;
-  transition: width 130ms ease;
-}
-
-.left:not(.open) {
-  width: 0;
-}
-
 /* Frameless window: this rail is the window's chrome, so it drags the window and
    its traffic lights drive the real one. It is taken out of the row, so it costs
-   the chat panel no width; while the sidebar is open it sits over that sidebar's
-   head, and its right edge is the border the sidebar carries on below it. */
+   the panel beneath it no height: the panel's own nav reserves the same strip,
+   and the two read as one band across the top of the window. */
 .rail {
   position: absolute;
   top: 0;
@@ -34,31 +23,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  width: var(--sidebar-w);
+  /* Only as wide as its controls, and wearing the chat panel's own colour: it is
+     the panel's corner rather than a column of its own, and its rule is the
+     beginning of the line the nav draws across the rest of the window. The
+     sidebar used to be this column's body; the channel is the window now, so
+     this corner is all of the chrome there is. */
+  width: var(--rail-collapsed);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: var(--sidebar);
-  border-right: 1px solid var(--border);
-  /* Reserved, never toggled in width: the rail must not resize its own contents
-     when the sidebar opens or shuts, or the controls would jump by a pixel. */
-  border-bottom: 1px solid transparent;
-  transition:
-    width 130ms ease,
-    background-color 200ms ease,
-    border-right-color 200ms ease,
-    border-bottom-color 200ms ease;
-  user-select: none;
-}
-
-/* Shut, the rail is only as wide as its controls and wears the chat panel's own
-   colour, so it reads as the panel's corner rather than a column of its own —
-   and it draws the nav's rule across its own width, starting the line that
-   separates the nav from the transcript at the window's edge. */
-.shell:not(:has(.left.open)) .rail {
-  width: var(--rail-collapsed);
   background-color: var(--bg);
-  border-right-color: transparent;
-  border-bottom-color: var(--border);
+  border-right: 1px solid transparent;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
 }
 
 /* The chip names the model in use and leads to where it is chosen: no box

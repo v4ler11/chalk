@@ -1,22 +1,23 @@
-import { PanelLeftClose, PanelLeftOpen, SquarePen } from "lucide-react";
+import { ArrowLeft, Settings } from "lucide-react";
 import { MOD } from "../keybinds";
 import { TrafficLights } from "./WindowControls";
 
 interface Props {
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
-  onNewChat: () => void;
+  /** Whether a thread is open: the way back to the feed is only there for one. */
+  thread: boolean;
+  onBack: () => void;
+  onOpenSettings: () => void;
 }
 
 /**
  * The window's own title bar: the controls, drawn in the webview because the
  * window is frameless, and the region that drags it.
  *
- * It is the sidebar's head — the same width and colour — so the two read as one
- * panel, and it sits at the top of the sidebar's own column, which leaves the
- * chat panel the full height of the window beside it.
+ * It carries what belongs to no single view: the way back to the feed while a
+ * thread is open, and the settings, which both views can reach. The panel
+ * beneath reserves the same strip, so the two read as one band.
  */
-export function TitleBar({ sidebarOpen, onToggleSidebar, onNewChat }: Props) {
+export function TitleBar({ thread, onBack, onOpenSettings }: Props) {
   return (
     // "deep", so every pixel of the rail drags — its padding and the gaps
     // between the controls included — while the buttons themselves still take
@@ -27,25 +28,23 @@ export function TitleBar({ sidebarOpen, onToggleSidebar, onNewChat }: Props) {
       <div className="window-actions">
         {/* Each button names itself and its shortcut under the pointer: with no
             menu bar, this is where a binding can be found. */}
-        <span className="hint">
-          <button
-            className="icon-btn"
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            onClick={onToggleSidebar}
-          >
-            {sidebarOpen ? <PanelLeftClose className="icon" /> : <PanelLeftOpen className="icon" />}
-          </button>
-          <span className="key-hint" aria-hidden="true">
-            {sidebarOpen ? "Hide sidebar" : "Show sidebar"} <kbd>{MOD}B</kbd>
+        {thread && (
+          <span className="hint">
+            <button className="icon-btn" aria-label="Back to channel" onClick={onBack}>
+              <ArrowLeft className="icon" />
+            </button>
+            <span className="key-hint" aria-hidden="true">
+              Channel <kbd>Esc</kbd>
+            </span>
           </span>
-        </span>
+        )}
 
         <span className="hint">
-          <button className="icon-btn" aria-label="New chat" onClick={onNewChat}>
-            <SquarePen className="icon" />
+          <button className="icon-btn" aria-label="Settings" onClick={onOpenSettings}>
+            <Settings className="icon" />
           </button>
           <span className="key-hint" aria-hidden="true">
-            New chat <kbd>{MOD}N</kbd>
+            Settings <kbd>{MOD},</kbd>
           </span>
         </span>
       </div>

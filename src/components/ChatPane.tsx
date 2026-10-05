@@ -4,7 +4,7 @@ import type {
   McpFailure,
   McpServer,
   McpTool,
-  Pending,
+  Partial,
   ReasoningLevel,
   ToolCallRequest,
   UiMessage,
@@ -15,7 +15,7 @@ import { ToolApproval } from "./ToolApproval";
 
 interface Props {
   messages: UiMessage[];
-  pending: Pending | null;
+  pending: Partial | null;
   /** The chat's own error, or a server the chat calls that nobody can reach. */
   error: string;
   follow: boolean;
@@ -26,7 +26,7 @@ interface Props {
   onEdit: (index: number) => void;
   /** The calls a server asked to run, held above the composer until they are
    *  allowed or declined. */
-  awaiting: { calls: ToolCallRequest[]; history: UiMessage[] } | null;
+  awaiting: ToolCallRequest[] | null;
   onRun: () => void;
   onDecline: () => void;
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -102,7 +102,7 @@ export function ChatPane({
       <footer className="composer-bar">
         {/* A server's tool calls are what a turn may stop on: the calls are
             shown above the composer until the user allows them or says no. */}
-        {awaiting && <ToolApproval calls={awaiting.calls} onRun={onRun} onDecline={onDecline} />}
+        {awaiting && <ToolApproval calls={awaiting} onRun={onRun} onDecline={onDecline} />}
         <Composer
           textareaRef={composerRef}
           streaming={pending !== null}

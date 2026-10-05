@@ -1,0 +1,155 @@
+/* ------------------------------------------------------------------ channel */
+
+/* The channel stands where the chat did: a scrolling feed of threads down the
+   panel, the composer fixed under it, and the ↓ button on the feed's edge. A row
+   is a thread, not a card: the whole width of one centred measure, quiet until
+   the pointer is on it. So the feed reads as a channel rather than a list of
+   boxes. */
+
+.channel-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.channel-feed {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* Nothing chains out of the feed to the window, and the panel itself does not
+     rubber-band. */
+  overscroll-behavior: none;
+  /* The window's chrome floats over the panel's top-left corner, wearing the
+     panel's own colour; the feed starts below it, as the history's column does,
+     so the first thread is never under the controls. */
+  padding: calc(var(--titlebar) + 20px) 24px 24px;
+  /* The centred column stays centred when the platform draws a classic
+     scrollbar, which takes width from this box alone. */
+  scrollbar-gutter: stable both-edges;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.channel-list {
+  width: 100%;
+  max-width: var(--content-w);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* One thread. Flat, like a channel message and not a card: the pointer lifts it
+   with a tint rather than a border, and an open or confirming row keeps the open
+   chat's treatment. */
+.channel-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  transition: background-color 120ms ease;
+}
+
+.channel-row.active {
+  background-color: var(--sidebar-active);
+}
+
+.channel-row:hover {
+  background-color: var(--sidebar-hover);
+}
+
+/* The wave keeps its column on the message's first line rather than the row's
+   middle, and lifts to the reading colour under the pointer or on the open
+   thread, the way a history row's does. */
+.channel-row .chat-wave {
+  flex: none;
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+
+.channel-row:hover .chat-wave,
+.channel-row.active .chat-wave {
+  color: var(--text-primary);
+}
+
+.channel-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The whole row is the click target: the button stretches over it, its padding
+   and its wave included and under the actions, so a click anywhere on a thread
+   opens it, not just the words. */
+.channel-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* The message as it was typed: the transcript's own prompt face and size, its
+   newlines kept, a long line wrapped rather than run off the row. */
+.channel-root {
+  display: block;
+  font-family: var(--font-message);
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* While the question is up the row's words step back behind it, dimmed rather
+   than hidden, as a history row's do. */
+.channel-row.confirming .channel-root {
+  color: var(--text-secondary);
+}
+
+/* What the run is doing: UI chrome, in the sans face and quiet by default. The
+   wait and the reply count are grey; a thread that needs the user wears the
+   app's blue, since it is the one state that is the user's move, and a failure
+   wears the error red. */
+.channel-status {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.channel-status.needs {
+  color: var(--reasoning);
+}
+
+.channel-status.failed {
+  color: var(--danger);
+}
+
+/* A post that did not land: the same notice the transcript shows, at the feed's
+   own end where the post would have been. */
+.channel-error {
+  width: 100%;
+  max-width: var(--content-w);
+  margin-top: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13.5px;
+}

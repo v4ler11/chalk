@@ -1,11 +1,11 @@
-import type { Pending } from "../types";
+import type { Partial } from "../types";
 import { splitBlocks } from "../blocks";
 import { useTicker } from "../timer";
 import { Markdown } from "./Markdown";
 import { Thinking } from "./Thinking";
 
 interface Props {
-  pending: Pending;
+  pending: Partial;
 }
 
 /**
