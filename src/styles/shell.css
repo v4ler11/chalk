@@ -440,19 +440,15 @@
   transition: none;
 }
 
-/* What a thread is written on: a sheet in the window's own colour, with the
-   border the app draws its rules in along the edge that leads. The width is the
-   same whether it is drawn or not, so the box never changes, and the colour is
-   what turns: it is on for the length of a slide and off at the end of it, which
-   is where the two panes meet and where it says something. At rest the sheet
-   fills the pane and an edge along the window's own side says nothing. It covers
-   the whole pane, the strip behind the composer included, so the space under the
-   composer travels with the thread while the composer's card stays where it is. */
+/* What a thread is written on: a sheet a step above the window's own colour, so a
+   thread reads as its own pane rather than as the channel with other words in it.
+   It covers the whole pane, the strip behind the composer included, so the space
+   under the composer travels with the thread while the composer's card stays
+   where it is. */
 .transcript-sheet {
   position: absolute;
   inset: 0;
-  background-color: var(--bg);
-  border-left: 1px solid transparent;
+  background-color: var(--sidebar-active);
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
@@ -464,14 +460,25 @@
   min-height: 0;
 }
 
-/* The sheet and the transcript travel as one: the messages are the transcript's
-   children, so they are written on the sheet and go where it goes. It arrives
-   from the right edge, moving left, and leaves the same way, so going in and
-   coming back are one movement read forwards and backwards. */
+/* The sheet, the transcript written on it, and the bar over them travel as one:
+   the bar belongs to the pane rather than to the window, so the chat arrives with
+   it and carries it away again. It comes in from the right edge, moving left, and
+   leaves the same way, so going in and coming back are one movement read forwards
+   and backwards. The window's own bar stays put underneath: it is what the pane
+   slides back onto, and what a channel keeps when the thread is not there. */
+.pane.thread > .chat-nav,
 .transcript,
 .transcript-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
+}
+
+/* The bar takes the pane's colour, so a thread is one surface from its top edge
+   down: a step above the channel's own bar, which is what the slide is read
+   against. */
+.pane.thread > .chat-nav {
+  position: relative;
+  background-color: var(--sidebar-active);
 }
 
 /* Both are positioned so they are painted over the sheet rather than under it,
@@ -481,28 +488,15 @@
   position: relative;
 }
 
+.pane.thread.off > .chat-nav,
 .pane.thread.off .transcript,
 .pane.thread.off .transcript-sheet {
   transform: translateX(100%);
 }
 
-/* Leaving is the last thing this pane does, and it is unmounted the moment its
-   slide ends, which is what takes the edge off again: the colour is not in the
-   transition list, so it is there from the first frame of the movement. */
-.pane.thread.off .transcript-sheet {
-  border-left-color: var(--border);
-}
-
-/* Arriving is a keyframe, since a pane that is created is not a pane that
-   changed: the edge is held to the last instant of the movement and the settled
-   pane, filling the window, has none. */
 @keyframes thread-in {
   from {
     transform: translateX(100%);
-    border-left-color: var(--border);
-  }
-  99% {
-    border-left-color: var(--border);
   }
 }
 

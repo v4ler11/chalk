@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type {
   McpCost,
   McpFailure,
@@ -14,6 +14,9 @@ import { Composer } from "./Composer";
 import { ToolApproval } from "./ToolApproval";
 
 interface Props {
+  /** The panel's own bar, drawn by the window so the pane can slide with it: it
+   *  is a pane's top edge rather than the space above one. */
+  nav: ReactNode;
   messages: UiMessage[];
   pending: Partial | null;
   /** The chat's own error, or a server the chat calls that nobody can reach. */
@@ -61,6 +64,7 @@ interface Props {
  * and the window that owns the modes above it need not know their arrangement.
  */
 export function ChatPane({
+  nav,
   messages,
   pending,
   error,
@@ -98,6 +102,7 @@ export function ChatPane({
           behind the composer included, and travels with the transcript; the
           composer's own card is drawn over it and does not move. */}
       <div className="transcript-sheet" aria-hidden="true" />
+      {nav}
       <div className="transcript">
         <MessageList
           messages={messages}
