@@ -146,16 +146,17 @@ function App() {
         <TitleBar thread={threadOpen} onBack={conversation.backToChannel} />
 
         <main className="main">
-          {/* The panel's own nav: the model, and the window's view switches while
-              a thread is open. It is not drawn while the settings take the pane. */}
-          {!conversation.settingsView && (
-            <ChatNav
-              thread={threadOpen}
-              jsonView={conversation.jsonView}
-              onJsonView={conversation.showJson}
-              onOpenSettings={conversation.toggleSettings}
-            />
-          )}
+          {/* The panel's own nav: the strip across the top of the panel, which
+              drags the window and holds the three-dots — the window's view
+              switches, the settings among them. It stands in every mode, the
+              settings included, so the pane beneath it always begins below the
+              rail rather than under it. */}
+          <ChatNav
+            thread={threadOpen}
+            jsonView={conversation.jsonView}
+            onJsonView={conversation.showJson}
+            onOpenSettings={conversation.toggleSettings}
+          />
 
           {/* The panes share one box so the feed can stay mounted under a thread
               or the settings: opening one and coming back must not rebuild the
