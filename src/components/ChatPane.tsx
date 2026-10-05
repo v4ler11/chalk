@@ -37,7 +37,6 @@ interface Props {
   onModel: (model: string) => void;
   reasoning: ReasoningLevel;
   onReasoning: (level: ReasoningLevel) => void;
-  spent: number;
   editingText: string | null;
   onCancelEdit: () => void;
   servers: McpServer[];
@@ -79,7 +78,6 @@ export function ChatPane({
   onModel,
   reasoning,
   onReasoning,
-  spent,
   editingText,
   onCancelEdit,
   servers,
@@ -119,7 +117,6 @@ export function ChatPane({
           onModel={onModel}
           reasoning={reasoning}
           onReasoning={onReasoning}
-          spent={spent}
           editingText={editingText}
           onCancelEdit={onCancelEdit}
           servers={{

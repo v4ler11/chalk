@@ -270,7 +270,12 @@ function Harness() {
           />
         </div>
         <main className="main">
-          <ChatNav thread jsonView={false} onJsonView={() => {}} />
+          <ChatNav
+            thread
+            jsonView={false}
+            onJsonView={() => {}}
+            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
+          />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
               message={assistant}
@@ -331,7 +336,6 @@ function Harness() {
               models={config.models}
               onModel={(name) => setEvents((e) => [...e, `model ${name}`])}
               reasoning={reasoning}
-              spent={0.00428}
               onReasoning={(level) => {
                 setReasoning(level);
                 setEvents((e) => [...e, `reasoning ${level || "off"}`]);

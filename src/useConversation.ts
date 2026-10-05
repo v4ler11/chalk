@@ -119,7 +119,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const model = thread === null ? composeModel || defaultModel(chats, config) : snapshot?.model ?? "";
   const reasoning = thread === null ? composeReasoning : asReasoningLevel(snapshot?.reasoning ?? "");
   const chosen = thread === null ? composeChosen : snapshot?.servers ?? null;
-  const spent = messages.reduce((total, message) => total + (message.usage?.cost ?? 0), 0);
   // A prompt's actions are offered while its thread is not answering: a run that
   // is only queued still counts as answering, so its transcript is left alone.
   const canAct = thread !== null && status !== "running" && config !== null;
@@ -452,7 +451,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     reasoning,
     chosen,
     loaded,
-    spent,
     editing,
     setEditing,
     post,

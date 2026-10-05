@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { ArrowUp, Brain, Check, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
 import { MOD, mod } from "../keybinds";
 import { newAttachment, processImage, type Attachment } from "../images";
-import { price } from "../money";
 import { REASONING_LEVELS, type ReasoningLevel } from "../types";
 import { ServersMenu, offeredServers, type ServersProps } from "./ServersMenu";
 
@@ -33,8 +32,6 @@ interface Props {
   reasoning: ReasoningLevel;
   /** The level to ask with from the next request on. */
   onReasoning: (level: ReasoningLevel) => void;
-  /** What the open chat's answers have cost altogether, in USD. */
-  spent: number;
   /**
    * The text of the prompt being rewritten, or null when the composer is
    * writing a new one. While it is set, sending starts the chat over from that
@@ -68,8 +65,7 @@ interface Props {
  * which is then the way into the list — and, while it calls any, a pill of the
  * hammer and how many it calls, whose chevron opens that list and whose hammer
  * gives them all up. The model in use sits in the bar's right corner, beside the
- * send button, and opens the list of them; what the chat has cost sits between
- * the two, its newest message's change over the total.
+ * send button, and opens the list of them.
  */
 export function Composer({
   textareaRef,
@@ -79,7 +75,6 @@ export function Composer({
   onModel,
   reasoning,
   onReasoning,
-  spent,
   editingText,
   onCancelEdit,
   servers,
@@ -411,9 +406,6 @@ export function Composer({
             <span className="model-name">{model || "model"}</span>
             <ChevronDown className="chevron" />
           </button>
-          {/* What the chat has cost so far: every answer's price, summed, in the
-              draft's own corner where the next request is sent from. */}
-          {spent > 0 && <span className="composer-cost">{price(spent)}</span>}
           {/* The button holds its place whether or not there is a draft — an
               empty one sends nothing — and the animation marks the swap between
               Send and Stop when the role changes, not the button's arrival. It

@@ -99,13 +99,9 @@ function App() {
   return (
     <div className="app">
       <div className="shell">
-        {/* The rail carries what belongs to no single view: the way back to the
-            feed while a thread is open, and the settings, which both views reach. */}
-        <TitleBar
-          thread={threadOpen}
-          onBack={conversation.backToChannel}
-          onOpenSettings={conversation.toggleSettings}
-        />
+        {/* The rail carries the way back to the feed while a thread is open.
+            The settings are the panel's own now, behind its three-dots. */}
+        <TitleBar thread={threadOpen} onBack={conversation.backToChannel} />
 
         <main className="main">
           {/* The panel's own nav: the model, and the window's view switches while
@@ -115,6 +111,7 @@ function App() {
               thread={threadOpen}
               jsonView={conversation.jsonView}
               onJsonView={conversation.showJson}
+              onOpenSettings={conversation.toggleSettings}
             />
           )}
 
@@ -137,7 +134,6 @@ function App() {
                     onModel={conversation.setModel}
                     reasoning={conversation.reasoning}
                     onReasoning={conversation.setReasoning}
-                    spent={0}
                     editingText={null}
                     onCancelEdit={() => {}}
                     servers={{
@@ -208,7 +204,6 @@ function App() {
                   onModel={conversation.setModel}
                   reasoning={conversation.reasoning}
                   onReasoning={conversation.setReasoning}
-                  spent={conversation.spent}
                   editingText={conversation.editing?.text ?? null}
                   onCancelEdit={() => conversation.setEditing(null)}
                   servers={servers}

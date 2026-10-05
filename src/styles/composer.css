@@ -420,18 +420,6 @@
   text-overflow: ellipsis;
 }
 
-/* What the chat has cost, beside the send button: every answer's price, summed,
-   in the money format of two decimals. Tabular figures keep it from twitching as
-   the total grows, and it is chrome rather than content — a drag across it should
-   start no selection. */
-.composer-cost {
-  font-size: calc(11px + var(--composer-grow));
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  user-select: none;
-  -webkit-user-select: none;
-}
-
 /* The button holds its place whether or not there is a draft — an empty one
    sends nothing — and it marks the swap between Send and Stop. It is animated by
    a class the swap adds rather than by the button itself: the button also

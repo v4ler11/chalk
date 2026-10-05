@@ -1,23 +1,22 @@
-import { ArrowLeft, Settings } from "lucide-react";
-import { MOD } from "../keybinds";
+import { ArrowLeft } from "lucide-react";
 import { TrafficLights } from "./WindowControls";
 
 interface Props {
   /** Whether a thread is open: the way back to the feed is only there for one. */
   thread: boolean;
   onBack: () => void;
-  onOpenSettings: () => void;
 }
 
 /**
  * The window's own title bar: the controls, drawn in the webview because the
  * window is frameless, and the region that drags it.
  *
- * It carries what belongs to no single view: the way back to the feed while a
- * thread is open, and the settings, which both views can reach. The panel
- * beneath reserves the same strip, so the two read as one band.
+ * It carries the way back to the feed while a thread is open. The settings used
+ * to be here, in the corner; they are in the panel's own three-dots now, with
+ * the rest of the window's switches. The panel beneath reserves the same strip,
+ * so the two read as one band.
  */
-export function TitleBar({ thread, onBack, onOpenSettings }: Props) {
+export function TitleBar({ thread, onBack }: Props) {
   return (
     // "deep", so every pixel of the rail drags — its padding and the gaps
     // between the controls included — while the buttons themselves still take
@@ -38,15 +37,6 @@ export function TitleBar({ thread, onBack, onOpenSettings }: Props) {
             </span>
           </span>
         )}
-
-        <span className="hint">
-          <button className="icon-btn" aria-label="Settings" onClick={onOpenSettings}>
-            <Settings className="icon" />
-          </button>
-          <span className="key-hint" aria-hidden="true">
-            Settings <kbd>{MOD},</kbd>
-          </span>
-        </span>
       </div>
     </header>
   );
