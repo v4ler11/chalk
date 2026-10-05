@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
+import { copyText } from "../clipboard";
 import { price } from "../money";
 import { Markdown } from "./Markdown";
 import { Thinking } from "./Thinking";
@@ -31,28 +32,6 @@ interface Props {
   canAct: boolean;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
-}
-
-/**
- * Writes text to the clipboard. The async clipboard needs a secure context, so
- * where it is unavailable the old selection copy is the fallback — a click that
- * quietly does nothing is worse than a deprecated call.
- */
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const scratch = document.createElement("textarea");
-    scratch.value = text;
-    scratch.style.position = "fixed";
-    scratch.style.opacity = "0";
-    document.body.append(scratch);
-    scratch.select();
-    const copied = document.execCommand("copy");
-    scratch.remove();
-    return copied;
-  }
 }
 
 /**
