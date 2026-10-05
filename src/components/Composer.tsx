@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUp, Brain, Check, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
 import { MOD, mod } from "../keybinds";
@@ -96,6 +96,21 @@ export function Composer({
   // Anything not ready — still being prepared, or failed — holds the send back,
   // so a request never carries half an image.
   const busy = attachments.some((a) => a.status !== "ready");
+
+  // The button marks a swap of role — Send into Stop — and not its own arrival:
+  // a composer arrives with every view, so an animation on the button itself
+  // would blink it open each time a thread opens. The flag is cleared by the
+  // animation it started, so the class never outlives the pass it was added for.
+  const mode = streaming ? "stop" : "send";
+  const [swapping, setSwapping] = useState(false);
+  const shown = useRef(mode);
+  useEffect(() => {
+    if (shown.current === mode) return;
+    shown.current = mode;
+    setSwapping(true);
+  }, [mode]);
+  const sendClass = `send-btn${swapping ? " swapping" : ""}`;
+  const sendSettled = () => setSwapping(false);
 
   // `value` is read here, not listed as a dependency: this runs on the render
   // that changes `editingText`, where it is the draft the edit is displacing.
@@ -369,19 +384,27 @@ export function Composer({
           {spent > 0 && <span className="composer-cost">{price(spent)}</span>}
           {/* The button holds its place whether or not there is a draft — an
               empty one sends nothing — and the animation marks the swap between
-              Send and Stop. It is held back while an image is still being
-              prepared, so nothing is sent missing its picture. */}
+              Send and Stop when the role changes, not the button's arrival. It
+              is held back while an image is still being prepared, so nothing is
+              sent missing its picture. */}
           {streaming ? (
-            <button className="send-btn" title="Stop" aria-label="Stop" onClick={onStop}>
+            <button
+              className={sendClass}
+              title="Stop"
+              aria-label="Stop"
+              onClick={onStop}
+              onAnimationEnd={sendSettled}
+            >
               <Square />
             </button>
           ) : (
             <button
-              className="send-btn"
+              className={sendClass}
               title="Send"
               aria-label="Send"
               disabled={busy}
               onClick={submit}
+              onAnimationEnd={sendSettled}
             >
               <ArrowUp />
             </button>

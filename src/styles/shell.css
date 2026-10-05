@@ -422,29 +422,34 @@
    half-typed draft live in its own DOM. The stack fills what the nav leaves. */
 .pane-stack {
   position: relative;
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
   min-width: 0;
 }
 
+/* Every pane covers the stack, on screen or off, and that is the point: showing
+   one and hiding another is a change of `visibility` and of nothing else. A pane
+   that moved between in-flow and absolute on its way would take its whole
+   subtree through layout again — a transcript is thousands of boxes, more than
+   fits in a frame — and the frame it misses is the text blinking out and back.
+   It would also move the geometry under the pointer for that frame, which reads
+   as the hover flicking on and off. Laid out once, showing a pane is a paint of
+   what is already there. */
 .pane {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-height: 0;
   min-width: 0;
 }
 
 /* Off, the pane keeps its place and its layout — `visibility`, not
    `display: none`, which would leave a scroll container with a scrollable area
-   of zero and bring it back at the top. It is out of the flow so the visible
-   pane is the one that sizes the stack, and inert so nothing off-screen is
-   reachable by keyboard. */
+   of zero and bring it back at the top. It is off the pointer's path, so nothing
+   hidden is hovered, and inert, so nothing hidden is reachable by keyboard or by
+   a screen reader. */
 .pane.off {
-  position: absolute;
-  inset: 0;
   visibility: hidden;
   pointer-events: none;
 }

@@ -393,7 +393,10 @@
 }
 
 /* The button holds its place whether or not there is a draft — an empty one
-   sends nothing — and the animation marks the swap between Send and Stop. */
+   sends nothing — and it marks the swap between Send and Stop. It is animated by
+   a class the swap adds rather than by the button itself: the button also
+   arrives with a composer, and a composer arrives with a view, so an animation
+   on the button would blink the way it opens every thread. */
 @keyframes send-in {
   from {
     opacity: 0;
@@ -418,6 +421,9 @@
   background-color: var(--accent);
   color: var(--accent-contrast);
   cursor: pointer;
+}
+
+.send-btn.swapping {
   animation: send-in 120ms ease-out;
 }
 
