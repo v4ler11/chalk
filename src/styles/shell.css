@@ -440,7 +440,7 @@
   transition: none;
 }
 
-/* What a thread is written on: a sheet a step above the window's own colour, so a
+/* What a thread is written on: a sheet a step off the window's own grey, so a
    thread reads as its own pane rather than as the channel with other words in it.
    It covers the whole pane, the strip behind the composer included, so the space
    under the composer travels with the thread while the composer's card stays
@@ -448,7 +448,7 @@
 .transcript-sheet {
   position: absolute;
   inset: 0;
-  background-color: var(--sidebar-active);
+  background-color: var(--pane);
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
@@ -473,12 +473,12 @@
   transition: transform 180ms ease-out;
 }
 
-/* The bar takes the pane's colour, so a thread is one surface from its top edge
-   down: a step above the channel's own bar, which is what the slide is read
-   against. */
+/* The bar stays the window's own colour, which is what the rail is drawn in: the
+   two are one band across the top of the window, and a bar of a different tone
+   would cut that band in two. It is positioned so it is painted over the sheet
+   rather than under it. */
 .pane.thread > .chat-nav {
   position: relative;
-  background-color: var(--sidebar-active);
 }
 
 /* Both are positioned so they are painted over the sheet rather than under it,
