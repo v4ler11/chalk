@@ -437,6 +437,15 @@
   background-color: var(--sidebar);
 }
 
+/* The transcript is the pane's growing half: the messages fill what the composer
+   leaves, which is what keeps the composer at the foot of the pane. */
+.transcript {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* The sheet and the transcript travel as one: the messages are the transcript's
    children, so they are written on the sheet and go where it goes. It arrives
    from the right edge, moving left, and leaves the same way, so going in and
