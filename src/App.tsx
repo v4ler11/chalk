@@ -196,38 +196,15 @@ function App() {
               />
             </div>
 
-            {/* Settings and the JSON view take the pane, one at a time, and both
-                are the same shape: a bar naming the mode and holding the way out,
-                then a vertical list of sections down the left and the pane they
-                open on the right. */}
-            {conversation.settingsView ? (
-              <div className="pane">
-                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
-                {config ? (
-                  <SettingsView config={config} onSaved={setConfig} />
-                ) : (
-                  <div className="settings-body">
-                    <p className="json-note" style={{ padding: 24 }}>
-                      Reading the settings…
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : view.kind === "thread" && conversation.jsonView ? (
-              <div className="pane">
-                <ModeBar title="JSON" onClose={conversation.closeJson} />
-                <div className="settings-body">
-                  <SectionNav
-                    label="JSON sections"
-                    sections={JSON_SECTIONS}
-                    active={conversation.jsonTab}
-                    onSelect={(id) => conversation.setJsonTab(id as JsonTab)}
-                  />
-                  <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
-                </div>
-              </div>
-            ) : threadPane ? (
-              <div className={`pane thread${threadVisible ? "" : " off"}`}>
+            {/* The thread's pane stays in the page while a mode stands in front
+                of it. The settings and the JSON view are panels over the chat
+                rather than another view of it, so nothing about the chat moves
+                when one opens or closes; it leaves the page only when the
+                channel is the view, and that is the movement the slide is for.
+                It is inert while a mode is in front, so a reader reaches the
+                panel and not the transcript behind it. */}
+            {threadPane && (
+              <div className={`pane thread${holding ? " off" : ""}`} inert={!threadVisible}>
                 <ChatPane
                   messages={threadVisible ? conversation.messages : held.current.messages}
                   pending={threadVisible ? conversation.pending : held.current.pending}
@@ -260,6 +237,38 @@ function App() {
                   onSubmit={conversation.submit}
                   onStop={conversation.stop}
                 />
+              </div>
+            )}
+
+            {/* Settings and the JSON view take the pane, one at a time, and both
+                are the same shape: a bar naming the mode and holding the way out,
+                then a vertical list of sections down the left and the pane they
+                open on the right. */}
+            {conversation.settingsView ? (
+              <div className="pane">
+                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
+                {config ? (
+                  <SettingsView config={config} onSaved={setConfig} />
+                ) : (
+                  <div className="settings-body">
+                    <p className="json-note" style={{ padding: 24 }}>
+                      Reading the settings…
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : threadOpen && conversation.jsonView ? (
+              <div className="pane">
+                <ModeBar title="JSON" onClose={conversation.closeJson} />
+                <div className="settings-body">
+                  <SectionNav
+                    label="JSON sections"
+                    sections={JSON_SECTIONS}
+                    active={conversation.jsonTab}
+                    onSelect={(id) => conversation.setJsonTab(id as JsonTab)}
+                  />
+                  <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
+                </div>
               </div>
             ) : null}
           </div>
