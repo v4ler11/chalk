@@ -448,15 +448,14 @@
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
-   leaves, which is what keeps the composer at the foot of the pane. Its top rule
-   is the one between the bar and the pane, drawn here rather than on the bar so
-   that it travels with the surface it belongs to. */
+   leaves, which is what keeps the composer at the foot of the pane. It draws no
+   rule of its own: the line between the bar and the pane belongs to the bar, and
+   one line is what separates them. */
 .transcript {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--border);
 }
 
 /* The sheet and the transcript travel as one: the messages are the transcript's
@@ -473,14 +472,13 @@
   transition: transform 180ms ease-out;
 }
 
-/* The bar over the sheet wears no colour of its own, and no rule of its own: the
-   sheet is what is seen behind its controls, and the rule between the bar and the
-   pane is the transcript's, drawn on the thing that moves. It is positioned so
+/* The bar over the sheet wears no colour of its own: the sheet is what is seen
+   behind its controls. It keeps its rule, and it is not in the slide, so the line
+   under it holds still while the surface moves beneath it. It is positioned so
    its controls are painted over the sheet rather than under it. */
 .pane.thread > .chat-nav {
   position: relative;
   background-color: transparent;
-  border-bottom: none;
 }
 
 /* Both are positioned so they are painted over the sheet rather than under it,
