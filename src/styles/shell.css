@@ -448,33 +448,39 @@
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
-   leaves, which is what keeps the composer at the foot of the pane. */
+   leaves, which is what keeps the composer at the foot of the pane. Its top rule
+   is the one between the bar and the pane, drawn here rather than on the bar so
+   that it travels with the surface it belongs to. */
 .transcript {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  border-top: 1px solid var(--border);
 }
 
-/* The sheet, the transcript written on it, and the bar over them travel as one:
-   the bar belongs to the pane rather than to the window, so the chat arrives with
-   it and carries it away again. It comes in from the right edge, moving left, and
-   leaves the same way, so going in and coming back are one movement read forwards
-   and backwards. The window's own bar stays put underneath: it is what the pane
-   slides back onto, and what a channel keeps when the thread is not there. */
-.pane.thread > .chat-nav,
+/* The sheet and the transcript travel as one: the messages are the transcript's
+   children, so they are written on the sheet and go where it goes. It comes in
+   from the right edge, moving left, and leaves the same way, so going in and
+   coming back are one movement read forwards and backwards.
+
+   The bar is not part of that movement. Its own surface is the sheet behind it —
+   the sheet covers the pane's whole height — so what passes under the controls is
+   the background, and the controls themselves stay where they are. */
 .transcript,
 .transcript-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
 }
 
-/* The bar takes the pane's surface, so a thread is one piece rather than a bar
-   laid over a pane, and its whole width travels with it. It is positioned so it
-   is painted over the sheet rather than under it. */
+/* The bar over the sheet wears no colour of its own, and no rule of its own: the
+   sheet is what is seen behind its controls, and the rule between the bar and the
+   pane is the transcript's, drawn on the thing that moves. It is positioned so
+   its controls are painted over the sheet rather than under it. */
 .pane.thread > .chat-nav {
   position: relative;
-  background-color: var(--sidebar);
+  background-color: transparent;
+  border-bottom: none;
 }
 
 /* Both are positioned so they are painted over the sheet rather than under it,
@@ -484,7 +490,6 @@
   position: relative;
 }
 
-.pane.thread.off > .chat-nav,
 .pane.thread.off .transcript,
 .pane.thread.off .transcript-sheet {
   transform: translateX(100%);
