@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { RunStatus } from "../types";
 import { ChatWave, waveSeed } from "./ChatWave";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
@@ -63,38 +64,54 @@ interface Props {
  * deletes it. The button holds its place whether or not it is drawn, so a row
  * never twitches under the pointer, and deleting asks first: the row becomes the
  * question, the same way a history row does.
+ *
+ * Memoized on the row's own fields: the window hands a fresh rows array, and
+ * fresh row objects, on every run event, so the default shallow compare would
+ * redraw the whole feed for one thread's status. A row draws nothing but those
+ * fields, so a row whose fields are unchanged is left alone.
  */
-export function ChannelRowItem({ row, onOpen, onDelete }: Props) {
-  const { asking, ask, giveUp } = useDeleteQuestion();
-  const status = statusLine(row);
-  // A row being removed wears the open thread's treatment, so the question reads
-  // as the row's own and not as a stray line in the feed.
-  const lit = row.active || asking;
+export const ChannelRowItem = memo(
+  function ChannelRowItem({ row, onOpen, onDelete }: Props) {
+    const { asking, ask, giveUp } = useDeleteQuestion();
+    const status = statusLine(row);
+    // A row being removed wears the open thread's treatment, so the question
+    // reads as the row's own and not as a stray line in the feed.
+    const lit = row.active || asking;
 
-  return (
-    <div className={`channel-row row${lit ? " active" : ""}${asking ? " confirming" : ""}`}>
-      <ChatWave seed={waveSeed(String(row.chat))} strokeWidth={lit ? 1.5 : 1.25} />
-      <div className="channel-body">
-        {asking ? (
-          // While the question is up the row keeps its wave and its place, and
-          // what there is to read is the question rather than the message.
-          <span className="channel-root">Delete this thread?</span>
-        ) : (
-          <button className="channel-open" onClick={() => onOpen(row.chat)}>
-            <span className="channel-root">{row.root}</span>
-          </button>
-        )}
-        {status.text !== "" && !asking && (
-          <div className={`channel-status ${status.tone}`}>{status.text}</div>
-        )}
+    return (
+      <div className={`channel-row row${lit ? " active" : ""}${asking ? " confirming" : ""}`}>
+        <ChatWave seed={waveSeed(String(row.chat))} strokeWidth={lit ? 1.5 : 1.25} />
+        <div className="channel-body">
+          {asking ? (
+            // While the question is up the row keeps its wave and its place, and
+            // what there is to read is the question rather than the message.
+            <span className="channel-root">Delete this thread?</span>
+          ) : (
+            <button className="channel-open" onClick={() => onOpen(row.chat)}>
+              <span className="channel-root">{row.root}</span>
+            </button>
+          )}
+          {status.text !== "" && !asking && (
+            <div className={`channel-status ${status.tone}`}>{status.text}</div>
+          )}
+        </div>
+        <RowDelete
+          asking={asking}
+          label={`Delete "${firstLine(row.root)}"`}
+          ask={ask}
+          giveUp={giveUp}
+          onDelete={() => onDelete(row.chat)}
+        />
       </div>
-      <RowDelete
-        asking={asking}
-        label={`Delete "${firstLine(row.root)}"`}
-        ask={ask}
-        giveUp={giveUp}
-        onDelete={() => onDelete(row.chat)}
-      />
-    </div>
-  );
-}
+    );
+  },
+  (before, after) =>
+    before.row.chat === after.row.chat &&
+    before.row.root === after.row.root &&
+    before.row.createdAt === after.row.createdAt &&
+    before.row.replies === after.row.replies &&
+    before.row.status === after.row.status &&
+    before.row.thinking === after.row.thinking &&
+    before.row.awaiting === after.row.awaiting &&
+    before.row.active === after.row.active,
+);

@@ -417,3 +417,35 @@
   font-weight: 500;
 }
 
+/* The panes share one box so the channel can stay mounted under a thread: a
+   thread opened and left again must not rebuild the feed, whose scroll and
+   half-typed draft live in its own DOM. The stack fills what the nav leaves. */
+.pane-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Off, the pane keeps its place and its layout — `visibility`, not
+   `display: none`, which would leave a scroll container with a scrollable area
+   of zero and bring it back at the top. It is out of the flow so the visible
+   pane is the one that sizes the stack, and inert so nothing off-screen is
+   reachable by keyboard. */
+.pane.off {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+

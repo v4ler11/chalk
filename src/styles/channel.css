@@ -105,9 +105,17 @@
 }
 
 /* The message as it was typed: the transcript's own prompt face and size, its
-   newlines kept, a long line wrapped rather than run off the row. */
+   newlines kept, a long line wrapped rather than run off the row. A row is here
+   to say which thread it is rather than to hold the whole prompt, so at most
+   three lines are shown and the rest is cut with an ellipsis; the message in
+   full is in the opening of the thread the row opens. The clamp needs the box
+   display and the hidden overflow, and it keeps the whitespace, so a prompt's
+   own newlines still break where they were typed. */
 .channel-root {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
   font-family: var(--font-message);
   font-size: 17px;
   line-height: 1.45;

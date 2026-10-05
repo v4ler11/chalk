@@ -38,6 +38,13 @@ function App() {
 
   const view = conversation.view;
   const threadOpen = view.kind === "thread";
+  // The feed stays mounted while a thread or the settings are showing, hidden
+  // rather than unmounted, so its scroll and its half-typed draft survive the
+  // trip. `visibility`, not `display: none`, is what keeps its scroll position.
+  const channelVisible = !conversation.settingsView && view.kind === "channel";
+  // Both composers are mounted at once, and the shared ref must land on the one
+  // on screen: the channel's takes this spare while it is hidden.
+  const channelComposerRef = useRef<HTMLTextAreaElement>(null);
 
   // The window's shortcuts, beside the buttons that do the same thing. Escape is
   // the taken-over pane's own: it leaves the settings or the JSON view first,
@@ -111,101 +118,108 @@ function App() {
             />
           )}
 
-          {/* Settings and the JSON view take the pane, one at a time, and both
-              are the same shape: a bar naming the mode and holding the way out,
-              then a vertical list of sections down the left and the pane they
-              open on the right. */}
-          {conversation.settingsView ? (
-            <>
-              <ModeBar title="Settings" onClose={conversation.leaveSettings} />
-              {config ? (
-                <SettingsView config={config} onSaved={setConfig} />
-              ) : (
+          {/* The panes share one box so the feed can stay mounted under a thread
+              or the settings: opening one and coming back must not rebuild the
+              channel. The hidden pane keeps its place and its scroll. */}
+          <div className="pane-stack">
+            <div className={`pane${channelVisible ? "" : " off"}`} inert={!channelVisible}>
+              <Channel
+                rows={conversation.rows}
+                error={error}
+                onOpen={conversation.openThread}
+                onDelete={conversation.deleteChat}
+                composer={
+                  <Composer
+                    textareaRef={channelVisible ? composerRef : channelComposerRef}
+                    streaming={false}
+                    reasoning={conversation.reasoning}
+                    onReasoning={conversation.setReasoning}
+                    spent={0}
+                    editingText={null}
+                    onCancelEdit={() => {}}
+                    servers={{
+                      declared: servers,
+                      tools,
+                      failures,
+                      costs,
+                      reading,
+                      chosen: conversation.chosen,
+                      loaded: conversation.loaded,
+                      onChoose: conversation.setChosen,
+                      onRefresh: () => readTools(true),
+                    }}
+                    onSubmit={conversation.post}
+                    onStop={() => {}}
+                  />
+                }
+              />
+            </div>
+
+            {/* Settings and the JSON view take the pane, one at a time, and both
+                are the same shape: a bar naming the mode and holding the way out,
+                then a vertical list of sections down the left and the pane they
+                open on the right. */}
+            {conversation.settingsView ? (
+              <div className="pane">
+                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
+                {config ? (
+                  <SettingsView config={config} onSaved={setConfig} />
+                ) : (
+                  <div className="settings-body">
+                    <p className="json-note" style={{ padding: 24 }}>
+                      Reading the settings…
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : view.kind === "thread" && conversation.jsonView ? (
+              <div className="pane">
+                <ModeBar title="JSON" onClose={conversation.closeJson} />
                 <div className="settings-body">
-                  <p className="json-note" style={{ padding: 24 }}>
-                    Reading the settings…
-                  </p>
+                  <SectionNav
+                    label="JSON sections"
+                    sections={JSON_SECTIONS}
+                    active={conversation.jsonTab}
+                    onSelect={(id) => conversation.setJsonTab(id as JsonTab)}
+                  />
+                  <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
                 </div>
-              )}
-            </>
-          ) : view.kind === "channel" ? (
-            /* The feed of threads. The composer is the window's own — its submit
-               is a post, which makes a thread and answers in the background. */
-            <Channel
-              rows={conversation.rows}
-              error={error}
-              onOpen={conversation.openThread}
-              onDelete={conversation.deleteChat}
-              composer={
-                <Composer
-                  textareaRef={composerRef}
-                  streaming={false}
+              </div>
+            ) : view.kind === "thread" ? (
+              <div className="pane">
+                <ChatPane
+                  messages={conversation.messages}
+                  pending={conversation.pending}
+                  error={error || conversation.threadError || conversation.unreachable}
+                  follow={follow}
+                  onFollowChange={setFollow}
+                  canAct={conversation.canAct}
+                  onRegenerate={conversation.regenerate}
+                  onEdit={conversation.startEdit}
+                  awaiting={conversation.awaiting.length > 0 ? conversation.awaiting : null}
+                  onRun={conversation.allow}
+                  onDecline={conversation.decline}
+                  composerRef={composerRef}
                   reasoning={conversation.reasoning}
                   onReasoning={conversation.setReasoning}
-                  spent={0}
-                  editingText={null}
-                  onCancelEdit={() => {}}
-                  servers={{
-                    declared: servers,
-                    tools,
-                    failures,
-                    costs,
-                    reading,
-                    chosen: conversation.chosen,
-                    loaded: conversation.loaded,
-                    onChoose: conversation.setChosen,
-                    onRefresh: () => readTools(true),
-                  }}
-                  onSubmit={conversation.post}
-                  onStop={() => {}}
+                  spent={conversation.spent}
+                  editingText={conversation.editing?.text ?? null}
+                  onCancelEdit={() => conversation.setEditing(null)}
+                  servers={servers}
+                  tools={tools}
+                  failures={failures}
+                  costs={costs}
+                  reading={reading}
+                  chosen={conversation.chosen}
+                  loaded={conversation.loaded}
+                  onChoose={conversation.setChosen}
+                  onRefresh={() => readTools(true)}
+                  onSubmit={conversation.submit}
+                  onStop={conversation.stop}
                 />
-              }
-            />
-          ) : conversation.jsonView ? (
-            <>
-              <ModeBar title="JSON" onClose={conversation.closeJson} />
-              <div className="settings-body">
-                <SectionNav
-                  label="JSON sections"
-                  sections={JSON_SECTIONS}
-                  active={conversation.jsonTab}
-                  onSelect={(id) => conversation.setJsonTab(id as JsonTab)}
-                />
-                <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
               </div>
-            </>
-          ) : (
-            <ChatPane
-              messages={conversation.messages}
-              pending={conversation.pending}
-              error={error || conversation.threadError || conversation.unreachable}
-              follow={follow}
-              onFollowChange={setFollow}
-              canAct={conversation.canAct}
-              onRegenerate={conversation.regenerate}
-              onEdit={conversation.startEdit}
-              awaiting={conversation.awaiting.length > 0 ? conversation.awaiting : null}
-              onRun={conversation.allow}
-              onDecline={conversation.decline}
-              composerRef={composerRef}
-              reasoning={conversation.reasoning}
-              onReasoning={conversation.setReasoning}
-              spent={conversation.spent}
-              editingText={conversation.editing?.text ?? null}
-              onCancelEdit={() => conversation.setEditing(null)}
-              servers={servers}
-              tools={tools}
-              failures={failures}
-              costs={costs}
-              reading={reading}
-              chosen={conversation.chosen}
-              loaded={conversation.loaded}
-              onChoose={conversation.setChosen}
-              onRefresh={() => readTools(true)}
-              onSubmit={conversation.submit}
-              onStop={conversation.stop}
-            />
-          )}
+            ) : null}
+          </div>
         </main>
       </div>
     </div>
