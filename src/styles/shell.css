@@ -427,27 +427,32 @@
 }
 
 /* A pane on its way out keeps its place for one slide, and it takes no hover with
-   it. The pointer is on the pane arriving over it, and the browser only clears
-   what a hover put there a few frames later; with no transition in the way, the
-   chrome goes the moment it does, rather than fading while the other pane slides
-   across. `transition` is set by none of the rules that reveal these, so this
-   needs no weight of its own to win. */
+   it. The pointer is on the pane arriving over it, and the browser only clears a
+   hover a few frames later, so the chrome is taken away here instead: without a
+   transition it goes the instant the pane is off, rather than fading while the
+   other one slides across. The reveal rules are the row's and the transcript's,
+   which are imported after this file, so the weight is stated rather than
+   matched; a `display` here would move the row's own layout. */
 .pane.off .row-actions,
 .pane.off .msg-actions,
 .pane.off .key-hint {
+  opacity: 0 !important;
   transition: none;
 }
 
-/* What a thread is written on: a sheet in the window's own colour, with a border
-   along the edge that leads, so the slide reads as one pane passing over another
-   rather than as the window redrawing. It covers the whole pane, the strip behind
-   the composer included, so the space under the composer travels with the thread
-   while the composer's card itself stays where it is. */
+/* What a thread is written on: a sheet in the window's own colour, with the
+   border the app draws its rules in along the edge that leads. The width is the
+   same whether it is drawn or not, so the box never changes, and the colour is
+   what turns: it is on for the length of a slide and off at the end of it, which
+   is where the two panes meet and where it says something. At rest the sheet
+   fills the pane and an edge along the window's own side says nothing. It covers
+   the whole pane, the strip behind the composer included, so the space under the
+   composer travels with the thread while the composer's card stays where it is. */
 .transcript-sheet {
   position: absolute;
   inset: 0;
   background-color: var(--bg);
-  border-left: 1px solid var(--border);
+  border-left: 1px solid transparent;
 }
 
 /* The transcript is the pane's growing half: the messages fill what the composer
@@ -481,9 +486,23 @@
   transform: translateX(100%);
 }
 
+/* Leaving is the last thing this pane does, and it is unmounted the moment its
+   slide ends, which is what takes the edge off again: the colour is not in the
+   transition list, so it is there from the first frame of the movement. */
+.pane.thread.off .transcript-sheet {
+  border-left-color: var(--border);
+}
+
+/* Arriving is a keyframe, since a pane that is created is not a pane that
+   changed: the edge is held to the last instant of the movement and the settled
+   pane, filling the window, has none. */
 @keyframes thread-in {
   from {
     transform: translateX(100%);
+    border-left-color: var(--border);
+  }
+  99% {
+    border-left-color: var(--border);
   }
 }
 
