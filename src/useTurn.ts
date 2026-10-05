@@ -16,7 +16,7 @@ import type {
 } from "./types";
 import * as api from "./api";
 import { LOAD_TOOL_NAME } from "./lazy";
-import { DECLINED, MAX_ROUNDS, TOO_MANY, toolMessage, wantedName, type Round } from "./conversation";
+import { DECLINED, toolMessage, wantedName, type Round } from "./conversation";
 
 /** The conversation as a turn reads it: the open transcript, the model and the
  *  reasoning level it is asked with, and the servers it is sent with. Held by
@@ -280,14 +280,15 @@ export function useTurn({
    * answers without asking for one.
    *
    * A call belonging to a server that is not allowed to run automatically is not
-   * run here: the turn stops with the calls on screen, and the user decides. The
-   * round cap is for a model that will not stop asking: an honest turn never
-   * reaches it, and the calls of the last round are answered anyway, so the
-   * transcript stays one the provider accepts.
+   * run here: the turn stops with the calls on screen, and the user decides.
+   * There is no round cap: how many times a turn may ask is the model's business
+   * and the user's, who can see every round on screen and stop the turn, where a
+   * number picked here would cut off an honest turn that simply had more work to
+   * do. A model that asks forever is visible, and stopped by hand.
    */
   const runTurn = useCallback(async (request: UiMessage[]) => {
     let history = request;
-    for (let pass = 0; ; pass++) {
+    for (;;) {
       const { calls, message } = await round(history);
       if (calls.length === 0) return;
       // The answer that asked for the calls is part of the transcript they are
@@ -299,12 +300,6 @@ export function useTurn({
       const allowed = calls.every((call) => sent.find((tool) => tool.name === call.name)?.autoRun === true);
       if (!allowed) {
         setAwaiting({ calls, history: asked });
-        return;
-      }
-      if (pass === MAX_ROUNDS - 1) {
-        history = [...asked, ...calls.map((call) => toolMessage(call, TOO_MANY))];
-        setMessages(history);
-        setError(`One turn asked for tools ${MAX_ROUNDS} times, so it was stopped there.`);
         return;
       }
       history = [...asked, ...(await Promise.all(calls.map(callTool)))];

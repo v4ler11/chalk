@@ -1,24 +1,12 @@
 /**
  * The pieces of a conversation that are not React: how a chat is named, what it
- * starts from, how a tool call is answered, and the caps a turn runs under. They
- * are here rather than in the window so the window is about the window.
+ * starts from, and how a tool call is answered. They are here rather than in the
+ * window so the window is about the window.
  */
 import { contentText, type AppConfig, type ChatSummary, type ToolCallRequest, type UiMessage } from "./types";
 
-/**
- * How many times one turn may ask for tools before it is stopped.
- *
- * A model that will not stop asking would otherwise be answered forever, and the
- * transcript — and the user's tokens — are what pay for it. An honest turn never
- * reaches this; reaching it is a model stuck in a loop.
- */
-export const MAX_ROUNDS = 8;
-
 /** What a tool call the user declined is answered with. */
 export const DECLINED = "The user declined to run this tool.";
-
-/** What a call is answered with when the turn was stopped for asking too often. */
-export const TOO_MANY = "One turn asked for tools too many times, so this was not run.";
 
 /**
  * The name a chat is born with: its first prompt, collapsed to one line and cut
