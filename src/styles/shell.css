@@ -444,11 +444,19 @@
    transition it goes the instant the pane is off, rather than fading while the
    other one slides across. The reveal rules are the row's and the transcript's,
    which are imported after this file, so the weight is stated rather than
-   matched; a `display` here would move the row's own layout. */
+   matched; a `display` here would move the row's own layout.
+   
+   The row's own menu is in this list because its reveal is a `visibility` as well
+   as an opacity: a row left asking a question reveals its menu through the
+   `confirming` class, and a `visibility: visible` written on a descendant is also
+   what an off pane cannot take back — the menu would otherwise be drawn over the
+   thread that stands in front of the pane it belongs to. */
+.pane.off .row-menu,
 .pane.off .row-actions,
 .pane.off .msg-actions,
 .pane.off .key-hint {
   opacity: 0 !important;
+  visibility: hidden !important;
   transition: none;
 }
 

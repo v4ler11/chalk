@@ -302,19 +302,25 @@
   overflow-wrap: anywhere;
 }
 
-/* The message's own box, which the question is drawn over: what the row's height
-   is made of stays where it is while a row is asked about, and only the words in
-   it are taken out of sight. */
+/* The message's own box, and the question stacked in it: what the row's height is
+   made of is the message, and the question is put in the message's own cell, so
+   asking a row leaves the box exactly the height it had. The box is not
+   positioned on purpose: the row's click target is the button's `::after`,
+   stretched over the whole row from the nearest positioned box above it, and a
+   positioned box here would shrink a click on the row's face, its status line or
+   its empty corner into a click on the message alone. */
 .channel-message {
-  position: relative;
+  display: grid;
 }
 
-/* The question the row asks in its own words, over the box the message keeps: the
-   same face and the same measure as the message, since it stands where the
-   message stands, and one line inside a box that may be three. */
+.channel-message > * {
+  grid-area: 1 / 1;
+}
+
+/* The question the row asks in its own words, in the message's box: the same face
+   and the same measure as the message, since it stands where the message stands,
+   and one line inside a box that may be three. */
 .channel-ask {
-  position: absolute;
-  inset: 0;
   font-family: var(--font-message);
   font-size: 15.5px;
   line-height: 1.45;
