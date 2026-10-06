@@ -297,10 +297,13 @@ function App() {
                 the right — and, like the JSON view, they wear the bar that names
                 the mode under that strip: the column's own row opens them, but a
                 pane that has taken the window over also says so and holds the
-                way out of itself. */}
+                way out of itself. The strip above that bar carries nothing: the
+                way back into the feed belongs to a thread's bar, and the way out
+                of a mode is the bar's own ESC, so a mode's strip is the drag
+                region and its rule alone. */}
             {conversation.settingsView ? (
               <div className="pane">
-                {nav(threadOpen)}
+                {nav(false)}
                 <ModeBar title="Settings" onClose={conversation.leaveSettings} />
                 {config ? (
                   <SettingsView config={config} onSaved={setConfig} />
@@ -314,7 +317,7 @@ function App() {
               </div>
             ) : threadOpen && conversation.jsonView ? (
               <div className="pane">
-                {nav(threadOpen)}
+                {nav(false)}
                 <ModeBar title="JSON" onClose={conversation.closeJson} />
                 <div className="settings-body">
                   <SectionNav
