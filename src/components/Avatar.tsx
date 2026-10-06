@@ -24,6 +24,17 @@ function seed(text: string): number {
 const TINTS = ["#b4552a", "#3f63c9", "#2f8f5b", "#8a5cd6", "#a8813a", "#2f7f95"];
 
 /**
+ * The colour the assistant's mark wears.
+ *
+ * Deliberately not one of the tints above. Those belong to whoever is writing,
+ * and are derived from their name — so any of them can land on a person's
+ * circle, and the assistant's must be the one colour a person cannot be given.
+ * It is a slate: quiet enough to sit beside a name, and plainly not the app's
+ * blue, which means a thread needs the reader.
+ */
+export const ASSISTANT_TINT = "#4d5566";
+
+/**
  * The letters a circle wears: the first letter of the name's first word and of
  * its last, so "Lisa Zhang" is `LZ` and "gemini-3.8-flash" is `GF`. A name with
  * nothing letterlike in it — a thread whose model was never named — wears a
@@ -42,12 +53,15 @@ interface Props {
   who: string;
   /** The circle's width, which is its height. */
   size?: number;
+  /** The colour to wear, where it is not to be derived from the name — the
+   *  assistant's mark is not a person and wears a colour no person is given. */
+  colour?: string;
   /** What the circle is announced as, where nothing beside it says whose it is
    *  — a name drawn next to it is announcement enough, and it is hidden then. */
   label?: string;
 }
 
-export function Avatar({ who, size = 36, label }: Props) {
+export function Avatar({ who, size = 36, colour, label }: Props) {
   const name = who.trim() === "" ? "?" : who.trim();
   return (
     <span
@@ -55,7 +69,7 @@ export function Avatar({ who, size = 36, label }: Props) {
       style={{
         width: size,
         height: size,
-        backgroundColor: TINTS[seed(name) % TINTS.length],
+        backgroundColor: colour ?? TINTS[seed(name) % TINTS.length],
         fontSize: Math.max(9, Math.round(size * 0.4)),
       }}
       role={label ? "img" : undefined}

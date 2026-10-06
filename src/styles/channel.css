@@ -155,6 +155,9 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 3px;
+  /* Room under them, so what follows a picture is not read as part of it: the
+     pictures belong to the prompt above, and the line below is about the run. */
+  margin-bottom: 5px;
 }
 
 .channel-image {

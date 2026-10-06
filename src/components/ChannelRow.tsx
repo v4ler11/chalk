@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from "react";
 import type { RunStatus } from "../types";
 import * as api from "../api";
 import { lastReply, sentAt } from "../clock";
-import { Avatar } from "./Avatar";
+import { ASSISTANT_TINT, Avatar } from "./Avatar";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
 
 /**
@@ -99,6 +99,17 @@ function statusLine(row: ChannelRow): { text: string; tone: string } {
   return { text: row.replies === 1 ? "1 reply" : `${row.replies} replies`, tone: "replies" };
 }
 
+/**
+ * The mark the assistant wears wherever it answers.
+ *
+ * It is the app's own rather than the model's: a thread is answered by whichever
+ * model it happens to be holding, and the circle is the assistant in every
+ * thread — so it is one mark and one colour, fixed, and not a monogram that
+ * changes with the model. What answered is named in the circle's own label, and
+ * the model is on the chip in the composer, which is where a model is chosen.
+ */
+const ASSISTANT = "A";
+
 interface Props {
   row: ChannelRow;
   /** What the channel calls the person whose prompt this is. */
@@ -161,12 +172,17 @@ export const ChannelRowItem = memo(
               ))}
             </div>
           )}
-          {/* And under it, who answered and when: the model's own circle, the
+          {/* And under it, who answered and when: the assistant's own mark, the
               count of what it said, and the moment it last did. */}
           {status.text !== "" && !asking && (
             <div className={`channel-status ${status.tone}`}>
-              {answered && row.model !== "" && (
-                <Avatar who={row.model} size={18} label={`Answered by ${row.model}`} />
+              {answered && (
+                <Avatar
+                  who={ASSISTANT}
+                  colour={ASSISTANT_TINT}
+                  size={18}
+                  label={row.model === "" ? "Answered" : `Answered by ${row.model}`}
+                />
               )}
               <span>{status.text}</span>
               {answered && <span className="channel-last">{lastReply(row.updatedAt, now)}</span>}
