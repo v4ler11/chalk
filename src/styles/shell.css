@@ -488,13 +488,40 @@
    from the right edge, moving left, and leaves the same way, so going in and
    coming back are one movement read forwards and backwards.
 
+   The strip the composer floats on is in the same movement: it is the sheet's
+   colour at the bar's own height, and without it the one part of the pane that
+   did not move would be the part under the composer.
+
    The bar is not part of that movement. Its own surface is the sheet behind it —
    the sheet covers the pane's whole height — so what passes under the controls is
    the background, and the controls themselves stay where they are. */
 .transcript,
-.transcript-sheet {
+.transcript-sheet,
+.composer-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
+}
+
+/* The strip the composer floats on, and the reason the space under the composer
+   travels with the thread. The bar cannot draw it: the bar clips what it holds,
+   and a surface inside it would be wiped by that clip rather than carried out of
+   the bar's own box. So it is drawn here, the sheet's colour at the bar's own
+   height — the measurement the pane already reserves for the bar — and painted
+   after the transcript, so the messages passing under the bar are hidden by it,
+   and before the bar, so the composer's card is not. */
+.composer-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--composer-h, 0px);
+  background-color: var(--sidebar);
+}
+
+/* A thread's bar wears no colour of its own: the sheet is what is behind it, and
+   what the bar itself drew would be the one part of the pane that never moved. */
+.pane.thread > .composer-bar {
+  background-color: transparent;
 }
 
 /* The bar over the sheet wears no colour of its own: the sheet is what is seen
@@ -515,7 +542,8 @@
 }
 
 .pane.thread.off .transcript,
-.pane.thread.off .transcript-sheet {
+.pane.thread.off .transcript-sheet,
+.pane.thread.off .composer-sheet {
   transform: translateX(100%);
 }
 

@@ -126,6 +126,15 @@ export function ChatPane({
         />
       </div>
 
+      {/* The bar's own surface, over the strip the composer floats on. The bar
+          cannot carry it: it clips what it holds, so a surface inside it would
+          be wiped by that clip rather than travel out of its own box. This is
+          the sheet's colour at the bar's own height — the measurement the pane
+          already reserves for the bar — and one more thing in the slide, so the
+          space under the composer moves with the thread while the composer's
+          card stays where it is. */}
+      <div className="composer-sheet" aria-hidden="true" />
+
       <footer className="composer-bar" ref={footer}>
         {/* A server's tool calls are what a turn may stop on: the calls are
             shown above the composer until the user allows them or says no. */}
