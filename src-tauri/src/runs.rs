@@ -280,6 +280,19 @@ impl Run {
         state.awaiting = held_calls(&state.messages);
     }
 
+    /// Takes on what the chat is sent with next time, without touching the
+    /// transcript: `chat_set` writes the row, and this keeps the same change
+    /// where a window reads it. A window opening a chat that has a run reads
+    /// the run rather than the row, so a level or a list of servers written to
+    /// the row alone would be answered with what the run still held — which is
+    /// a control that moves and springs back.
+    fn retune(&self, model: String, reasoning: String, servers: Option<Vec<String>>) {
+        let mut state = self.state.lock();
+        state.model = model;
+        state.reasoning = reasoning;
+        state.servers = servers;
+    }
+
     fn summary(&self) -> Summary {
         let state = self.state.lock();
         Summary {
@@ -291,7 +304,7 @@ impl Run {
                     .as_ref()
                     .map(|partial| partial.thinking)
                     .unwrap_or(true),
-            replies: state.messages.len().saturating_sub(1),
+            replies: spoken(&state.messages).saturating_sub(1),
             awaiting: state.awaiting.len(),
         }
     }
@@ -306,7 +319,7 @@ impl Run {
             reasoning: state.reasoning.clone(),
             servers: state.servers.clone(),
             loaded: state.loaded.clone(),
-            replies: state.messages.len().saturating_sub(1),
+            replies: spoken(&state.messages).saturating_sub(1),
             messages: state.messages.clone(),
             partial: state.partial.clone(),
             awaiting: state.awaiting.clone(),
@@ -662,6 +675,27 @@ fn due(state: &mut Inner) -> Option<Partial> {
     }
     state.pushed = Some(Instant::now());
     state.partial.clone()
+}
+
+/// How many messages a thread has said since the prompt that opened it: the
+/// user's own words and the model's answers, counted together, with the tools'
+/// results left out. A result is a record of what was done rather than anything
+/// said, so a turn that called three tools and then answered has said two
+/// things and not five — which is what a row offers to read.
+///
+/// Read off the transcript rather than kept beside it, because it is the one
+/// value in a row that can be derived without guessing. The store derives it
+/// the same way, in the query a list is drawn from.
+fn spoken(messages: &[Value]) -> usize {
+    messages
+        .iter()
+        .filter(|message| {
+            matches!(
+                message.get("role").and_then(Value::as_str),
+                Some("user") | Some("assistant")
+            )
+        })
+        .count()
 }
 
 /// The calls a transcript ends on unanswered, which are the ones a chat opened
@@ -1262,8 +1296,13 @@ pub(crate) fn runs_state(state: State<'_, AppState>) -> Vec<Summary> {
 /// Refused while the chat is answering, because the row is written whole: a
 /// write of a model into a row whose transcript another writer is halfway
 /// through would put the row back to where this window last saw it.
+///
+/// The row is not the only copy: a chat with a run is read through the run, so
+/// the change is put there too, or the next read would answer with what the run
+/// still held.
 #[tauri::command]
 pub(crate) fn chat_set(
+    app: AppHandle,
     state: State<'_, AppState>,
     chat: i64,
     model: Option<String>,
@@ -1287,6 +1326,10 @@ pub(crate) fn chat_set(
         &record.messages,
         now(),
     )?;
+    if let Some(run) = state.runs.get(chat) {
+        run.retune(model, reasoning, servers);
+        run.emit_changed(&app);
+    }
     Ok(())
 }
 

@@ -439,6 +439,34 @@
   overflow-wrap: anywhere;
 }
 
+/* A prompt longer than the bubble shows is folded to its first lines, and the
+   rest waits behind the one control under it: what a transcript is read for is
+   the answer, and a prompt of forty lines is most of a screen between two of
+   them. The measure is the line's own, so the fold lands between two lines
+   rather than through one. */
+.plain-text.folded {
+  max-height: 18em;
+  overflow: hidden;
+}
+
+/* The control that opens a folded prompt, and closes it again: the app's small
+   voice, a step in from the wave below it like the text above it is. */
+.msg-more {
+  align-self: flex-start;
+  margin-left: 5px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.msg-more:hover {
+  color: var(--text-primary);
+}
+
 /* The images a prompt was sent with, above the rule that ends it — square, and
    wrapped onto as many rows as they need. */
 .msg-images {

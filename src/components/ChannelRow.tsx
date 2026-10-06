@@ -1,5 +1,6 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { RunStatus } from "../types";
+import * as api from "../api";
 import { ChatWave, waveSeed } from "./ChatWave";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
 
@@ -18,6 +19,9 @@ export type ChannelRow = {
   createdAt: number;
   /** How many messages the thread holds after its opening one. */
   replies: number;
+  /** How many pictures the prompt was posted with, which is what the row asks
+   *  for them by: none is a row that has nothing to draw. */
+  images: number;
   status: RunStatus;
   /** True while the run has not answered yet: it is thinking, not answering. */
   thinking: boolean;
@@ -31,6 +35,43 @@ export type ChannelRow = {
 function firstLine(text: string): string {
   const line = text.split("\n", 1)[0].trim();
   return line === "" ? "this thread" : line;
+}
+
+/**
+ * The pictures a thread was opened with, kept once read.
+ *
+ * A row draws whenever anything about it moves, and an attachment is a data URL
+ * of a megabyte or more, so what has been read is held rather than asked for
+ * again. What the list says is how many there are; the pictures themselves come
+ * from the transcript, when the row that shows them is drawn.
+ */
+const pictures = new Map<number, string[]>();
+
+/** The pictures a row draws, read on the first draw that has a count to read. */
+function usePictures(chat: number, count: number): string[] {
+  const [images, setImages] = useState<string[]>(() => pictures.get(chat) ?? []);
+  useEffect(() => {
+    if (count === 0) return;
+    const kept = pictures.get(chat);
+    if (kept) {
+      setImages(kept);
+      return;
+    }
+    let live = true;
+    void api
+      .rootImages(chat)
+      .then((urls) => {
+        pictures.set(chat, urls);
+        if (live) setImages(urls);
+      })
+      // A row that cannot draw its pictures draws none: the thread is still
+      // there to open, and the row still says which thread it is.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [chat, count]);
+  return images;
 }
 
 /**
@@ -74,6 +115,7 @@ export const ChannelRowItem = memo(
   function ChannelRowItem({ row, onOpen, onDelete }: Props) {
     const { asking, ask, giveUp } = useDeleteQuestion();
     const status = statusLine(row);
+    const images = usePictures(row.chat, row.images);
     // A row being removed wears the open thread's treatment, so the question
     // reads as the row's own and not as a stray line in the feed.
     const lit = row.active || asking;
@@ -90,6 +132,13 @@ export const ChannelRowItem = memo(
             <button className="channel-open" onClick={() => onOpen(row.chat)}>
               <span className="channel-root">{row.root}</span>
             </button>
+          )}
+          {!asking && images.length > 0 && (
+            <div className="channel-images">
+              {images.map((url, i) => (
+                <img key={i} className="channel-image" src={url} alt={`Attached image ${i + 1}`} />
+              ))}
+            </div>
           )}
           {status.text !== "" && !asking && (
             <div className={`channel-status ${status.tone}`}>{status.text}</div>
@@ -110,6 +159,7 @@ export const ChannelRowItem = memo(
     before.row.root === after.row.root &&
     before.row.createdAt === after.row.createdAt &&
     before.row.replies === after.row.replies &&
+    before.row.images === after.row.images &&
     before.row.status === after.row.status &&
     before.row.thinking === after.row.thinking &&
     before.row.awaiting === after.row.awaiting &&

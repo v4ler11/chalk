@@ -130,6 +130,26 @@
   color: var(--text-secondary);
 }
 
+/* The pictures the prompt was posted with, under the words it was posted as: a
+   thread's attachments at the size a row of the feed can hold. The transcript
+   draws the same ones at the size they were sent — a hundred and four to a side
+   — and a row is a line of a channel rather than a page: each keeps its own
+   square and is cropped to fill it, the way the transcript's are. */
+.channel-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.channel-image {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 /* What the run is doing: UI chrome, in the sans face and quiet by default. The
    wait and the reply count are grey; a thread that needs the user wears the
    app's blue, since it is the one state that is the user's move, and a failure

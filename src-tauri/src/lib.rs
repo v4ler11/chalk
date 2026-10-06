@@ -281,6 +281,22 @@ fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<C
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
 }
 
+/// The pictures a thread was opened with, for the row in the feed that stands
+/// for it. Asked for by rows that have any — the list says how many — since
+/// what comes back is the attachments themselves, a megabyte each.
+#[tauri::command]
+fn root_images(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+) -> Result<Vec<String>, String> {
+    history(
+        &app,
+        "could not read the thread's pictures",
+        history_store(&state).and_then(|store| store.root_images(chat)),
+    )
+}
+
 /// Renames a chat, leaving its transcript alone.
 #[tauri::command]
 fn rename_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64, title: String) -> Result<(), String> {
@@ -957,6 +973,7 @@ pub fn run() {
             get_logs,
             open_logs,
             list_chats,
+            root_images,
             rename_chat,
             delete_chat,
             runs::run_start,

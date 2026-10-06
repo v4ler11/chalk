@@ -235,8 +235,10 @@ export interface RunSummary {
    */
   thinking: boolean;
   /**
-   * How many messages the chat holds after its opening one: what is committed,
-   * so it stays still for the whole of a run and moves when the answer lands.
+   * How many messages the thread has said since its prompt: the user's own and
+   * the model's answers, with the tools' results left out, which are a record
+   * of what was done rather than anything said. What is committed, so it stays
+   * still for the whole of a run and moves when the answer lands.
    */
   replies: number;
   /** How many tool calls are waiting on the user. */
@@ -261,6 +263,8 @@ export interface RunSnapshot {
   servers: string[] | null;
   /** The ids of the servers this run has loaded lazily. */
   loaded: string[];
+  /** How many messages the thread has said since its prompt: the user's own and
+   *  the model's answers, with the tools' results left out. */
   replies: number;
   /** The transcript: the run's own while it is live, the row's otherwise. */
   messages: UiMessage[];
@@ -307,8 +311,15 @@ export interface ChatSummary {
   createdAt: number;
   /** The chat's first user message, whole: what the channel's row shows. */
   root: string;
-  /** How many messages the chat holds after its opening one. */
+  /** How many messages the chat holds after its opening one, the tools' results
+   *  among them left out: the user's own and the model's answers. */
   replies: number;
+  /**
+   * How many pictures the prompt was posted with. A count rather than the
+   * pictures: an attachment is a data URL, and the list is drawn on every post.
+   * A row that has any asks for them, by id, when it is drawn.
+   */
+  images: number;
 }
 
 /** Flatten a message's content to display text. */

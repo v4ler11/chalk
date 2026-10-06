@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
@@ -92,6 +92,22 @@ export const ChatMessage = memo(function ChatMessage({
   const [copied, setCopied] = useState(false);
   const usage = message.usage;
 
+  // A prompt longer than the bubble shows is folded to its first lines, and the
+  // control under it reads the rest. Whether there is anything to fold is
+  // measured rather than guessed from a length: the bubble is a fixed measure
+  // and the type is not, so only the text that was drawn knows how tall it came
+  // out. It is measured with the fold in place, which is what the reader is
+  // looking at — a text that fills it has more to show, and one that does not is
+  // left alone, with no control offered for a prompt that ends where it ends.
+  const [open, setOpen] = useState(false);
+  const [folded, setFolded] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el || open) return;
+    setFolded(el.scrollHeight > el.clientHeight + 1);
+  }, [content, open]);
+
   // What a tool answered is not something the model said: it is what came back
   // from what the model asked for, so it is shown as a record of the call —
   // which tool, and what it said — rather than as a bubble of prose. Nothing of
@@ -134,9 +150,20 @@ export const ChatMessage = memo(function ChatMessage({
         )}
         {message.role === "user" ? (
           // A prompt is shown as it was typed: markdown in it is text, not
-          // formatting, and the transcript must not disagree with the wire.
+          // formatting, and the transcript must not disagree with the wire. A
+          // prompt longer than the bubble shows is folded, with the control
+          // under it to read the rest.
           <>
-            {content !== "" && <div className="plain-text">{content}</div>}
+            {content !== "" && (
+              <div ref={textRef} className={`plain-text${open ? "" : " folded"}`}>
+                {content}
+              </div>
+            )}
+            {folded && (
+              <button className="msg-more" onClick={() => setOpen((was) => !was)}>
+                {open ? "Show less" : "Show more"}
+              </button>
+            )}
             {images.length > 0 && (
               <div className="msg-images">
                 {images.map((url, i) => (

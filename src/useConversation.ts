@@ -30,6 +30,9 @@ export interface FeedRow {
   root: string;
   createdAt: number;
   replies: number;
+  /** How many pictures the prompt was posted with, which is what tells the row
+   *  whether it has any to draw — the pictures themselves are read by the row. */
+  images: number;
   status: RunStatus;
   /** True while the turn is going and no answer token has arrived yet. */
   thinking: boolean;
@@ -422,6 +425,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
         root: chat.root,
         createdAt: chat.createdAt,
         replies,
+        images: chat.images,
         status,
         thinking,
         awaiting,

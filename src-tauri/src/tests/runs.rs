@@ -193,3 +193,43 @@ fn the_loader_offers_a_name_and_nothing_else() {
     assert!(loader.auto_run);
     assert_eq!(loader.parameters["required"][0], "name");
 }
+
+/// A reply is something said: the user's words and the model's answers, counted
+/// together, with what the tools answered left out — which is the same count the
+/// store derives in the query a list is drawn from.
+#[test]
+fn a_reply_is_something_said() {
+    let messages = json!([
+        { "role": "user", "content": "one" },
+        { "role": "assistant", "content": "", "tool_calls": [] },
+        { "role": "tool", "tool_call_id": "call_1", "content": "done" },
+        { "role": "assistant", "content": "two" },
+    ]);
+    assert_eq!(spoken(messages.as_array().unwrap()), 3);
+}
+
+/// A chat is set to things through its row, and a chat with a run is read
+/// through the run: a level written to the row alone would be answered with what
+/// the run still held, which is a control that moves and springs back.
+#[test]
+fn a_run_answers_with_what_the_chat_was_set_to() {
+    let run = Run::new(1);
+    run.adopt(crate::store::ChatRecord {
+        id: 1,
+        title: "one".into(),
+        model: "old/model".into(),
+        reasoning: "low".into(),
+        servers: Some(vec!["a".to_string()]),
+        messages: json!([{ "role": "user", "content": "hello" }]),
+    });
+
+    run.retune("new/model".into(), "high".into(), Some(vec!["b".to_string()]));
+
+    let snapshot = run.snapshot();
+    assert_eq!(snapshot.model, "new/model");
+    assert_eq!(snapshot.reasoning, "high");
+    assert_eq!(snapshot.servers, Some(vec!["b".to_string()]));
+    // What it was holding is untouched: the change is to what the chat is sent
+    // with, not to what has been said.
+    assert_eq!(snapshot.messages.len(), 1);
+}

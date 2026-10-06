@@ -103,8 +103,10 @@ fn a_chats_servers_round_trip_and_its_silence_is_not_a_choice() {
 /// The frontend reads `id`, `title` and `updatedAt` off a row, the model it
 /// is holding, and the reasoning level it is asking with. The channel reads
 /// three more: when the thread was posted, the prompt it was posted as, and how
-/// much has come back since. Renaming a field, or losing the attribute that
-/// camel-cases it, would leave the feed drawing threads with nothing to draw.
+/// much has come back since — and a fourth, how many pictures that prompt
+/// carried, which is what tells its row whether there are any to draw.
+/// Renaming a field, or losing the attribute that camel-cases it, would leave
+/// the feed drawing threads with nothing to draw.
 #[test]
 fn a_row_crosses_to_the_frontend_as_it_is_read() {
     let store = Store::in_memory().unwrap();
@@ -127,6 +129,7 @@ fn a_row_crosses_to_the_frontend_as_it_is_read() {
             "createdAt": 42,
             "root": "",
             "replies": 0,
+            "images": 0,
         })
     );
 }
@@ -197,6 +200,92 @@ fn a_thread_is_named_by_its_prompt_and_counts_what_follows() {
     let listed = &store.list().unwrap()[0];
     assert_eq!(listed.root, "what is this");
     assert_eq!(listed.replies, 1);
+}
+
+/// A turn that calls tools writes more than one message, and only some of them
+/// are things said: a tool's result is what came back from what the model asked
+/// for. A thread answered through a call is two replies — the round that asked
+/// and the answer it led to — and not the four messages it took to get there.
+#[test]
+fn a_turns_tools_are_not_replies() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "what did I spend",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "what did I spend" },
+                { "role": "assistant", "content": "", "tool_calls": [
+                    { "id": "call_1", "type": "function", "function": { "name": "one", "arguments": "{}" } },
+                ] },
+                { "role": "tool", "tool_call_id": "call_1", "name": "one", "content": "12" },
+                { "role": "assistant", "content": "a euro" },
+            ]),
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(chat.replies, 2);
+    assert_eq!(store.list().unwrap()[0].replies, 2);
+}
+
+/// The pictures a prompt was posted with: the row says how many there are, so a
+/// row of the feed knows whether it has any to draw, and the pictures themselves
+/// are read by id — an attachment is a data URL, and the list is read on every
+/// post.
+#[test]
+fn a_threads_pictures_are_counted_in_the_list_and_read_by_id() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "look",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": [
+                    { "type": "text", "text": "look" },
+                    { "type": "image_url", "image_url": { "url": "data:image/png;base64,AA" } },
+                    { "type": "image_url", "image_url": { "url": "data:image/png;base64,BB" } },
+                ] },
+                { "role": "assistant", "content": "seen" },
+            ]),
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(chat.images, 2);
+    assert_eq!(store.list().unwrap()[0].images, 2);
+    assert_eq!(
+        store.root_images(chat.id).unwrap(),
+        vec!["data:image/png;base64,AA", "data:image/png;base64,BB"]
+    );
+}
+
+/// A prompt of words alone carries no picture, and a chat that is gone carries
+/// nothing: asking is answered with none rather than with a failure.
+#[test]
+fn a_prompt_of_words_alone_has_no_pictures_to_read() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "hello",
+            "m",
+            "",
+            None,
+            &json!([{ "role": "user", "content": "hello" }]),
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(chat.images, 0);
+    assert!(store.root_images(chat.id).unwrap().is_empty());
+    assert!(store.root_images(chat.id + 1).unwrap().is_empty());
 }
 
 /// A database written before there were models to hold, or a reasoning level
