@@ -294,12 +294,14 @@ function App() {
 
             {/* The settings take the pane the way the pins do — the pane's own
                 strip, then the sections down the left and the page they open on
-                the right — since the column's own row names them and holds the
-                way out of them. The JSON view is a thread's, with no row in the
-                column to stand for it, so it is the one that wears a bar. */}
+                the right — and, like the JSON view, they wear the bar that names
+                the mode under that strip: the column's own row opens them, but a
+                pane that has taken the window over also says so and holds the
+                way out of itself. */}
             {conversation.settingsView ? (
               <div className="pane">
                 {nav(threadOpen)}
+                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
                 {config ? (
                   <SettingsView config={config} onSaved={setConfig} />
                 ) : (
