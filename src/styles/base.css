@@ -57,7 +57,11 @@
      room for a view's name beside them. Narrow on purpose: what a row says is one
      word, and the window is for the transcript. */
   --sidebar-w: 168px;
-  --titlebar: 48px;
+  /* The strip the window's chrome stands in, and the height every bar that reads
+     as part of that band takes — the rail over the column's head and the pane's
+     own bar beside it: the lights and the controls in them are 30px at the
+     tallest, so this is that and the air around it. */
+  --titlebar: 38px;
   /* How much the composer grows past its design size: nothing at the 820px
      minimum window, 2px of extra type by 1600px. */
   --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
