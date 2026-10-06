@@ -5,6 +5,7 @@ import { contentText } from "../types";
 import { useCopy } from "../useCopy";
 import { price } from "../money";
 import { ASSISTANT, ASSISTANT_NAME, ASSISTANT_TINT, Avatar } from "./Avatar";
+import { Hint } from "./Hint";
 import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
 import { MessageHead } from "./MessageHead";
@@ -278,14 +279,13 @@ export const ChatMessage = memo(function ChatMessage({
           // the message there is the calls under it.
           content !== "" && (
             <div className="msg-actions">
-              <div className="hint">
+              <Hint label="Copy message">
                 <button className="msg-action" aria-label="Copy message" onClick={() => copy(content)}>
                   {copied ? <Check /> : <Copy />}
                 </button>
-                <span className="key-hint">Copy message</span>
-              </div>
+              </Hint>
               {usage && (
-                <div className="hint">
+                <Hint label={consumption(usage)}>
                   <span
                     className="msg-action usage"
                     role="img"
@@ -293,8 +293,7 @@ export const ChatMessage = memo(function ChatMessage({
                   >
                     <Hash />
                   </span>
-                  <span className="key-hint">{consumption(usage)}</span>
-                </div>
+                </Hint>
               )}
             </div>
           )
