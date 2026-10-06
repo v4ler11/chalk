@@ -794,12 +794,11 @@
   margin: 0;
 }
 
-/* The row: how long the server took, what was called, and the arguments as they
-   were sent — one line, cut off rather than wrapped, with the whole of it in the
-   card below. It is a record of an identifier being invoked, so it is set as
-   code. Under the pointer, or with the caret in it, the line takes the
-   transcript's own tint and its text comes up to the reading colour: it is then
-   plainly the thing to press. */
+/* The row: how long the server took, and what was called — one line, with the
+   arguments and the result in the card below it. It is a record of an identifier
+   being invoked, so it is set as code. Under the pointer, or with the caret in
+   it, the line takes the transcript's own tint and its text comes up to the
+   reading colour: it is then plainly the thing to press. */
 .tool-call-row {
   display: flex;
   align-items: baseline;
@@ -847,19 +846,6 @@
 .tool-call-sep {
   margin: 0 3px;
   color: var(--text-muted);
-}
-
-.tool-call .tool-call-args {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border-radius: 0;
-  background-color: transparent;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 /* The chevron onto the card: out of the way until the row is under the pointer

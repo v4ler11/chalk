@@ -73,6 +73,27 @@ export function toolParts(name?: string): { server: string; tool: string } {
 }
 
 /**
+ * Whether a call's arguments are worth showing.
+ *
+ * A model that sends `{}` for a tool that takes nothing has said nothing, and a
+ * row reading `{}` for it is a row reading punctuation: the braces are the shape
+ * of an answer, not the answer. An empty array is the same nothing. Anything
+ * else — an object with a key in it, a value, or something that is not JSON at
+ * all — is shown as it arrived.
+ */
+export function hasArguments(text?: string): boolean {
+  if (text === undefined) return false;
+  const trimmed = text.trim();
+  if (trimmed === "") return false;
+  try {
+    const value: unknown = JSON.parse(trimmed);
+    return !(value !== null && typeof value === "object" && Object.keys(value).length === 0);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Arguments or a result laid out to be read: the JSON as it was sent or
  * answered, indented. What is not JSON — a fragment, an answer that is prose —
  * is shown as it arrived, which is more use than an empty box.
@@ -82,18 +103,5 @@ export function laidOut(text: string): string {
     return JSON.stringify(JSON.parse(text), null, 2);
   } catch {
     return text;
-  }
-}
-
-/**
- * The same, on one line. A model's arguments are usually one dense line already;
- * when they are not, the row they are shown in is, so the newlines are folded
- * into spaces rather than left for the layout to collapse.
- */
-export function oneLine(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text));
-  } catch {
-    return text.replace(/\s+/g, " ").trim();
   }
 }

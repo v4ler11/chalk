@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { ChevronRight, Plug } from "lucide-react";
 import { formatBrief } from "../timer";
-import { laidOut, oneLine, toolParts } from "../tools";
+import { hasArguments, laidOut, toolParts } from "../tools";
 
 interface Props {
   /** The name the call carries: the server's id and the tool's own name, joined. */
   name: string;
-  /** The arguments, as the JSON text the model sent. */
+  /** The arguments, as the JSON text the model sent: the card's own, since the
+   *  row is the call and not what it carried. */
   args?: string;
   /**
    * What the tool answered, once it has: the text the model was given, and how
@@ -17,14 +18,16 @@ interface Props {
 }
 
 /**
- * One tool call, as the transcript shows it: a row — what the server took, what
- * was called, and with what — and, under it, the card the row opens into.
+ * One tool call, as the transcript shows it: a row — what the server took, and
+ * what was called — and, under it, the card the row opens into.
  *
  * The row is a record of an identifier being invoked, so it is set as code:
- * monospace, one line, cut off rather than wrapped, with everything it is
- * holding a click away. The card is the rest of the same fact — the arguments
- * laid out, and what came back — and stays shut until it is asked for, since a
- * tool's result is usually long and rarely read twice.
+ * monospace, one line, cut off rather than wrapped. What the call carried is the
+ * card's rather than the row's — a line of arguments in the row is a line cut
+ * off before the part worth reading, and a row of `{}` is a row reading
+ * punctuation — so the card is the rest of the same fact: the arguments laid
+ * out, and what came back. It stays shut until it is asked for, since a tool's
+ * result is usually long and rarely read twice.
  *
  * A call the app answers itself — the loader, and the tools that manage the
  * models and the servers — has no server on it, so it is shown as the tool it
@@ -33,12 +36,12 @@ interface Props {
 export function ToolCall({ name, args, result }: Props) {
   const [open, setOpen] = useState(false);
   const { server, tool } = toolParts(name);
-  const arguments_ = args !== undefined && args !== "" ? args : undefined;
+  const arguments_ = hasArguments(args) ? args : undefined;
 
   return (
     <div className={`tool-call${open ? " open" : ""}`}>
-      {/* The row is the whole line, so a click anywhere on it — the arguments
-          included — opens the card: they are what there is to read. */}
+      {/* The row is the whole line, so a click anywhere on it opens the card:
+          it is where the arguments are. */}
       <button
         className="tool-call-row"
         aria-expanded={open}
@@ -60,7 +63,6 @@ export function ToolCall({ name, args, result }: Props) {
           )}
           <span className="tool-call-tool">{tool}</span>
         </span>
-        {arguments_ !== undefined && <code className="tool-call-args">{oneLine(arguments_)}</code>}
         <ChevronRight className="tool-call-chevron" />
       </button>
       {open && (

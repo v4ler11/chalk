@@ -1,6 +1,6 @@
 import { Play, X } from "lucide-react";
 import type { ToolCallRequest } from "../types";
-import { laidOut, toolLabel } from "../tools";
+import { hasArguments, laidOut, toolLabel } from "../tools";
 
 interface Props {
   /** The calls the model asked for, in the order it asked for them. */
@@ -46,7 +46,9 @@ export function ToolApproval({ calls, onRun, onDecline }: Props) {
             <span className="tool-approval-name" title={call.name}>
               {toolLabel(call.name)}
             </span>
-            <code className="tool-approval-args">{laidOut(call.arguments)}</code>
+            {hasArguments(call.arguments) && (
+              <code className="tool-approval-args">{laidOut(call.arguments)}</code>
+            )}
           </li>
         ))}
       </ul>
