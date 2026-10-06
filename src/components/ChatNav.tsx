@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { ArrowLeft, Check, EllipsisVertical } from "lucide-react";
+import { ArrowLeft, EllipsisVertical } from "lucide-react";
 import { MOD } from "../keybinds";
+import { Hint } from "./Hint";
+import { Menu, MenuOption, useOpenMenu } from "./Menu";
 
 interface Props {
   /** Whether a thread is open. The way back to the feed belongs to the pane a
@@ -32,21 +33,19 @@ interface Props {
  * pane below it.
  */
 export function ChatNav({ thread, onBack, jsonView, onJsonView, onOpenSettings }: Props) {
-  const [viewOpen, setViewOpen] = useState(false);
+  const menus = useOpenMenu<"view">();
+  const viewOpen = menus.open === "view";
 
   return (
     <div className="chat-nav" data-tauri-drag-region="deep">
       {/* The way back, in the bar rather than in the window's corner: it belongs
           to the pane a thread puts up, so it travels with that pane. */}
       {thread && (
-        <span className="hint">
+        <Hint label={<>Channel <kbd>Esc</kbd></>} decorative>
           <button className="icon-btn" aria-label="Back to channel" onClick={onBack}>
             <ArrowLeft className="icon" />
           </button>
-          <span className="key-hint" aria-hidden="true">
-            Channel <kbd>Esc</kbd>
-          </span>
-        </span>
+        </Hint>
       )}
 
       <div className="nav-menu">
@@ -55,45 +54,35 @@ export function ChatNav({ thread, onBack, jsonView, onJsonView, onOpenSettings }
           aria-haspopup="menu"
           aria-expanded={viewOpen}
           aria-label="View and settings"
-          onClick={() => setViewOpen((o) => !o)}
+          onClick={() => menus.toggle("view")}
         >
           <EllipsisVertical className="icon" />
         </button>
 
         {viewOpen && (
-          <>
-            <div className="menu-backdrop" onClick={() => setViewOpen(false)} />
-            <div className="menu below view-menu" role="menu">
-              {thread && (
-                <button
-                  className={`menu-option${jsonView ? " active" : ""}`}
-                  role="menuitemcheckbox"
-                  aria-checked={jsonView}
-                  onClick={() => {
-                    onJsonView(!jsonView);
-                    setViewOpen(false);
-                  }}
-                >
-                  <span className="menu-option-name">JSON view</span>
-                  {/* The shortcut is named where its command lives, as the rail's
-                      buttons name theirs. */}
-                  <kbd>{MOD}J</kbd>
-                  {jsonView && <Check className="menu-option-check" />}
-                </button>
-              )}
-              <button
-                className="menu-option"
-                role="menuitem"
+          <Menu className="view-menu" role="menu" onClose={menus.close}>
+            {thread && (
+              <MenuOption
+                label="JSON view"
+                selected={jsonView}
+                role="menuitemcheckbox"
+                shortcut={`${MOD}J`}
                 onClick={() => {
-                  onOpenSettings();
-                  setViewOpen(false);
+                  onJsonView(!jsonView);
+                  menus.close();
                 }}
-              >
-                <span className="menu-option-name">Settings</span>
-                <kbd>{MOD},</kbd>
-              </button>
-            </div>
-          </>
+              />
+            )}
+            <MenuOption
+              label="Settings"
+              role="menuitem"
+              shortcut={`${MOD},`}
+              onClick={() => {
+                onOpenSettings();
+                menus.close();
+              }}
+            />
+          </Menu>
         )}
       </div>
     </div>
