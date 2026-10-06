@@ -21,12 +21,17 @@
      rubber-band. */
   overscroll-behavior: none;
   /* The window's chrome floats over the panel's top-left corner, wearing the
-     panel's own colour; the feed starts below it, as the history's column does,
-     so the first thread is never under the controls. */
-  padding: calc(var(--titlebar) + 20px) 24px 24px;
+     panel's own colour; what keeps the first thread clear of it is the list's own
+     top padding rather than the scroller's, so that a divider pinned to the top
+     of what is scrolled is at the top of the pane and not under that strip. */
+  padding: 0 24px 24px;
   /* The centred column stays centred when the platform draws a classic
      scrollbar, which takes width from this box alone. */
   scrollbar-gutter: stable both-edges;
+  /* The feed is a layer of its own: a divider is pinned with a z-index, and
+     without this it would be pinned over the panels the window puts up beside
+     or over the channel rather than under them. */
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -35,9 +40,74 @@
 .channel-list {
   width: 100%;
   max-width: var(--content-w);
+  /* The strip the window's chrome floats over, reserved where it costs the pin
+     nothing. */
+  padding-top: calc(var(--titlebar) + 20px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* A stretch of the channel, one to a period: the divider that opens it and the
+   threads that belong to it. Each stretch is a column of its own, which is what
+   lets its divider be pinned while its own threads are what is under it, and
+   what leaves the rule it opens on behind as the feed moves. */
+.channel-group {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* The rule a stretch opens on. It is drawn where the pill stands rather than
+   where the stretch begins — at the middle of the divider's own band — and it
+   belongs to the feed rather than to the pill, so a divider the feed has
+   scrolled under is a pill over the threads below it and not a line above them.
+   Drawn behind the pill, whose own colour is what the rule stops at its edges
+   for. */
+.channel-group::before {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--border);
+}
+
+/* The divider: the band between two stretches of the feed, with the pill in the
+   middle of it. The pill is pinned to the top of the pane, so the threads of its
+   stretch scroll under it and it names the stretch they belong to. The band
+   itself is clear, so what passes behind the pill is the feed's own words. */
+.channel-divider {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+}
+
+/* The pill: the period in the app's own voice, a step louder than a row's own
+   time since it is what the reader looks for while scrolling, on the panel's own
+   colour, which is what it masks the feed behind it with. */
+.channel-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.channel-pill:hover {
+  border-color: var(--text-muted);
 }
 
 /* One thread. Flat, like a channel message and not a card: the pointer lifts it

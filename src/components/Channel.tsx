@@ -1,6 +1,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import { ArrowDown } from "lucide-react";
 import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
+import { period } from "../clock";
 import "../styles/channel.css";
 
 export type { ChannelRow } from "./ChannelRow";
@@ -29,7 +31,9 @@ interface ChannelProps {
 /**
  * The channel: the feed of threads, oldest at the top and newest at the bottom,
  * with the composer fixed under it: one column, arranged the way the chat pane
- * arranges its transcript and footer.
+ * arranges its transcript and footer. The threads are read in stretches — today,
+ * yesterday, and back through the weeks and months before them — each opened by a
+ * divider that stays at the top of the pane as its own stretch goes by.
  *
  * The feed follows its own end the way the transcript does: while a thread is
  * added under the view the newest row stays on screen, and the moment the reader
@@ -73,6 +77,22 @@ export function Channel({
       view even when the reader had scrolled away to read. */
   const seen = useRef(rows.length);
   const [follow, setFollow] = useState(true);
+
+  /** The feed in stretches, one divider each: a row opens a new stretch when the
+   *  period it belongs to is not the one before it. The rows arrive oldest
+   *  first, so they are read in the order they are drawn in and no stretch has
+   *  to be looked up twice. */
+  const groups = useMemo(() => {
+    const now = Date.now();
+    const stretches: { label: string; rows: ChannelRow[] }[] = [];
+    for (const row of rows) {
+      const label = period(row.createdAt, now);
+      const open = stretches[stretches.length - 1];
+      if (open && open.label === label) open.rows.push(row);
+      else stretches.push({ label, rows: [row] });
+    }
+    return stretches;
+  }, [rows]);
 
   /** Attaches the view to the end, or hands it to the reader, as one report. */
   function report(attached: boolean) {
@@ -169,6 +189,23 @@ export function Channel({
     else if (top < previous) report(false);
   }
 
+  /** The divider: back to the start of the stretch it names. The section is
+      taken to the top of what the feed shows, which is its content's own top
+      rather than its box's — the band above it is the strip the window's chrome
+      floats over — and the view stops following the end on the way: the reader
+      asked for this place, not for the last thread. */
+  function jumpTo(section: HTMLElement | null) {
+    const el = scrollRef.current;
+    if (!el || !section) return;
+    const pad = parseFloat(getComputedStyle(el).paddingTop) || 0;
+    const top =
+      section.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - pad;
+    // Reported before the scroll, so a pass already scheduled cannot put the end
+    // back under the view while the reader is on their way up.
+    report(false);
+    el.scrollTo({ top, behavior: "smooth" });
+  }
+
   /** The ↓ button: the end, now, with any landing wheel dropped. */
   function jumpToEnd() {
     const el = scrollRef.current;
@@ -190,8 +227,19 @@ export function Channel({
           onWheel={handleWheel}
         >
           <div className="channel-list">
-            {rows.map((row) => (
-              <ChannelRowItem key={row.chat} row={row} author={author} onOpen={onOpen} onDelete={onDelete} />
+            {groups.map((group) => (
+              <div className="channel-group" key={group.rows[0].chat}>
+                <FeedDivider label={group.label} onJump={jumpTo} />
+                {group.rows.map((row) => (
+                  <ChannelRowItem
+                    key={row.chat}
+                    row={row}
+                    author={author}
+                    onOpen={onOpen}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </div>
             ))}
           </div>
           {error !== "" && <div className="channel-error">Error: {error}</div>}
@@ -210,5 +258,34 @@ export function Channel({
 
       <footer className="composer-bar">{composer}</footer>
     </>
+  );
+}
+
+/**
+ * The divider that opens a stretch of the feed: a pill naming the period it
+ * holds, standing on a rule that runs the column. The pill is pinned to the top
+ * of the pane, so while its own stretch is what is under it the pill names what
+ * the reader is in rather than what has gone by; the rule belongs to the stretch
+ * and is left behind as the feed moves, so a divider that has been scrolled under
+ * is a pill over threads rather than a line between them. Clicking the pill goes
+ * back to where its stretch begins.
+ */
+function FeedDivider({
+  label,
+  onJump,
+}: {
+  label: string;
+  onJump: (section: HTMLElement | null) => void;
+}) {
+  return (
+    <div className="channel-divider">
+      <button
+        className="channel-pill"
+        title={`Back to ${label}`}
+        onClick={(event) => onJump(event.currentTarget.closest<HTMLElement>(".channel-group"))}
+      >
+        {label}
+      </button>
+    </div>
   );
 }
