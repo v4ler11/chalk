@@ -202,7 +202,7 @@
   -webkit-line-clamp: 3;
   overflow: hidden;
   font-family: var(--font-message);
-  font-size: 17px;
+  font-size: 15.5px;
   line-height: 1.45;
   color: var(--text-primary);
   white-space: pre-wrap;
