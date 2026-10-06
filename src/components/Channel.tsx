@@ -23,6 +23,8 @@ interface ChannelProps {
   error: string;
   onOpen: (chat: number) => void;
   onDelete: (chat: number) => void;
+  /** Pins a thread of the feed, or takes the pin off it. */
+  onPin: (chat: number, pinned: boolean) => void;
   /** The composer itself, fixed below the feed. */
   composer: ReactNode;
 }
@@ -47,6 +49,7 @@ export function Channel({
   error,
   onOpen,
   onDelete,
+  onPin,
   composer,
 }: ChannelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,6 +123,7 @@ export function Channel({
                     author={author}
                     onOpen={onOpen}
                     onDelete={onDelete}
+                    onPin={onPin}
                   />
                 ))}
               </div>

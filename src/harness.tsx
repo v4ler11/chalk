@@ -5,6 +5,7 @@
 import ReactDOM from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
+import { ChannelRowItem } from "./components/ChannelRow";
 import { ChatMessage } from "./components/ChatMessage";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
@@ -13,19 +14,23 @@ import { ModeBar } from "./components/ModeBar";
 import { PinsView } from "./components/PinsView";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
+import type { ChannelRow } from "./feed";
 import type {
   AppConfig,
+  ChatSummary,
   McpCost,
   McpFailure,
   McpServer,
   McpTool,
   Partial,
-  Pin,
   ReasoningLevel,
   UiMessage,
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
+// The feed's own sheet is imported by the component that draws it, so a page that
+// draws a feed row without the channel has to ask for it the same way.
+import "./styles/channel.css";
 
 /** The servers the tools control can hold: two that answer, one that answers and
  *  is imported lazily, one that does not, and one the settings window has
@@ -203,44 +208,82 @@ const TOOL_TURN: UiMessage[] = [
   },
 ];
 
-/** The pins the list is drawn from: one of the person's own, one of the model's,
- *  one with more words than a row holds, and one written before the app kept the
- *  time a message was sent. */
-const PINS: Pin[] = [
+/** The pinned threads the list is drawn from: one with replies, one with none, and
+ *  one pinned long enough ago that the row's line reads as a date. */
+const PINS: ChatSummary[] = [
   {
-    chat: 3,
-    index: 4,
-    role: "user",
+    id: 3,
+    title: "Which accounts paid the two electricity bills?",
+    updatedAt: Date.now() - 4 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "",
+    createdAt: Date.now() - 30 * 60_000,
     root: "Which accounts paid the two electricity bills?",
-    text: "here are some pics",
-    sentAt: Date.now() - 5 * 60_000,
-    pinnedAt: Date.now() - 4 * 60_000,
-  },
-  {
-    chat: 3,
-    index: 5,
-    role: "assistant",
-    root: "Which accounts paid the two electricity bills?",
-    text: "Both bills went out of the house account, on the 3rd of March and the 6th of April.",
-    sentAt: Date.now() - 4 * 60_000,
+    replies: 3,
+    mine: 1,
+    images: 0,
     pinnedAt: Date.now() - 3 * 60_000,
   },
   {
-    chat: 1,
-    index: 2,
-    role: "user",
-    root: "A prompt long enough that the row under it has to say less than all of it.",
-    text: " ".repeat(0) + "A message whose words run past the two lines a row of the list holds, so that what is shown is cut off rather than wrapped down the page and the row stays the height every other row is.",
-    sentAt: Date.now() - 26 * 60 * 60_000,
+    id: 1,
+    title: "A prompt long enough that the row under it has to say less than all of it",
+    updatedAt: Date.now() - 26 * 60 * 60_000,
+    model: "google/gemini-3.8-flash",
+    reasoning: "medium",
+    createdAt: Date.now() - 27 * 60 * 60_000,
+    root: "A prompt long enough that the row under it has to say less than all of it, so that the words of it run past what a row of the list holds and are cut off rather than wrapped down the page.",
+    replies: 0,
+    mine: 0,
+    images: 2,
     pinnedAt: Date.now() - 25 * 60 * 60_000,
   },
   {
-    chat: 2,
-    index: 0,
-    role: "user",
+    id: 2,
+    title: "An older thread",
+    updatedAt: Date.now() - 3 * 24 * 60 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "",
+    createdAt: Date.now() - 4 * 24 * 60 * 60_000,
     root: "An older thread",
-    text: "Pinned from a message the app never timed.",
+    replies: 1,
+    mine: 0,
+    images: 0,
     pinnedAt: Date.now() - 3 * 24 * 60 * 60_000,
+  },
+];
+
+/** The rows the feed block is drawn from: one pinned, one not, one that is
+ *  thinking, so both readings of the row's menu can be looked at. */
+const FEED: ChannelRow[] = [
+  {
+    chat: 3,
+    root: "Which accounts paid the two electricity bills?",
+    createdAt: Date.now() - 30 * 60_000,
+    replies: 3,
+    mine: 1,
+    images: 0,
+    model: "deepseek/deepseek-v4.1-flash",
+    pinnedAt: Date.now() - 3 * 60_000,
+    updatedAt: Date.now() - 4 * 60_000,
+    status: "idle",
+    thinking: false,
+    awaiting: 0,
+    active: false,
+  },
+  {
+    chat: 4,
+    root: "A thread nobody has pinned, with a longer prompt than the row holds.",
+    createdAt: Date.now() - 2 * 60 * 60_000,
+    replies: 0,
+    mine: 0,
+    images: 0,
+    model: "google/gemini-3.8-flash",
+    pinnedAt: 0,
+    updatedAt: Date.now() - 2 * 60 * 60_000,
+    status: "running",
+    thinking: true,
+    awaiting: 0,
+    active: false,
   },
 ];
 
@@ -250,9 +293,9 @@ function Harness() {
   const [reasoning, setReasoning] = useState<ReasoningLevel>("");
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [events, setEvents] = useState<string[]>([]);
-  // Whether the one message the page draws on its own is pinned, which is set
-  // from the console so the pinned block can be looked at without a transcript.
-  const [pinned, setPinned] = useState(false);
+  // The feed's rows as the block below draws them, which is what lets a pin be
+  // pressed here: the row it is pressed on is the row that changes.
+  const [feed, setFeed] = useState<ChannelRow[]>(FEED);
   // Which of the sidebar's two rows is the one showing, so the column and the
   // list it opens can both be looked at.
   const [pinsOpen, setPinsOpen] = useState(false);
@@ -267,9 +310,6 @@ function Harness() {
 
   Object.assign(window, { events: () => events });
   Object.assign(window, { setEditing });
-  // The one message below is pinned from here, so the pinned block can be
-  // looked at without a transcript to pin it in.
-  Object.assign(window, { setPinned });
 
   const assistant: UiMessage = {
     role: "assistant",
@@ -298,7 +338,7 @@ function Harness() {
           />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
-              message={pinned ? { ...assistant, pinned: true, pinnedAt: Date.now() } : assistant}
+              message={assistant}
               index={0}
               author="valerii"
               head
@@ -310,9 +350,6 @@ function Harness() {
               canAct
               onRegenerate={() => {}}
               onEdit={() => {}}
-              onPin={() => setPinned(true)}
-              onUnpin={() => setPinned(false)}
-              onDelete={() => {}}
             />
           </div>
           {/* The transcript is a scrolling pane, and a page that stacks its
@@ -333,13 +370,31 @@ function Harness() {
               canAct
               onRegenerate={() => {}}
               onEdit={() => {}}
-              focus={null}
-              onPin={() => {}}
-              onUnpin={() => {}}
-              onDelete={() => {}}
             />
           </div>
           <ScrollHarness />
+          {/* The feed's own rows, one of them pinned and one of them being
+              answered: the row's menu has two readings and the pinned block is a
+              state of the row, so both are drawn here where they can be driven. */}
+          <div className="channel-list" style={{ width: 720, padding: 12 }}>
+            {feed.map((row) => (
+              <ChannelRowItem
+                key={row.chat}
+                row={row}
+                author="valerii"
+                onOpen={(chat) => setEvents((e) => [...e, `open ${chat}`])}
+                onDelete={(chat) => setEvents((e) => [...e, `delete ${chat}`])}
+                onPin={(chat, pinned) => {
+                  setEvents((e) => [...e, `${pinned ? "pin" : "unpin"} ${chat}`]);
+                  setFeed((rows) =>
+                    rows.map((row) =>
+                      row.chat === chat ? { ...row, pinnedAt: pinned ? Date.now() : 0 } : row,
+                    ),
+                  );
+                }}
+              />
+            ))}
+          </div>
           {/* The window's own column, and the list one of its rows opens: the
               components the app draws, with fixtures standing in for the
               backend, so the two can be looked at and driven here. */}
@@ -355,7 +410,7 @@ function Harness() {
                 <PinsView
                   pins={PINS}
                   author="valerii"
-                  onOpen={(pin) => setEvents((e) => [...e, `open pin ${pin.chat}:${pin.index}`])}
+                  onOpen={(pin) => setEvents((e) => [...e, `open pin ${pin.id}`])}
                 />
               </div>
             </main>
@@ -524,10 +579,6 @@ function ScrollHarness() {
         canAct
         onRegenerate={() => {}}
         onEdit={() => {}}
-        focus={null}
-        onPin={() => {}}
-        onUnpin={() => {}}
-        onDelete={() => {}}
       />
     </div>
   );

@@ -1,10 +1,11 @@
 import { memo, useEffect, useState } from "react";
+import { Pin, PinOff, Trash2 } from "lucide-react";
 import * as api from "../api";
 import { lastReply } from "../clock";
 import { ASSISTANT, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { ImageStrip } from "./ImageStrip";
 import { MessageHead } from "./MessageHead";
-import { RowDelete, useDeleteQuestion } from "./RowDelete";
+import { useDeleteQuestion } from "./RowDelete";
 import type { ChannelRow } from "../feed";
 
 export type { ChannelRow };
@@ -77,15 +78,21 @@ interface Props {
   author: string;
   onOpen: (chat: number) => void;
   onDelete: (chat: number) => void;
+  /** Pins the thread this row is, or takes the pin off it. */
+  onPin: (chat: number, pinned: boolean) => void;
 }
 
 /**
  * One row of the feed, drawn the way a channel draws a message: the face of
  * whoever posted it, their name and when they posted it, what they said, and —
  * under it — who answered and when. The root message opens the thread on a
- * click; the button that deletes it holds its place whether or not it is drawn,
- * so a row never twitches under the pointer, and deleting asks first: the row
- * becomes the question, the same way a history row does.
+ * click; the row offers its own two things while the pointer is in it, at its
+ * top-right corner: pinning the thread, and deleting it.
+ *
+ * Deleting asks first, and the question is asked twice over on purpose: the bin
+ * becomes Delete and Cancel in the menu, and the row says the same thing in its
+ * own words where the message is — so the row that is about to go is the one
+ * asking, and a pointer that wanders off it leaves a question still legible.
  *
  * Memoized on the row's own fields: the window hands a fresh rows array, and
  * fresh row objects, on every run event, so the default shallow compare would
@@ -93,10 +100,11 @@ interface Props {
  * fields, so a row whose fields are unchanged is left alone.
  */
 export const ChannelRowItem = memo(
-  function ChannelRowItem({ row, author, onOpen, onDelete }: Props) {
+  function ChannelRowItem({ row, author, onOpen, onDelete, onPin }: Props) {
     const { asking, ask, giveUp } = useDeleteQuestion();
     const status = statusLine(row);
     const images = usePictures(row.chat, row.images);
+    const pinned = row.pinnedAt > 0;
     // When the row's line is the reply count and not a run's state, the row is a
     // thread summary: what belongs under it is who answered and when. A row that
     // is thinking, waiting on the user or failed is saying something else, and
@@ -108,9 +116,22 @@ export const ChannelRowItem = memo(
     const lit = row.active || asking;
 
     return (
-      <div className={`channel-row row${lit ? " active" : ""}${asking ? " confirming" : ""}`}>
+      <div
+        className={`channel-row row${lit ? " active" : ""}${asking ? " confirming" : ""}${
+          pinned ? " pinned" : ""
+        }`}
+      >
         <Avatar who={author} size={36} />
         <div className="channel-body">
+          {/* A pin is a mark on the thread rather than on anything said in it, so
+              it is said above the thread: whose pin it is, on the line before the
+              name, rather than left to the colour of the row. */}
+          {pinned && (
+            <div className="pin-label">
+              <Pin />
+              <span>{author === "You" ? "Pinned by you" : `Pinned by ${author}`}</span>
+            </div>
+          )}
           {/* Who wrote it, and when, above it — the line a channel starts a
               message with. */}
           <MessageHead who={author} when={row.createdAt} now={now} />
@@ -151,13 +172,42 @@ export const ChannelRowItem = memo(
             </div>
           )}
         </div>
-        <RowDelete
-          asking={asking}
-          label={`Delete "${firstLine(row.root)}"`}
-          ask={ask}
-          giveUp={giveUp}
-          onDelete={() => onDelete(row.chat)}
-        />
+        {/* What the row offers while the pointer is in it, at its own top-right
+            corner: pin the thread, or delete it. It is out of the flow, since
+            that corner is empty, so the row is the same height whether or not it
+            is drawn — and it is drawn for as long as the question is up, so the
+            answer is there to give even once the pointer has moved. */}
+        <div className="row-menu">
+          {asking ? (
+            <>
+              <button className="row-menu-word danger" onClick={() => onDelete(row.chat)}>
+                Delete
+              </button>
+              <button className="row-menu-word" onClick={giveUp}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={`row-menu-action${pinned ? " on" : ""}`}
+                title={pinned ? `Unpin "${firstLine(row.root)}"` : `Pin "${firstLine(row.root)}"`}
+                aria-label={pinned ? "Unpin thread" : "Pin thread"}
+                onClick={() => onPin(row.chat, !pinned)}
+              >
+                {pinned ? <PinOff /> : <Pin />}
+              </button>
+              <button
+                className="row-menu-action"
+                title={`Delete "${firstLine(row.root)}"`}
+                aria-label="Delete thread"
+                onClick={ask}
+              >
+                <Trash2 />
+              </button>
+            </>
+          )}
+        </div>
       </div>
     );
   },
@@ -169,6 +219,7 @@ export const ChannelRowItem = memo(
     before.row.mine === after.row.mine &&
     before.row.images === after.row.images &&
     before.row.model === after.row.model &&
+    before.row.pinnedAt === after.row.pinnedAt &&
     before.row.updatedAt === after.row.updatedAt &&
     before.row.status === after.row.status &&
     before.row.thinking === after.row.thinking &&

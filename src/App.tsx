@@ -185,6 +185,7 @@ function App() {
                 error={error}
                 onOpen={conversation.openThread}
                 onDelete={conversation.deleteChat}
+                onPin={conversation.pin}
                 composer={
                   <Composer
                     textareaRef={channelVisible ? composerRef : channelComposerRef}
@@ -234,14 +235,6 @@ function App() {
                   canAct={conversation.canAct}
                   onRegenerate={conversation.regenerate}
                   onEdit={conversation.startEdit}
-                  focus={
-                    threadVisible && view.kind === "thread" && conversation.focus?.chat === view.chat
-                      ? conversation.focus
-                      : null
-                  }
-                  onPin={conversation.pinMessage}
-                  onUnpin={conversation.unpinMessage}
-                  onDelete={conversation.deleteMessage}
                   awaiting={conversation.awaiting.length > 0 ? conversation.awaiting : null}
                   onRun={conversation.allow}
                   onDecline={conversation.decline}

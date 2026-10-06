@@ -123,6 +123,124 @@
   transition: background-color 120ms ease;
 }
 
+/* What a row offers while the pointer is in it, at its own top-right corner: pin
+   the thread, or delete it. The corner is empty — the face and the words are at
+   the row's left — and the menu is taken out of the flow, so the feed is the same
+   height whether or not it is drawn. */
+.row-menu {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background-color: var(--bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+/* Drawn under the pointer, or while something in it has the caret — and for as
+   long as the question is up, so that the answer to it is still there to give
+   once the pointer has moved. */
+.channel-row:hover .row-menu,
+.row-menu:focus-within,
+.channel-row.confirming .row-menu {
+  opacity: 1;
+  visibility: visible;
+}
+
+.row-menu-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.row-menu-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* The pin that is already on the thread: the colour says which way the press
+   goes, so the two readings of one button are told apart before it is pressed. */
+.row-menu-action.on {
+  color: var(--pin);
+}
+
+.row-menu-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The question the bin asks, in the menu's own place: two answers rather than an
+   icon of the thing about to be removed. */
+.row-menu-word {
+  padding: 5px 9px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.row-menu-word:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.row-menu-word.danger {
+  color: var(--danger);
+}
+
+.row-menu-word.danger:hover {
+  background-color: var(--danger-bg);
+}
+
+/* A pinned thread: the block a channel gives one — a ground of its own and a rule
+   down its left edge — and the pin named above the thread rather than beside it.
+   The padding the rule and the mark take is given back, so the face, the name and
+   the words stay on the column every other row is on. */
+.channel-row.pinned {
+  padding-left: 11px;
+  border-left: 3px solid var(--pin);
+  border-radius: 0 10px 10px 0;
+  background-color: var(--pin-bg);
+}
+
+/* What the pin is, and whose it is, on the line above the name — the way a
+   channel says a message was pinned rather than leaving it to the colour. */
+.pin-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+}
+
+.pin-label svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--pin);
+}
+
 .channel-row.active {
   background-color: var(--sidebar-active);
 }

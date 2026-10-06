@@ -7,7 +7,6 @@ import {
   type ChatSummary,
   type McpFailure,
   type McpServer,
-  type Pin,
   type ReasoningLevel,
   type RunStatus,
   type ToolCallRequest,
@@ -80,10 +79,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
   // the window's own fact, so the window is the one that asks for it — when the
   // list is drawn, and after anything that changes what is pinned.
   const [pinsView, setPinsView] = useState(false);
-  const [pins, setPins] = useState<Pin[]>([]);
-  // Where the transcript is asked to land: the message a pin was opened from. The
-  // moment is what makes a second look at the same message a request again.
-  const [focus, setFocus] = useState<{ chat: number; index: number; at: number } | null>(null);
+  const [pins, setPins] = useState<ChatSummary[]>([]);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   // The prompt being rewritten in a thread's composer: where it sits, and what
   // it said. Sending the edit starts the turn over from there.
@@ -296,7 +292,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     setEditing(null);
     setJsonView(false);
     setPinsView(false);
-    setFocus(null);
     setView({ kind: "channel" });
   }, []);
 
@@ -321,56 +316,32 @@ export function useConversation({ config, servers, failures, setError, setFollow
     backToChannel();
   }, [backToChannel]);
 
-  /**
-   * Goes to a pinned message: its thread is opened with the view left where the
-   * message is rather than pulled to the end of it, and the transcript is asked
-   * to land on the message itself — which is what the index in a pin is for.
-   */
-  const openPin = useCallback((pin: Pin) => {
-    setPinsView(false);
-    setSettingsView(false);
-    setJsonView(false);
-    setEditing(null);
-    actions.current.setFollow(false);
-    actions.current.setError("");
-    setView({ kind: "thread", chat: pin.chat });
-    setFocus({ chat: pin.chat, index: pin.index, at: Date.now() });
-    void loadRun(pin.chat).catch((e) => actions.current.setError(String(e)));
-  }, []);
-
-  /**
-   * A change to one message of the open thread: pinning it, unpinning it, or
-   * deleting it. Each is one write of the row, and each is refused while the
-   * thread is answering — a second writer halfway through a turn's own write
-   * would put the row back to where this window last saw it — so what is left to
-   * do afterwards is the same either way: read the transcript again, and the
-   * list with it.
-   */
-  const changeMessage = useCallback(
-    (write: (chat: number, index: number) => Promise<void>, index: number) => {
-      const chat = live.current.thread;
-      if (chat === null) return;
-      void write(chat, index)
-        .then(async () => {
-          await loadRun(chat);
-          await refreshPins();
-        })
-        .catch((e) => actions.current.setError(String(e)));
+  /** Goes to a pinned thread, which is the channel's own way of opening one. */
+  const openPin = useCallback(
+    (pin: ChatSummary) => {
+      openThread(pin.id);
     },
-    [refreshPins],
+    [openThread],
   );
 
-  const pinMessage = useCallback(
-    (index: number) => changeMessage(api.pinMessage, index),
-    [changeMessage],
-  );
-  const unpinMessage = useCallback(
-    (index: number) => changeMessage(api.unpinMessage, index),
-    [changeMessage],
-  );
-  const deleteMessage = useCallback(
-    (index: number) => changeMessage(api.deleteMessage, index),
-    [changeMessage],
+  /**
+   * Pins a thread of the feed, or takes the pin off it.
+   *
+   * A pin is one column of one row, so what is left to do afterwards is read the
+   * feed again, where the row that was marked is marked. The sidebar's list is
+   * read from the same rows, and reads them when it is opened — by which time a
+   * pin made here is already in them.
+   */
+  const pin = useCallback(
+    async (chat: number, pinned: boolean) => {
+      try {
+        await api.pinChat(chat, pinned);
+        await refreshChats();
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [refreshChats, fail],
   );
 
   /** The composer's send inside a thread. A prompt being rewritten cuts the
@@ -472,7 +443,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
     showPins,
     showChannel,
     openPin,
-    focus,
+    pin,
     rows,
     messages,
     pending,
@@ -493,9 +464,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     submit,
     regenerate,
     startEdit,
-    pinMessage,
-    unpinMessage,
-    deleteMessage,
     stop,
     allow,
     decline,

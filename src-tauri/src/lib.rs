@@ -15,7 +15,7 @@ use tauri::{Emitter, Manager, State, WebviewWindowBuilder};
 
 use logging::{LogEntry, Logger};
 use settings::{AppConfig, Settings};
-use store::{ChatSummary, Pin, Store};
+use store::{ChatSummary, Store};
 use types::chat::{Chunk, Post, ReasoningConfig, StreamOptions, Tool};
 use types::chat_message::{Content, Message, Part, Role, ToolCallChunk};
 
@@ -283,12 +283,38 @@ fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<C
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
 }
 
-/// Every pinned message there is, newest pin first: what the sidebar's Pins row
-/// draws. Read from the transcripts themselves rather than from a table of its
-/// own, since the pin lives in the message it belongs to.
+/// The pinned threads, most recently pinned first: what the sidebar's Pins row
+/// draws. A thread rather than a message of one, since a row of the channel is
+/// the thread — so what comes back is a chat's own summary, with the moment it
+/// was pinned in it.
 #[tauri::command]
-fn list_pins(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<Pin>, String> {
+fn list_pins(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
     history(&app, "could not list the pins", history_store(&state).and_then(|store| store.pins()))
+}
+
+/// Pins a thread, or takes the pin off it.
+///
+/// The row is written column by column rather than whole, so a pin taken while a
+/// thread is answering is not undone by the next thing its run writes.
+#[tauri::command]
+fn pin_chat(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    pinned: bool,
+) -> Result<(), String> {
+    let at = if pinned {
+        chrono::Utc::now().timestamp_millis()
+    } else {
+        0
+    };
+    history(
+        &app,
+        "could not pin the thread",
+        history_store(&state).and_then(|store| store.set_pinned(chat, at)),
+    )?;
+    log(&app, "info", format!("chat {chat} {}", if pinned { "pinned" } else { "unpinned" }));
+    Ok(())
 }
 
 /// The pictures a thread was opened with, for the row in the feed that stands
@@ -968,9 +994,7 @@ pub fn run() {
             runs::run_state,
             runs::runs_state,
             runs::chat_set,
-            runs::pin_message,
-            runs::unpin_message,
-            runs::delete_message,
+            pin_chat,
             request_preview,
             mcp_servers,
             mcp_save_servers,
