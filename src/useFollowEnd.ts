@@ -42,7 +42,7 @@ const PASS_MS = 16;
 const LAND_MS = 120;
 
 /** What the view reports back, and what the caller's policy asks of it. */
-export interface FollowEnd {
+interface FollowEnd {
   /** The view's own position, as it moves. */
   onScroll: () => void;
   /** A wheel: a gesture the pin stands off for until it has landed. */

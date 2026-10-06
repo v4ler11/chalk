@@ -326,18 +326,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const allow = useCallback(() => runCommand(api.runAllow), [runCommand]);
   const decline = useCallback(() => runCommand(api.runDecline), [runCommand]);
 
-  const renameChat = useCallback(
-    async (id: number, title: string) => {
-      try {
-        await api.renameChat(id, title);
-        setChats((all) => all.map((chat) => (chat.id === id ? { ...chat, title } : chat)));
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [fail],
-  );
-
   const deleteChat = useCallback(
     async (id: number) => {
       try {
@@ -402,7 +390,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     stop,
     allow,
     decline,
-    renameChat,
     deleteChat,
     setModel,
     setReasoning,

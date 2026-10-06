@@ -29,7 +29,6 @@ export const listChats = () => invoke<ChatSummary[]>("list_chats");
 /** The pictures a chat's opening prompt was posted with, as the data URLs they
  *  were sent as. Asked for by the rows that have any, when they are drawn. */
 export const rootImages = (chat: number) => invoke<string[]>("root_images", { chat });
-export const renameChat = (id: number, title: string) => invoke<void>("rename_chat", { id, title });
 export const deleteChat = (id: number) => invoke<void>("delete_chat", { id });
 
 /**
