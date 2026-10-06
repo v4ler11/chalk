@@ -337,20 +337,22 @@ export function useConversation({ config, servers, failures, setError, setFollow
    * Pins a thread of the feed, or takes the pin off it.
    *
    * A pin is one column of one row, so what is left to do afterwards is read the
-   * feed again, where the row that was marked is marked. The sidebar's list is
-   * read from the same rows, and reads them when it is opened — by which time a
-   * pin made here is already in them.
+   * feed again, where the row that was marked is marked. The pins list is read
+   * again with it: it is the same fact seen from the other side, and a pin taken
+   * off from inside that list has to leave it there and then — the list is read
+   * on the way into the pane, which is no help to a row unpinned while the pane
+   * is already showing.
    */
   const pin = useCallback(
     async (chat: number, pinned: boolean) => {
       try {
         await api.pinChat(chat, pinned);
-        await refreshChats();
+        await Promise.all([refreshChats(), refreshPins()]);
       } catch (e) {
         fail(e);
       }
     },
-    [refreshChats, fail],
+    [refreshChats, refreshPins, fail],
   );
 
   /** The composer's send inside a thread. A prompt being rewritten cuts the
