@@ -391,6 +391,29 @@
   }
 }
 
+/* Where the replies begin: a line under the message that opened the thread, and
+   the count of what was said after it. It is the thread's own seam rather than
+   another message, so it wears the app's small voice and a rule that fills what
+   the count leaves — and it starts on the face's edge, so what it counts is read
+   as belonging to the turn above it. */
+.reply-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--content-w);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.reply-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--border);
+}
+
 /* Every message is one row: the face of whoever wrote it at the left, their name
    and the time over what they said, and the words themselves beside the face. It
    is the shape a channel draws a message in rather than the shape a chat does —
@@ -432,7 +455,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-message);
-  font-size: 17px;
+  font-size: 15.5px;
   line-height: 1.5;
   color: var(--text-primary);
 }
@@ -474,11 +497,12 @@
   margin-top: 0;
 }
 
+/* A prompt is shown as it was typed: its newlines kept, a long line wrapped
+   rather than run off the pane. It wears the message's own face, and the fold
+   below is what stands for the rest of a prompt too long to read between two
+   answers. */
 .plain-text {
   width: 100%;
-  font-family: var(--font-message);
-  font-size: 17px;
-  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -928,7 +952,7 @@
 
 .msg code {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 13.5px;
   background-color: var(--input-bg);
   border-radius: 4px;
   padding: 0.1em 0.3em;
@@ -939,7 +963,7 @@
   padding: 10px 12px;
   border-radius: 8px;
   background-color: var(--input-bg);
-  font-size: 15px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
 

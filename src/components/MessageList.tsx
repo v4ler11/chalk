@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type WheelEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, type WheelEvent } from "react";
 import { ArrowDown } from "lucide-react";
 import { contentText, reasoningText, type Partial, type Thought, type UiMessage } from "../types";
 import { ChatMessage } from "./ChatMessage";
@@ -233,6 +233,24 @@ export function MessageList({
   const pendingHead = last === undefined || (last.role !== "assistant" && last.role !== "tool");
 
   /**
+   * The thread's own seam: the message that opened it, and how much was said
+   * after it.
+   *
+   * A reply is something said rather than a step in a turn, which is the count
+   * the feed's row already shows and the count the store keeps: the person's own
+   * messages and the model's answers, with the tool results left out. It is drawn
+   * under the message that opened the thread, which is where a reader looking for
+   * what came of it starts reading, and a thread whose turn said nothing under it
+   * has no seam to draw.
+   */
+  const opening = messages.findIndex((message) => message.role === "user");
+  const replies =
+    opening < 0
+      ? 0
+      : messages.filter((m, i) => i > opening && (m.role === "user" || m.role === "assistant"))
+          .length;
+
+  /**
    * What one message's calls were answered with, in the order it asked for them.
    *
    * Held against the message the array belongs to, because the row it is handed
@@ -429,19 +447,25 @@ export function MessageList({
             return null;
           }
           return (
-            <ChatMessage
-              key={i}
-              message={message}
-              index={i}
-              author={author}
-              head={heads.where.has(message)}
-              when={heads.when.get(message)}
-              thought={thoughtFor(message)}
-              results={resultsFor(message)}
-              canAct={canAct}
-              onRegenerate={onRegenerate}
-              onEdit={onEdit}
-            />
+            <Fragment key={i}>
+              <ChatMessage
+                message={message}
+                index={i}
+                author={author}
+                head={heads.where.has(message)}
+                when={heads.when.get(message)}
+                thought={thoughtFor(message)}
+                results={resultsFor(message)}
+                canAct={canAct}
+                onRegenerate={onRegenerate}
+                onEdit={onEdit}
+              />
+              {/* Under the message that opened the thread: how much was said
+                  after it, and the line that sets those replies apart from it. */}
+              {i === opening && replies > 0 && (
+                <div className="reply-rule">{replies === 1 ? "1 reply" : `${replies} replies`}</div>
+              )}
+            </Fragment>
           );
         })}
         {pending && <StreamingMessage pending={pending} head={pendingHead} />}
