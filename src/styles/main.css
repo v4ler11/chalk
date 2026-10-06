@@ -296,7 +296,9 @@
      dies here: nothing chains to the window, and the panel itself does not
      rubber-band. */
   overscroll-behavior: none;
-  padding: 32px 24px;
+  /* The last line keeps two composer lines of air below it: that air is what the
+     composer takes when it grows, so a draft of a few lines moves nothing here. */
+  padding: 32px 24px 48px;
   /* The centred column has to stay centred on the pane when the platform draws
      a classic scrollbar, which takes width from this box alone. Reserving the
      gutter at both edges keeps it symmetric — and with the overlay scrollbars

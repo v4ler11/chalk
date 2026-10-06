@@ -105,6 +105,16 @@ export function useFollowEnd({
     onFollowChange(attached);
   }
 
+  /** How much of the view's own content is out of sight below it, leaving out the
+   *  air at its foot. Zero or less is the end: the last line is on screen, which
+   *  is where a reader following the view wants it — whether or not the composer
+   *  under the pane has taken that air, which is the room the pane gives up first
+   *  and is not the view's place to move for. */
+  function shortfall(el: HTMLElement) {
+    const air = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    return el.scrollHeight - air - (el.scrollTop + el.clientHeight);
+  }
+
   /** One pass: holds the view at the end. */
   function settle() {
     const el = ref.current;
@@ -117,11 +127,16 @@ export function useFollowEnd({
       pass(gesture.current - performance.now());
       return;
     }
-    if (!following.current) return;
-    el.scrollTop = el.scrollHeight;
-    // The view is at the end again, so the position may speak for the view once
-    // more.
+    // The pass answers a claim whether or not it moves anything, so the position
+    // may speak for the view once it has run.
     going.current = false;
+    if (!following.current) return;
+    // The air given up to the composer is already the end: the last line is on
+    // screen, and taking the offset to the pixel below it would be a jump the
+    // reader never asked for — the one that reads as the feed bouncing a moment
+    // after the composer grew, or a keystroke later.
+    if (shortfall(el) <= 0) return;
+    el.scrollTop = el.scrollHeight;
   }
 
   /** Runs a pass, coalescing everything that asks for one inside its pace. */
@@ -183,8 +198,7 @@ export function useFollowEnd({
       // and not the layout's to move.
       if (!following.current) return;
       if (performance.now() < gesture.current) return;
-      const air = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-      const short = el.scrollHeight - air - (el.scrollTop + el.clientHeight);
+      const short = shortfall(el);
       if (short > 0) el.scrollTop += short;
     });
     observer.observe(el);
