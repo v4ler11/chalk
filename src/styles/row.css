@@ -1,0 +1,82 @@
+/* ---------------------------------------------------------------------- row */
+
+/* The end of a list row, where the row is removed: one drawing for every list
+   with rows worth removing, so the feed's threads and the settings' protocol
+   servers cannot come to disagree about it. A list says `row` on its rows; the
+   question the row asks is `RowDelete`'s. How a row dims while its question is
+   up belongs to the list that draws the words, which is why only the servers'
+   name is dimmed here and the feed's is dimmed in its own sheet. */
+
+/* While the question is up the row's own words step back, dimmed rather than
+   hidden, so the two answers read as the row's business. The name is clipped
+   like the rest of the row, so the question can never run under the two
+   answers, which would leave all three unreadable. */
+.row.confirming .mcp-row-name {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.row.confirming .row-action {
+  color: var(--text-primary);
+}
+
+.row.confirming .row-action.confirm {
+  color: var(--danger);
+}
+
+/* Held in the row whether or not it is drawn, so a row does not twitch as the
+   pointer crosses it, and drawn only under the pointer — or under the keyboard,
+   which reaches it either way. It rides above the title's stretched target, and
+   takes no clicks until it is drawn, so the row stays clickable through it. */
+.row-actions {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.row:hover .row-actions,
+.row-actions:focus-within,
+.row.confirming .row-actions {
+  opacity: 1;
+}
+
+.row:hover .row-action,
+.row-actions:focus-within .row-action,
+.row.confirming .row-action {
+  pointer-events: auto;
+}
+
+.row-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.row-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.row-action.confirm {
+  color: var(--danger);
+}
+
+.row-action svg {
+  width: 13px;
+  height: 13px;
+}

@@ -11,21 +11,10 @@
   min-height: 0;
 }
 
-.left {
-  flex: none;
-  width: var(--sidebar-w);
-  overflow: hidden;
-  transition: width 130ms ease;
-}
-
-.left:not(.open) {
-  width: 0;
-}
-
 /* Frameless window: this rail is the window's chrome, so it drags the window and
    its traffic lights drive the real one. It is taken out of the row, so it costs
-   the chat panel no width; while the sidebar is open it sits over that sidebar's
-   head, and its right edge is the border the sidebar carries on below it. */
+   the panel beneath it no height: the panel's own nav reserves the same strip,
+   and the two read as one band across the top of the window. */
 .rail {
   position: absolute;
   top: 0;
@@ -34,69 +23,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  width: var(--sidebar-w);
+  /* Only as wide as its controls, and wearing no colour of its own: the pane's
+     bar is what shows behind it, so the band across the top is one surface from
+     the controls to the far edge, and a pane that slides takes its own corner
+     with it. Its rule is the beginning of the line the nav draws across the rest
+     of the window. The sidebar used to be this column's body; the channel is the
+     window now, so this corner is all of the chrome there is. */
+  width: var(--rail-collapsed);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: var(--sidebar);
-  border-right: 1px solid var(--border);
-  /* Reserved, never toggled in width: the rail must not resize its own contents
-     when the sidebar opens or shuts, or the controls would jump by a pixel. */
-  border-bottom: 1px solid transparent;
-  transition:
-    width 130ms ease,
-    background-color 200ms ease,
-    border-right-color 200ms ease,
-    border-bottom-color 200ms ease;
-  user-select: none;
-}
-
-/* Shut, the rail is only as wide as its controls and wears the chat panel's own
-   colour, so it reads as the panel's corner rather than a column of its own —
-   and it draws the nav's rule across its own width, starting the line that
-   separates the nav from the transcript at the window's edge. */
-.shell:not(:has(.left.open)) .rail {
-  width: var(--rail-collapsed);
-  background-color: var(--bg);
-  border-right-color: transparent;
-  border-bottom-color: var(--border);
-}
-
-/* The chip names the model in use and leads to where it is chosen: no box
-   around it, just the name and a chevron. Its measure is generous enough that an
-   id like `deepseek/deepseek-v4.1-flash` is shown whole. */
-.model-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 4px 6px;
-  border: none;
-  border-radius: 8px;
   background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.model-chip:hover {
-  color: var(--text-primary);
-}
-
-.model-chip .chevron {
-  flex: none;
-  width: 14px;
-  height: 14px;
-}
-
-.model-name {
-  /* Wide enough for the model ids in use, so the name is not cut off; past it,
-     the ellipsis is there so a very long id cannot crowd the nav. */
-  max-width: 360px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  border-right: 1px solid transparent;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
 }
 
 .traffic-lights {
@@ -127,12 +66,6 @@
   background-color: #28c840;
 }
 
-.window-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .icon-btn {
   position: relative;
   display: flex;
@@ -157,6 +90,24 @@
 .icon-btn .icon {
   width: 16px;
   height: 16px;
+}
+
+/* A face in the channel — or wherever the window draws one: initials in a circle
+   of the colour their name hashes to. The colour arrives inline, since it is
+   derived from the name rather than chosen here, and white reads on all of them.
+   It takes no pointer and no selection: it is a mark, not a control. */
+.avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  user-select: none;
+  pointer-events: none;
 }
 
 /* A button's name and its shortcut, under the button and under the pointer. It
@@ -192,13 +143,6 @@
   opacity: 1;
 }
 
-/* The chip opens the list of models rather than the settings window: a chat's
-   model is the chat's own, so choosing one belongs beside the chat — and the
-   menu still leads to where the list itself is written. */
-.model-picker {
-  position: relative;
-}
-
 /* Anywhere else closes the menu, which is what a click outside one is for. */
 .menu-backdrop {
   position: fixed;
@@ -206,10 +150,11 @@
   z-index: 5;
 }
 
-/* A menu of choices: the model list under the chip that opened it, and the
-   reasoning levels beside the composer's brain. Held at the window rather than
-   in the card, since the levels are placed from the control's own rect — the
-   composer's bar clips whatever would hang out of it. */
+/* A menu of choices: the models above the chip in the composer's bar, the
+   reasoning levels beside the composer's brain, and the servers' list under the
+   hammer. Held at the window rather than in the card, since each is placed from
+   its own control's rect — the composer's bar clips whatever would hang out of
+   it. */
 .menu {
   position: fixed;
   z-index: 6;
@@ -224,7 +169,9 @@
   background-color: var(--bg);
 }
 
-/* Hanging under the chip that opened it, at the nav's own right edge. */
+/* The three-dots' menu hangs under the control that opened it, at the nav's own
+   right edge. The composer's menus are placed from their control's rect instead,
+   since the bar would clip them. */
 .menu.below {
   position: absolute;
   top: calc(100% + 6px);
@@ -429,8 +376,7 @@
 }
 
 .key-hint kbd,
-.menu-option kbd,
-.sidebar-settings kbd {
+.menu-option kbd {
   padding: 1px 4px;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -439,5 +385,134 @@
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
+}
+
+/* The panes share one box so the channel can stay mounted under a thread: a
+   thread opened and left again must not rebuild the feed, whose scroll and
+   half-typed draft live in its own DOM. The stack fills what the nav leaves, and
+   it clips: the thread's transcript arrives from the right edge of the window and
+   would otherwise hang off it and drag a scrollbar along. */
+.pane-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Every pane covers the stack, on screen or off, and that is the point: showing
+   one and hiding another is a change of `visibility` and of nothing else. A pane
+   that moved between in-flow and absolute on its way would take its whole
+   subtree through layout again — a transcript is thousands of boxes, more than
+   fits in a frame — and the frame it misses is the text blinking out and back.
+   It would also move the geometry under the pointer for that frame, which reads
+   as the hover flicking on and off. Laid out once, showing a pane is a paint of
+   what is already there.
+
+   A pane is opaque, so it covers what is beneath it; the thread's is the
+   exception, since the channel it slides over has to be seen until it is
+   covered. */
+.pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background-color: var(--bg);
+}
+
+.pane.thread {
+  background-color: transparent;
+}
+
+/* Off, the pane keeps its place and its layout — `visibility`, not
+   `display: none`, which would leave a scroll container with a scrollable area
+   of zero and bring it back at the top. It leaves the pointer's path at once and
+   is inert, and it goes out of sight at the *end* of a slide rather than at the
+   start: that is what keeps a pane in the picture while the other slides over it,
+   and while it slides away itself. */
+.pane.off {
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 180ms;
+}
+
+/* A pane on its way out keeps its place for one slide, and it takes no hover with
+   it. The pointer is on the pane arriving over it, and the browser only clears a
+   hover a few frames later, so the chrome is taken away here instead: without a
+   transition it goes the instant the pane is off, rather than fading while the
+   other one slides across. The reveal rules are the row's and the transcript's,
+   which are imported after this file, so the weight is stated rather than
+   matched; a `display` here would move the row's own layout. */
+.pane.off .row-actions,
+.pane.off .msg-actions,
+.pane.off .key-hint {
+  opacity: 0 !important;
+  transition: none;
+}
+
+/* What a thread is written on: a step below the window's own grey, so a thread
+   reads as its own pane rather than as the channel with other words in it. The
+   bar above it takes the same surface, so a thread is one solid window from its
+   top edge down. The sheet covers the whole pane, the strip behind the composer
+   included, so the space under the composer travels with the thread while the
+   composer's card stays where it is. */
+.transcript-sheet {
+  position: absolute;
+  inset: 0;
+  background-color: var(--sidebar);
+}
+
+/* The transcript is the pane's growing half: the messages fill what the composer
+   leaves, which is what keeps the composer at the foot of the pane. It draws no
+   rule of its own: the line between the bar and the pane belongs to the bar, and
+   one line is what separates them. */
+.transcript {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The sheet and the transcript travel as one: the messages are the transcript's
+   children, so they are written on the sheet and go where it goes. It comes in
+   from the right edge, moving left, and leaves the same way, so going in and
+   coming back are one movement read forwards and backwards.
+
+   The bar is not part of that movement. Its own surface is the sheet behind it —
+   the sheet covers the pane's whole height — so what passes under the controls is
+   the background, and the controls themselves stay where they are. */
+.transcript,
+.transcript-sheet {
+  animation: thread-in 180ms ease-out;
+  transition: transform 180ms ease-out;
+}
+
+/* The bar over the sheet wears no colour of its own: the sheet is what is seen
+   behind its controls. It keeps its rule, and it is not in the slide, so the line
+   under it holds still while the surface moves beneath it. It is positioned so
+   its controls are painted over the sheet rather than under it. */
+.pane.thread > .chat-nav {
+  position: relative;
+  background-color: transparent;
+}
+
+/* Both are positioned so they are painted over the sheet rather than under it,
+   which is what an absolute box would otherwise do to a static one. */
+.transcript,
+.composer-bar {
+  position: relative;
+}
+
+.pane.thread.off .transcript,
+.pane.thread.off .transcript-sheet {
+  transform: translateX(100%);
+}
+
+@keyframes thread-in {
+  from {
+    transform: translateX(100%);
+  }
 }
 

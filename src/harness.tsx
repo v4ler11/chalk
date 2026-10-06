@@ -3,34 +3,25 @@
 // driven, without the desktop window. Not part of the app: `harness.html` is the
 // only thing that loads it.
 import ReactDOM from "react-dom/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
 import { ChatMessage } from "./components/ChatMessage";
-import { Sidebar } from "./components/Sidebar";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
-import { promptFor, toolsFor } from "./lazy";
 import { MessageList } from "./components/MessageList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import type {
   AppConfig,
-  ChatSummary,
-  LazyServer,
   McpCost,
   McpFailure,
   McpServer,
   McpTool,
-  Pending,
+  Partial,
   ReasoningLevel,
   UiMessage,
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
-
-const CHATS: ChatSummary[] = [
-  { id: 1, title: "First chat", updatedAt: Date.now(), model: "m", reasoning: "" },
-  { id: 2, title: "Second chat", updatedAt: Date.now() - 10_000, model: "m", reasoning: "high" },
-];
 
 /** The servers the tools control can hold: two that answer, one that answers and
  *  is imported lazily, one that does not, and one the settings window has
@@ -129,25 +120,11 @@ const COSTS: McpCost[] = [
  *  Put `"notes"` here to see the same row once it has been loaded. */
 const LOADED: string[] = [];
 
-/** The lazily imported servers the prompt would name: nothing is loaded, so the
- *  Notes server is listed. */
-const LAZY: LazyServer[] = promptFor(
-  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
-  TOOLS,
-);
-
-/** The tools a request carries: the pool minus what laziness holds back, plus
- *  the loader while the Notes server is still waiting. */
-const SENT: McpTool[] = toolsFor(
-  { servers: SERVERS, chosen: null, loaded: LOADED, failed: FAILURES.map((failure) => failure.server) },
-  TOOLS,
-);
-
 /** A turn that went round three times: a lazily imported server loaded first,
  *  then a long query the way a model writes them and a plain call, then the
  *  answer — which is where all three rounds' reasoning is read. */
 const TOOL_TURN: UiMessage[] = [
-  { role: "user", content: "what did I spend on electricity?" },
+  { role: "user", content: "what did I spend on electricity?", sentAt: Date.now() - 4 * 60_000 },
   {
     role: "assistant",
     content: "",
@@ -229,6 +206,7 @@ function Harness() {
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [config, setConfig] = useState<AppConfig>({
+    name: "Valerii",
     provider: "openrouter",
     endpoint: "",
     apiKey: "sk-or-v1-abcdefghijklmnop",
@@ -256,29 +234,20 @@ function Harness() {
   return (
     <div className="app">
       <div className="shell">
-        <div className="left open">
-          <Sidebar
-            open
-            chats={CHATS}
-            openId={1}
-            onOpen={(id) => setEvents((e) => [...e, `open ${id}`])}
-            onRename={(id) => setEvents((e) => [...e, `rename ${id}`])}
-            onDelete={(id) => setEvents((e) => [...e, `delete ${id}`])}
-            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
-          />
-        </div>
-        <main className="main">
+                <main className="main">
           <ChatNav
-            model={config.models[0]}
-            models={config.models}
-            onPick={() => {}}
+            thread
+            onBack={() => setEvents((e) => [...e, "back"])}
             jsonView={false}
             onJsonView={() => {}}
+            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
           />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
               message={assistant}
               index={0}
+              author="valerii"
+              head
               thought={{
                 text: assistant.reasoning ?? "",
                 waitMs: assistant.waitMs ?? 0,
@@ -295,6 +264,7 @@ function Harness() {
           <div style={{ display: "flex", height: 520 }}>
             <MessageList
               messages={TOOL_TURN}
+              author="valerii"
               pending={null}
               error=""
               // Not following, so the turn is read from its start rather than
@@ -312,26 +282,12 @@ function Harness() {
           {/* The plain-JSON view over the same turn: the system prompt in front,
               then every message with its calls, results and timings. */}
           <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>
-            <JsonView
-              tab="history"
-              messages={TOOL_TURN}
-              systemPrompt={config.systemPrompt}
-              tools={SENT}
-              costs={COSTS}
-              lazy={LAZY}
-            />
+            <JsonView tab="history" chat={1} costs={COSTS} />
           </div>
           {/* And the other tab: every tool, grouped by its server, which is what
               the navbar's Tools tab puts in the pane. */}
           <div style={{ display: "flex", flex: "none", height: 320, minHeight: 0 }}>
-            <JsonView
-              tab="tools"
-              messages={TOOL_TURN}
-              systemPrompt={config.systemPrompt}
-              tools={SENT}
-              costs={COSTS}
-              lazy={LAZY}
-            />
+            <JsonView tab="tools" chat={1} costs={COSTS} />
           </div>
           <div className="settings-body" style={{ flex: "none", height: 420 }}>
             <SettingsPanel
@@ -345,8 +301,10 @@ function Harness() {
             <Composer
               textareaRef={textareaRef}
               streaming={false}
+              model={config.models[0] ?? ""}
+              models={config.models}
+              onModel={(name) => setEvents((e) => [...e, `model ${name}`])}
               reasoning={reasoning}
-              spent={0.00428}
               onReasoning={(level) => {
                 setReasoning(level);
                 setEvents((e) => [...e, `reasoning ${level || "off"}`]);
@@ -384,16 +342,16 @@ function Harness() {
  */
 function ScrollHarness() {
   const [messages, setMessages] = useState<UiMessage[]>([
-    { role: "user", content: "First prompt" },
-    { role: "assistant", content: "An answer." },
+    { role: "user", content: "First prompt", sentAt: Date.now() - 90_000 },
+    { role: "assistant", content: "An answer.", waitMs: 1_400 },
   ]);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [pending, setPending] = useState<Partial | null>(null);
   const [follow, setFollow] = useState(true);
   /** The pending answer as of this render, for the settle driver. */
   const pendingLive = useRef(pending);
   pendingLive.current = pending;
 
-  const started: Pending = {
+  const started: Partial = {
     startedAt: Date.now(),
     firstTokenAt: null,
     reasoning: "",
@@ -401,8 +359,24 @@ function ScrollHarness() {
     thinking: true,
     thinkingMs: null,
     usage: null,
-    toolCalls: null,
   };
+
+  // The driver, reachable from a tool that drives the page from outside the
+  // page's own world — a script runner sees the same DOM and nothing of these
+  // globals — so it is asked through an event, and answers in the same event.
+  useEffect(() => {
+    function call(event: Event) {
+      const { fn, args } = (event as CustomEvent<{ fn: string; args: unknown[] }>).detail ?? {
+        fn: "",
+        args: [],
+      };
+      const asked = (window as unknown as Record<string, (...a: unknown[]) => unknown>)[fn];
+      const result = asked ? asked(...args) : null;
+      document.body.dataset.harness = JSON.stringify({ fn, result });
+    }
+    window.addEventListener("harness-call", call);
+    return () => window.removeEventListener("harness-call", call);
+  }, []);
 
   Object.assign(window, {
     grow: (words = 40) =>
@@ -431,12 +405,12 @@ function ScrollHarness() {
     /** What a send does: the app asks for the view by setting follow. */
     followNow: (state = true) => setFollow(state),
     scrollState: () => {
-      const el = document.querySelector(".messages-wrap .messages") as HTMLElement;
+      const el = document.querySelector("#scroll-harness .messages") as HTMLElement;
       const bubble = el.lastElementChild?.getBoundingClientRect();
       const box = el.getBoundingClientRect();
       return {
         follow,
-        arrow: !!document.querySelector(".messages-wrap .to-bottom"),
+        arrow: !!document.querySelector("#scroll-harness .to-bottom"),
         atBottom: el.scrollHeight - el.scrollTop - el.clientHeight <= 16,
         top: Math.round(el.scrollTop),
         max: Math.round(el.scrollHeight - el.clientHeight),
@@ -446,9 +420,13 @@ function ScrollHarness() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: 420, minHeight: 0 }}>
+    <div
+      id="scroll-harness"
+      style={{ display: "flex", flexDirection: "column", flex: "none", height: 420, minHeight: 0 }}
+    >
       <MessageList
         messages={messages}
+        author="valerii"
         pending={pending}
         error=""
         follow={follow}

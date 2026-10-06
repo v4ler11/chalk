@@ -1,11 +1,15 @@
-import { useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
-import { createPortal } from "react-dom";
-import { ArrowUp, Brain, Check, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
+import { ArrowUp, Brain, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
 import { MOD, mod } from "../keybinds";
 import { newAttachment, processImage, type Attachment } from "../images";
-import { price } from "../money";
 import { REASONING_LEVELS, type ReasoningLevel } from "../types";
-import { ServersMenu, offeredServers, type ServersProps } from "./ServersMenu";
+import { ServersMenu, type ServersProps } from "./ServersMenu";
+import { Hint } from "./Hint";
+import { Menu, MenuOption, useOpenMenu } from "./Menu";
+import { offeredServers } from "../lazy";
+
+/** The menus the composer's own bar opens: the levels, the servers, the models. */
+type MenuName = "reasoning" | "servers" | "model";
 
 interface Props {
   /**
@@ -16,14 +20,23 @@ interface Props {
   /** A response is in flight: the submit button becomes Stop. */
   streaming: boolean;
   /**
+   * The model this chat is holding, named in the chip beside the send button —
+   * or, on the channel, the one the next thread will be posted with. Choosing
+   * one is a per-chat act and belongs beside the message being written; the list
+   * it opens is written in Settings.
+   */
+  model: string;
+  /** The models the settings offer, in their order. */
+  models: string[];
+  /** The model to post with from the next request on. */
+  onModel: (model: string) => void;
+  /**
    * How hard the chat is asking the model to think. `""` is off, which is what a
    * request carries when nothing has been chosen.
    */
   reasoning: ReasoningLevel;
   /** The level to ask with from the next request on. */
   onReasoning: (level: ReasoningLevel) => void;
-  /** What the open chat's answers have cost altogether, in USD. */
-  spent: number;
   /**
    * The text of the prompt being rewritten, or null when the composer is
    * writing a new one. While it is set, sending starts the chat over from that
@@ -56,15 +69,17 @@ interface Props {
  * same shape and colour: the hammer alone while this chat calls no server —
  * which is then the way into the list — and, while it calls any, a pill of the
  * hammer and how many it calls, whose chevron opens that list and whose hammer
- * gives them all up. What the chat has cost sits beside the send button, its
- * newest message's change over the total.
+ * gives them all up. The model in use sits in the bar's right corner, beside the
+ * send button, and opens the list of them.
  */
 export function Composer({
   textareaRef,
   streaming,
+  model,
+  models,
+  onModel,
   reasoning,
   onReasoning,
-  spent,
   editingText,
   onCancelEdit,
   servers,
@@ -74,13 +89,15 @@ export function Composer({
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  // Which of the two menus is open — the levels, or the servers — and where the
-  // control that opened it was: both are drawn at the window's edge rather than
-  // inside the composer, whose bar clips everything that would hang out of it.
-  const [menu, setMenu] = useState<"reasoning" | "servers" | null>(null);
-  const [anchor, setAnchor] = useState({ left: 0, bottom: 0 });
+  // Which of the three menus is open: the levels, the servers, or the models.
+  // Each is drawn at the window's edge rather than inside the composer, whose
+  // bar clips everything that would hang out of it, and each is placed from the
+  // rect of the control that opened it.
+  const menus = useOpenMenu<MenuName>();
   const levelRef = useRef<HTMLDivElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
+  // The chip in the bar's right corner, which the model list hangs above.
+  const modelRef = useRef<HTMLButtonElement>(null);
   const current = REASONING_LEVELS.find((option) => option.level === reasoning) ?? REASONING_LEVELS[0];
   // Which servers this chat calls, which is what the tools control shows and
   // counts — the servers themselves, since that is what the switches in its list
@@ -96,6 +113,21 @@ export function Composer({
   // Anything not ready — still being prepared, or failed — holds the send back,
   // so a request never carries half an image.
   const busy = attachments.some((a) => a.status !== "ready");
+
+  // The button marks a swap of role — Send into Stop — and not its own arrival:
+  // a composer arrives with every view, so an animation on the button itself
+  // would blink it open each time a thread opens. The flag is cleared by the
+  // animation it started, so the class never outlives the pass it was added for.
+  const mode = streaming ? "stop" : "send";
+  const [swapping, setSwapping] = useState(false);
+  const shown = useRef(mode);
+  useEffect(() => {
+    if (shown.current === mode) return;
+    shown.current = mode;
+    setSwapping(true);
+  }, [mode]);
+  const sendClass = `send-btn${swapping ? " swapping" : ""}`;
+  const sendSettled = () => setSwapping(false);
 
   // `value` is read here, not listed as a dependency: this runs on the render
   // that changes `editingText`, where it is the draft the edit is displacing.
@@ -166,20 +198,6 @@ export function Composer({
     if (!files.some((file) => file.type.startsWith("image/"))) return;
     event.preventDefault();
     addFiles(files);
-  }
-
-  /**
-   * Opens one of the two under the control that asked for it, closing the other;
-   * pressing the same control again gives it up. The menu is placed from that
-   * control's own rect, so it hangs where the button is.
-   */
-  function openMenu(which: "reasoning" | "servers") {
-    const el = (which === "reasoning" ? levelRef : toolsRef).current;
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
-    }
-    setMenu((open) => (open === which ? null : which));
   }
 
   function submit() {
@@ -262,7 +280,7 @@ export function Composer({
         <div className="composer-tools">
           {/* Each tool names itself under the pointer: a tip of the app's own,
               since the window draws its own chrome and has no native ones. */}
-          <div className="hint">
+          <Hint label="Attach files">
             <button
               className="composer-tool"
               aria-label="Attach files"
@@ -270,8 +288,7 @@ export function Composer({
             >
               <Paperclip />
             </button>
-            <span className="key-hint">Attach files</span>
-          </div>
+          </Hint>
           <input
             ref={fileRef}
             type="file"
@@ -289,7 +306,7 @@ export function Composer({
               turns into the pill. A level in force is a pill of two buttons:
               the brain gives the level up, and the level beside it opens the
               menu, which is also where off is. */}
-          <div className="hint">
+          <Hint label="Reasoning">
             <div
               ref={levelRef}
               className={`reasoning-pill${current.level === "" ? "" : " on"}`}
@@ -307,17 +324,16 @@ export function Composer({
                 <button
                   className="reasoning-btn"
                   aria-haspopup="menu"
-                  aria-expanded={menu === "reasoning"}
+                  aria-expanded={menus.open === "reasoning"}
                   aria-label={`Reasoning level: ${current.label}`}
-                  onClick={() => openMenu("reasoning")}
+                  onClick={() => menus.toggle("reasoning")}
                 >
                   <span className="reasoning-level">{current.letter}</span>
                   <ChevronDown className="reasoning-chevron" />
                 </button>
               )}
             </div>
-            <span className="key-hint">Reasoning</span>
-          </div>
+          </Hint>
           {/* The servers this chat calls, in the reasoning control's own shape:
               the hammer alone while it calls none — and then the hammer is what
               opens the list, which is the only way one can be switched back on —
@@ -326,7 +342,7 @@ export function Composer({
               list. Either way the choice is the chat's, written with it, so it
               is made here rather than in the settings, where the servers
               themselves are edited. */}
-          <div className="hint">
+          <Hint label="Tools">
             <div ref={toolsRef} className={`tools-pill${offered.length > 0 ? " on" : ""}`}>
               {offered.length > 0 ? (
                 <button
@@ -339,10 +355,10 @@ export function Composer({
               ) : (
                 <button
                   className="tools-btn"
-                  aria-expanded={menu === "servers"}
+                  aria-expanded={menus.open === "servers"}
                   aria-controls="composer-servers"
                   aria-label="Tools"
-                  onClick={() => openMenu("servers")}
+                  onClick={() => menus.toggle("servers")}
                 >
                   <Hammer />
                 </button>
@@ -350,89 +366,112 @@ export function Composer({
               {offered.length > 0 && (
                 <button
                   className="tools-btn"
-                  aria-expanded={menu === "servers"}
+                  aria-expanded={menus.open === "servers"}
                   aria-controls="composer-servers"
                   aria-label={`Tools: ${offered.length} of ${enabled} server(s) called`}
-                  onClick={() => openMenu("servers")}
+                  onClick={() => menus.toggle("servers")}
                 >
                   <span className="tools-count">{offered.length}</span>
                   <ChevronDown className="tools-chevron" />
                 </button>
               )}
             </div>
-            <span className="key-hint">Tools</span>
-          </div>
+          </Hint>
         </div>
         <div className="composer-right">
-          {/* What the chat has cost so far: every answer's price, summed, in the
-              draft's own corner where the next request is sent from. */}
-          {spent > 0 && <span className="composer-cost">{price(spent)}</span>}
+          {/* The model this chat is holding, or the one the next thread will be
+              posted with. It sits beside the send button because the choice
+              belongs to the message being written, and the list it opens is
+              written in Settings. */}
+          <button
+            ref={modelRef}
+            className="model-chip"
+            aria-haspopup="listbox"
+            aria-expanded={menus.open === "model"}
+            onClick={() => menus.toggle("model")}
+          >
+            <span className="model-name">{model || "model"}</span>
+            <ChevronDown className="chevron" />
+          </button>
           {/* The button holds its place whether or not there is a draft — an
               empty one sends nothing — and the animation marks the swap between
-              Send and Stop. It is held back while an image is still being
-              prepared, so nothing is sent missing its picture. */}
+              Send and Stop when the role changes, not the button's arrival. It
+              is held back while an image is still being prepared, so nothing is
+              sent missing its picture. */}
           {streaming ? (
-            <button className="send-btn" title="Stop" aria-label="Stop" onClick={onStop}>
+            <button
+              className={sendClass}
+              title="Stop"
+              aria-label="Stop"
+              onClick={onStop}
+              onAnimationEnd={sendSettled}
+            >
               <Square />
             </button>
           ) : (
             <button
-              className="send-btn"
+              className={sendClass}
               title="Send"
               aria-label="Send"
               disabled={busy}
               onClick={submit}
+              onAnimationEnd={sendSettled}
             >
               <ArrowUp />
             </button>
           )}
         </div>
       </div>
-      {/* The levels and the servers, drawn at the window's edge rather than in
-          the card: a click anywhere else closes them, the way the model list
-          closes. The servers stay open as they are switched — a row is not a
-          choice that is over once it is made, and several are usually moved at
-          once — so only the backdrop, or the hammer again, closes them. */}
-      {menu &&
-        createPortal(
-          <>
-            <div className="menu-backdrop" onClick={() => setMenu(null)} />
-            {menu === "reasoning" ? (
-              <div
-                className="menu reasoning-menu"
-                role="menu"
-                style={{ left: anchor.left, bottom: anchor.bottom }}
-              >
-                {REASONING_LEVELS.map((option) => (
-                  <button
-                    key={option.level || "off"}
-                    className={`menu-option${option.level === reasoning ? " active" : ""}`}
-                    role="menuitemradio"
-                    aria-checked={option.level === reasoning}
-                    onClick={() => {
-                      onReasoning(option.level);
-                      setMenu(null);
-                    }}
-                  >
-                    <span className="menu-option-name">{option.label}</span>
-                    {option.level === reasoning && <Check className="menu-option-check" />}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div
-                id="composer-servers"
-                className="menu servers-menu"
-                role="group"
-                aria-label="The servers this chat calls"
-                style={{ left: anchor.left, bottom: anchor.bottom }}
-              >
-                <ServersMenu {...servers} />
-              </div>
-            )}
-          </>,
-          document.body,
-        )}
+      {/* The levels, the servers and the models, hung from their own controls at
+          the window's edge rather than in the card: a click anywhere else closes
+          them. The servers stay open as they are switched, since a row is not a
+          choice that is over once it is made and several are usually moved at
+          once, so only the backdrop, or the hammer again, closes them. */}
+      {menus.open === "reasoning" && (
+        <Menu anchor={levelRef} className="reasoning-menu" role="menu" onClose={menus.close}>
+          {REASONING_LEVELS.map((option) => (
+            <MenuOption
+              key={option.level || "off"}
+              label={option.label}
+              selected={option.level === reasoning}
+              role="menuitemradio"
+              onClick={() => {
+                onReasoning(option.level);
+                menus.close();
+              }}
+            />
+          ))}
+        </Menu>
+      )}
+      {menus.open === "model" && (
+        <Menu anchor={modelRef} className="model-menu" role="listbox" onClose={menus.close}>
+          {models.map((name) => (
+            <MenuOption
+              key={name}
+              label={name}
+              selected={name === model}
+              role="option"
+              onClick={() => {
+                onModel(name);
+                menus.close();
+              }}
+            />
+          ))}
+          {models.length === 0 && <span className="menu-option empty">No models yet</span>}
+        </Menu>
+      )}
+      {menus.open === "servers" && (
+        <Menu
+          anchor={toolsRef}
+          id="composer-servers"
+          className="servers-menu"
+          role="group"
+          label="The servers this chat calls"
+          onClose={menus.close}
+        >
+          <ServersMenu {...servers} />
+        </Menu>
+      )}
     </div>
   );
 }

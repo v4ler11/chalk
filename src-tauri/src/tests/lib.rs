@@ -253,6 +253,7 @@ fn a_conversation_is_pinned_by_its_first_prompt() {
 #[test]
 fn only_openrouter_is_told_where_the_prefix_ends() {
     let openrouter = AppConfig {
+        name: String::new(),
         provider: settings::OPENROUTER.into(),
         endpoint: String::new(),
         api_key: "sk-1".into(),
@@ -438,6 +439,7 @@ fn the_body_carries_the_level_where_the_provider_reads_it() {
 fn the_response_cache_is_asked_for_only_at_openrouter() {
     let sent = |provider: &str, endpoint: &str| {
         let config = AppConfig {
+            name: String::new(),
             provider: provider.into(),
             endpoint: endpoint.into(),
             api_key: "sk-1".into(),

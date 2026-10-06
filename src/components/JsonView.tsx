@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, History, Wrench } from "lucide-react";
 import * as api from "../api";
-import { copyText } from "../clipboard";
+import { useCopy } from "../useCopy";
 import { groupTools } from "../lazy";
 import { tokens, toolBytes } from "../tools";
 import type { NavSection } from "./SectionNav";
-import type { LazyServer, McpCost, McpTool, UiMessage } from "../types";
+import type { McpCost, RequestPreview } from "../types";
 
 /** Which JSON the pane is showing: the conversation, or the tools it offers. */
 export type JsonTab = "history" | "tools";
@@ -19,20 +19,13 @@ export const JSON_SECTIONS: NavSection[] = [
 interface Props {
   /** Which JSON to show: the conversation, or the tools. */
   tab: JsonTab;
-  /** The open chat's transcript, as the window holds it. */
-  messages: UiMessage[];
-  /** The configured prompt sent ahead of every request, and never part of a
-   *  transcript; shown in front of it, as a request carries it. */
-  systemPrompt: string;
-  /** The tools the request carries: `toolsFor`'s answer, the very list the chat
-   *  command is handed. What is not here is not in the request. */
-  tools: McpTool[];
+  /** The thread whose request is shown. The backend assembles it — the system
+   *  prompt resolved, the headers written, the lazy addendum named — so the
+   *  window reads the request rather than rendering its own idea of one. */
+  chat: number;
   /** What each server's tools cost a request, as last read; the app's own group
    *  has none, and is measured from its tools instead. */
   costs: McpCost[];
-  /** The lazily imported servers still waiting to be loaded, as the prompt will
-   *  name them; the backend needs them to build the request's system message. */
-  lazy: LazyServer[];
 }
 
 const TOKEN =
@@ -40,6 +33,11 @@ const TOKEN =
 
 /** Nothing open, for a text whose markers have not been touched. */
 const EMPTY: ReadonlySet<number> = new Set();
+
+/** What the pane shows while there is no request to show, held by identity so a
+ *  render that has not heard back yet does not rebuild the JSON. */
+const NO_MESSAGES: RequestPreview["messages"] = [];
+const NO_TOOLS: RequestPreview["tools"] = [];
 
 /**
  * How much of one value is shown before the rest of it is only counted, and the
@@ -157,25 +155,19 @@ function highlight(
  * History tab's system message instead. The Copy button holds the pane's
  * bottom-right corner whatever the JSON is doing.
  */
-export function JsonView({
-  tab,
-  messages,
-  systemPrompt,
-  tools,
-  costs,
-  lazy,
-}: Props) {
-  const [copied, setCopied] = useState(false);
-  // The request's own messages, as the backend assembles them — the configured
-  // prompt resolved and the lazily imported servers named under it. `null` until
-  // it answers, and left `null` where there is no backend to ask (the harness),
-  // so the fallback below is what a browser shows.
-  const [preview, setPreview] = useState<UiMessage[] | null>(null);
+export function JsonView({ tab, chat, costs }: Props) {
+  const { copied, copy } = useCopy();
+  // The request as the backend assembles it: the prompt resolved, the prompts
+  // headed with the time they were sent, the lazy addendum named, and the tools
+  // the round would offer. `null` until it answers, and left `null` where there
+  // is no backend to ask (the harness), so the pane shows nothing rather than
+  // the window's own idea of a request.
+  const [preview, setPreview] = useState<RequestPreview | null>(null);
 
   useEffect(() => {
     let alive = true;
     api
-      .requestPreview(messages, lazy)
+      .requestPreview(chat)
       .then((asked) => {
         if (alive) setPreview(asked);
       })
@@ -185,17 +177,14 @@ export function JsonView({
     return () => {
       alive = false;
     };
-  }, [messages, lazy]);
+  }, [chat]);
 
+  const messages = preview?.messages ?? NO_MESSAGES;
+  const tools = preview?.tools ?? NO_TOOLS;
   const groups = useMemo(() => groupTools(tools), [tools]);
 
-  // What the model is sent, and, only when the backend cannot be asked, the
-  // window's own reading of it — the prompt as written, with no addendum.
-  const conversation = useMemo<unknown[]>(() => {
-    if (preview !== null) return preview;
-    const said = systemPrompt.trim();
-    return said === "" ? messages : [{ role: "system", content: said }, ...messages];
-  }, [preview, messages, systemPrompt]);
+  // What the model is sent, whole: the backend's own assembly, read as it is.
+  const conversation = messages;
 
   const payload = useMemo(
     () => (tab === "tools" ? groups.flatMap((group) => group.tools) : conversation),
@@ -247,12 +236,6 @@ export function JsonView({
     [tab, text, open, expand],
   );
 
-  async function copy() {
-    if (!(await copyText(text))) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
-
   return (
     <div className="json-pane">
       <div className="json-view">
@@ -274,7 +257,7 @@ export function JsonView({
           <pre className="json-pre">{body}</pre>
         )}
       </div>
-      <button className="json-copy" onClick={copy} aria-label="Copy JSON">
+      <button className="json-copy" onClick={() => copy(text)} aria-label="Copy JSON">
         {copied ? <Check className="icon" /> : <Copy className="icon" />}
         <span>{copied ? "Copied" : "Copy"}</span>
       </button>

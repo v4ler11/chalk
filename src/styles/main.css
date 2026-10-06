@@ -51,9 +51,10 @@
   background-color: var(--bg);
 }
 
-/* The chat panel's nav: this strip drags the window wherever the window's
-   controls are not, it names the model in use, and its rule is what separates
-   the nav from the transcript below it. */
+/* A pane's own bar: the strip that drags the window wherever the window's
+   controls are not, and whose rule is what separates the bar from the pane below
+   it. Its controls begin clear of the rail's own: 16 of padding, the three lights
+   at 52, and the 12 the rail puts between them. */
 .chat-nav {
   display: flex;
   align-items: center;
@@ -61,10 +62,16 @@
   gap: 6px;
   flex: none;
   height: var(--titlebar);
-  padding: 0 24px;
+  padding: 0 24px 0 80px;
   border-bottom: 1px solid var(--border);
   background-color: var(--bg);
   user-select: none;
+}
+
+/* The way back to the feed sits at the bar's left, with the three-dots kept at
+   its right. */
+.chat-nav > .hint {
+  margin-right: auto;
 }
 
 /* The nav's own menu: the three-dots at its right, holding the window's view
@@ -384,21 +391,55 @@
   }
 }
 
+/* Where the replies begin: a line under the message that opened the thread, and
+   the count of what was said after it. It is the thread's own seam rather than
+   another message, so it wears the app's small voice and a rule that fills what
+   the count leaves — and it starts on the face's edge, so what it counts is read
+   as belonging to the turn above it. */
+.reply-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--content-w);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.reply-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--border);
+}
+
+/* Every message is one row: the face of whoever wrote it at the left, their name
+   and the time over what they said, and the words themselves beside the face. It
+   is the shape a channel draws a message in rather than the shape a chat does —
+   nothing is aligned right to show who is speaking, since the name and the mark
+   beside it already say that, and the reader reads down one column instead of
+   following the words from side to side. */
 .msg {
   display: flex;
+  align-items: flex-start;
+  gap: 10px;
   width: 100%;
   max-width: var(--content-w);
 }
 
-.msg.user {
-  justify-content: flex-end;
+/* The face sits against the line its name sits on rather than the row's middle,
+   the way a channel stands an avatar against a message. */
+.msg > .avatar {
+  margin-top: 1px;
 }
 
-.msg.assistant,
-.msg.developer,
-.msg.tool,
-.msg.function {
-  justify-content: flex-start;
+/* A row with nothing of its own to say — a round that only asked for tools, or a
+   call whose message is not in the transcript — wears no face and no name: it is
+   a step inside a turn rather than a message, so it lines up with the prose it
+   belongs to. The step in is the width of a face and of the gap it sits in. */
+.msg.headless {
+  padding-left: 46px;
 }
 
 /* A new prompt is set apart from the answer above it. */
@@ -406,30 +447,91 @@
   margin-top: 28px;
 }
 
+/* What a message says, whoever said it: the column's whole width, in the
+   transcript's own face. A prompt and an answer are written the same way, and
+   what tells them apart is the name over them rather than the box around them. */
 .bubble {
+  position: relative;
+  flex: 1;
   min-width: 0;
+  font-family: var(--font-message);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
 }
 
-/* A prompt is a fixed measure, right-aligned, ruled off by its own wavy line. */
+/* A prompt's own blocks are stacked tight, so the words and the pictures they
+   came with read as one message rather than as two. */
 .msg.user .bubble {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: var(--prompt);
-  color: var(--text-primary);
-  /* The prompt's actions hang from its right-hand edge. */
-  position: relative;
 }
 
+/* Who wrote it, and when: the name in the app's own voice, the time a step
+   behind it, both on the line the face sits against. */
+.msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.msg-who {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.msg-when {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* What is written under a name starts where the name does: a block's own top
+   margin would otherwise open a gap between a message and who wrote it. */
+.bubble > .msg-head + * {
+  margin-top: 0;
+}
+
+/* A prompt is shown as it was typed: its newlines kept, a long line wrapped
+   rather than run off the pane. It wears the message's own face, and the fold
+   below is what stands for the rest of a prompt too long to read between two
+   answers. */
 .plain-text {
   width: 100%;
-  /* A step in from the wave below, so the two do not start on the same edge. */
-  padding-left: 5px;
-  font-family: var(--font-message);
-  font-size: 17px;
-  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* A prompt longer than the bubble shows is folded to its first lines, and the
+   rest waits behind the one control under it: what a transcript is read for is
+   the answer, and a prompt of forty lines is most of a screen between two of
+   them. The measure is the line's own, so the fold lands between two lines
+   rather than through one. */
+.plain-text.folded {
+  max-height: 18em;
+  overflow: hidden;
+}
+
+/* The control that opens a folded prompt, and closes it again: the app's small
+   voice, on the same edge as the text it is under. */
+.msg-more {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.msg-more:hover {
+  color: var(--text-primary);
 }
 
 /* The images a prompt was sent with, above the rule that ends it — square, and
@@ -439,7 +541,6 @@
   flex-wrap: wrap;
   gap: 6px;
   width: 100%;
-  padding-left: 5px;
 }
 
 .msg-image {
@@ -450,25 +551,9 @@
   object-fit: cover;
 }
 
-/* The design rules off every prompt with a wavy line. It is drawn as one path
-   spanning the whole rule, not a tile: a tiled stroke breaks at every join,
-   where the tile's edge clips the round cap. The humps vary in width and
-   amplitude, so the wave reads as drawn rather than repeated, and the mask is
-   stretched to the prompt's measure so the wave keeps pace with it. */
-.prompt-rule {
-  width: 100%;
-  height: 10px;
-  background-color: var(--rule);
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='326' height='10' viewBox='0 0 326 10'%3E%3Cpath d='M0 5 Q11.5 2.29 23 5 Q38 8.43 53 5 Q67.5 2.27 82 5 Q94.5 8.36 107 5 Q122.5 1.83 138 5 Q154.5 8.42 171 5 Q184 1.89 197 5 Q211.5 7.72 226 5 Q237 2.74 248 5 Q262 7.09 276 5 Q288 2.09 300 5 Q313 7.54 326 5' fill='none' stroke='%23000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: 100% 10px;
-  mask-size: 100% 10px;
-}
-
-/* What a prompt offers — copy it, ask again, rewrite it — hanging under its
-   right-hand edge, and the same row for an answer under its left.
+/* What a message offers — copy it, ask again, rewrite it — hanging under the
+   message's own left-hand edge, under the start of the text it acts on, for a
+   prompt and for an answer alike.
    
    The row holds its own place in the flow rather than floating in the gap under
    the message. A row taken out of the flow is drawn over whatever comes next,
@@ -478,7 +563,7 @@
    drawing of the row changes, and only for a message that can act. */
 .msg-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 2px;
   height: 27px;
   padding-top: 5px;
@@ -494,12 +579,6 @@
 .msg.acting .msg-actions:focus-within {
   visibility: visible;
   opacity: 1;
-}
-
-/* An answer's row hangs from its left edge, under the start of the text it acts
-   on; a prompt's stays at the right, where the prompt itself sits. */
-.msg.assistant .msg-actions {
-  justify-content: flex-start;
 }
 
 .msg-action {
@@ -527,8 +606,7 @@
 }
 
 /* A message action's tip hangs over the message rather than under the row, at
-   the row's own outer edge — the right for a prompt, whose row sits at the
-   right, and the left for an answer — so it grows inward and never past the
+   the row's own left-hand edge, so it grows inward and never past the
    transcript's edge, where nobody could scroll to it. */
 .msg-actions .key-hint {
   top: auto;
@@ -536,27 +614,10 @@
   left: 0;
 }
 
-.msg.user .msg-actions .key-hint {
-  left: auto;
-  right: 0;
-}
-
 /* An answer's tokens are read rather than clicked: the icon is what there is to
    hover, so it takes no click of its own. */
 .msg-action.usage {
   cursor: default;
-}
-
-/* An answer is the content of the transcript, not a card in it: it takes the
-   wide measure and shows nothing but its own text. */
-.msg.assistant .bubble {
-  width: 100%;
-  font-family: var(--font-message);
-  font-size: 17px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  /* The answer's actions hang from its own edge, the way a prompt's do. */
-  position: relative;
 }
 
 .msg.error {
@@ -891,7 +952,7 @@
 
 .msg code {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 13.5px;
   background-color: var(--input-bg);
   border-radius: 4px;
   padding: 0.1em 0.3em;
@@ -902,7 +963,7 @@
   padding: 10px 12px;
   border-radius: 8px;
   background-color: var(--input-bg);
-  font-size: 15px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
 

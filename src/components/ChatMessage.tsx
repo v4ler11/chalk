@@ -1,10 +1,14 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
-import { copyText } from "../clipboard";
+import { useCopy } from "../useCopy";
 import { price } from "../money";
+import { ASSISTANT, ASSISTANT_NAME, ASSISTANT_TINT, Avatar } from "./Avatar";
+import { Hint } from "./Hint";
+import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
+import { MessageHead } from "./MessageHead";
 import { Thinking } from "./Thinking";
 import { ToolCall } from "./ToolCall";
 
@@ -30,6 +34,25 @@ interface Props {
   results?: (UiMessage | undefined)[];
   /** Whether the actions are offered; false while a response is arriving. */
   canAct: boolean;
+  /**
+   * Whether this message opens its turn, and so wears the face, the name and the
+   * time: the person's own message, and the model's first round. What the rest of
+   * the turn says is drawn under that head, down the column it opened — the calls
+   * a round asked for belong to the answer, and are read under it rather than
+   * standing above the name of whoever asked for them.
+   */
+  head: boolean;
+  /** What the app calls the person whose prompts these are, which is the name
+   *  their messages are headed with and the mark their circle wears. */
+  author: string;
+  /**
+   * When the message was sent, in epoch ms, where that is known: the prompt's
+   * own time, and for an answer the moment it began speaking. The transcript
+   * heads every message with it the way a channel does, and a message whose time
+   * is not known — one written before the app kept them — is headed with its
+   * name alone rather than with a guess.
+   */
+  when?: number;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
 }
@@ -76,6 +99,9 @@ export const ChatMessage = memo(function ChatMessage({
   thought,
   results,
   canAct,
+  head,
+  author,
+  when,
   onRegenerate,
   onEdit,
 }: Props) {
@@ -89,8 +115,24 @@ export const ChatMessage = memo(function ChatMessage({
       if (part.type === "image_url") images.push(part.image_url.url);
     }
   }
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const usage = message.usage;
+
+  // A prompt longer than the bubble shows is folded to its first lines, and the
+  // control under it reads the rest. Whether there is anything to fold is
+  // measured rather than guessed from a length: the bubble is a fixed measure
+  // and the type is not, so only the text that was drawn knows how tall it came
+  // out. It is measured with the fold in place, which is what the reader is
+  // looking at — a text that fills it has more to show, and one that does not is
+  // left alone, with no control offered for a prompt that ends where it ends.
+  const [open, setOpen] = useState(false);
+  const [folded, setFolded] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el || open) return;
+    setFolded(el.scrollHeight > el.clientHeight + 1);
+  }, [content, open]);
 
   // What a tool answered is not something the model said: it is what came back
   // from what the model asked for, so it is shown as a record of the call —
@@ -104,18 +146,12 @@ export const ChatMessage = memo(function ChatMessage({
   // name and answer are all there is to show.
   if (message.role === "tool") {
     return (
-      <div className="msg tool">
+      <div className="msg tool headless">
         <div className="bubble">
           <ToolCall name={message.name ?? ""} result={{ text: content, ms: message.ms }} />
         </div>
       </div>
     );
-  }
-
-  async function copy() {
-    if (!(await copyText(content))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
   }
 
   // A message that only asked for tools is a step in the turn rather than
@@ -124,28 +160,50 @@ export const ChatMessage = memo(function ChatMessage({
   // thought is read with the answer it led to.
   const asking = toolCalls.length > 0 && content === "";
 
+  // What to call whoever wrote this: the person's own name, or the assistant's,
+  // which is the app's own rather than the model that happened to answer.
+  const who = message.role === "user" ? author : ASSISTANT_NAME;
+
   return (
     <div
-      className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}`}
+      className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}${
+        head ? "" : " headless"
+      }`}
     >
+      {/* The face of whoever wrote it, against the line their name sits on — the
+          shape a channel draws a message in, so a thread and the feed read the
+          same way. */}
+      {head && (
+        <Avatar
+          who={message.role === "user" ? author : ASSISTANT}
+          size={36}
+          colour={message.role === "user" ? undefined : ASSISTANT_TINT}
+        />
+      )}
       <div className="bubble">
+        {head && <MessageHead who={who} when={when} />}
         {thought && (
           <Thinking text={thought.text} waitMs={thought.waitMs} thinkingMs={thought.thinkingMs} />
         )}
         {message.role === "user" ? (
           // A prompt is shown as it was typed: markdown in it is text, not
-          // formatting, and the transcript must not disagree with the wire.
+          // formatting, and the transcript must not disagree with the wire. A
+          // prompt longer than the bubble shows is folded, with the control
+          // under it to read the rest.
           <>
-            {content !== "" && <div className="plain-text">{content}</div>}
-            {images.length > 0 && (
-              <div className="msg-images">
-                {images.map((url, i) => (
-                  <img key={i} className="msg-image" src={url} alt={`Attached image ${i + 1}`} />
-                ))}
+            {content !== "" && (
+              <div ref={textRef} className={`plain-text${open ? "" : " folded"}`}>
+                {content}
               </div>
             )}
-            {/* The design rules off every prompt with its own wavy line. */}
-            <div className="prompt-rule" aria-hidden="true" />
+            {folded && (
+              <button className="msg-more" onClick={() => setOpen((was) => !was)}>
+                {open ? "Show less" : "Show more"}
+              </button>
+            )}
+            {images.length > 0 && (
+              <ImageStrip images={images} wrapClass="msg-images" imageClass="msg-image" />
+            )}
           </>
         ) : (
           <Markdown text={content} />
@@ -191,7 +249,7 @@ export const ChatMessage = memo(function ChatMessage({
               className="msg-action"
               title="Copy message"
               aria-label="Copy message"
-              onClick={copy}
+              onClick={() => copy(content)}
             >
               {copied ? <Check /> : <Copy />}
             </button>
@@ -221,14 +279,13 @@ export const ChatMessage = memo(function ChatMessage({
           // the message there is the calls under it.
           content !== "" && (
             <div className="msg-actions">
-              <div className="hint">
-                <button className="msg-action" aria-label="Copy message" onClick={copy}>
+              <Hint label="Copy message">
+                <button className="msg-action" aria-label="Copy message" onClick={() => copy(content)}>
                   {copied ? <Check /> : <Copy />}
                 </button>
-                <span className="key-hint">Copy message</span>
-              </div>
+              </Hint>
               {usage && (
-                <div className="hint">
+                <Hint label={consumption(usage)}>
                   <span
                     className="msg-action usage"
                     role="img"
@@ -236,8 +293,7 @@ export const ChatMessage = memo(function ChatMessage({
                   >
                     <Hash />
                   </span>
-                  <span className="key-hint">{consumption(usage)}</span>
-                </div>
+                </Hint>
               )}
             </div>
           )

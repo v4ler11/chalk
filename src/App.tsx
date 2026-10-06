@@ -3,222 +3,284 @@ import { mod } from "./keybinds";
 import { useConfig } from "./useConfig";
 import { useServers } from "./useServers";
 import { useConversation } from "./useConversation";
+import { Channel } from "./components/Channel";
 import { ChatNav } from "./components/ChatNav";
 import { ChatPane } from "./components/ChatPane";
+import { Composer } from "./components/Composer";
 import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
 import { SectionNav } from "./components/SectionNav";
 import { ModeBar } from "./components/ModeBar";
 import { SettingsView } from "./components/SettingsView";
 import { TitleBar } from "./components/TitleBar";
-import { Sidebar } from "./components/Sidebar";
+import type { Partial, UiMessage } from "./types";
 import "./App.css";
 
+/** How long the thread's pane takes to slide in and out, matching `thread-in`. */
+const LEAVE_MS = 180;
+
 /**
- * The window: the chrome down the left, the chat or a mode in the pane beside
- * it, and the shortcuts that reach both. What the window *is* — the config, the
- * servers, the conversation — is in the hooks; this is what it looks like.
+ * The window: the rail at the top-left, and the pane beneath it — the channel's
+ * feed, or one thread's transcript, or a mode standing in for either. What the
+ * window *is* — the view, the runs, the modes — is in `useConversation`; this is
+ * what it looks like.
  */
 function App() {
-  // Whether the sidebar is showing. It is the window's, like the modes below.
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  // Whether the transcript and composer are standing aside for the raw JSON of
-  // the conversation. It is the window's rather than any chat's: entered from
-  // the nav's own menu, and left on — showing whichever chat is opened under it
-  // — until it is left.
-  const [jsonView, setJsonView] = useState(false);
-  // Which JSON the view shows while it is on: the open chat's conversation, or
-  // the tools its request carries.
-  const [jsonTab, setJsonTab] = useState<JsonTab>("history");
-  // Whether the settings are standing in the chat's place. Like the JSON view,
-  // it is the window's own mode rather than any chat's, and the two are
-  // exclusive: opening one gives up the other.
-  const [settingsView, setSettingsView] = useState(false);
-  // Whether the transcript follows new content. Stays on unless the user scrolls
-  // up, and comes back when they reach the bottom, send, or press the arrow.
+  // Whether the transcript follows new content. Stays on unless the reader
+  // scrolls up, and comes back when they reach the bottom, send, or press ↓.
   const [follow, setFollow] = useState(true);
   // What the window has to say about the last thing that failed.
   const [error, setError] = useState("");
   const fail = useCallback((e: unknown) => setError(String(e)), []);
 
-  // The composer's field, so a new chat can hand the caret to it.
+  // The composer's field. The channel and a thread each draw their own composer,
+  // but only one is ever mounted, so the caret can be handed to whichever is.
   const composerRef = useRef<HTMLTextAreaElement>(null);
-
-  /** Leaves whatever took the pane over. The JSON view is not left: it is what
-   *  a chat is shown as, so opening a chat under it shows that chat's JSON. */
-  const leaveSettings = useCallback(() => setSettingsView(false), []);
 
   const { config, setConfig } = useConfig(fail);
   const { servers, tools, failures, costs, reading, readTools } = useServers(fail);
-  const conversation = useConversation({
-    config,
-    servers,
-    tools,
-    failures,
-    setError,
-    setFollow,
-    composerRef,
-    onLeaveMode: leaveSettings,
+  const conversation = useConversation({ config, servers, failures, setError, setFollow, composerRef });
+
+  const view = conversation.view;
+  // The models Settings offers, in their order, read here once: both composers
+  // name the one in use and open this list.
+  const models = config?.models ?? [];
+  const threadOpen = view.kind === "thread";
+  // The feed stays mounted while a thread or the settings are showing, hidden
+  // rather than unmounted, so its scroll and its half-typed draft survive the
+  // trip. `visibility`, not `display: none`, is what keeps its scroll position.
+  const channelVisible = !conversation.settingsView && view.kind === "channel";
+  // The thread's pane is the one that slides, and it is the visible pane whenever
+  // a thread is the view and neither the JSON view nor the settings has the
+  // panel.
+  const threadVisible = threadOpen && !conversation.settingsView && !conversation.jsonView;
+  // Both composers are mounted at once, and the shared ref must land on the one
+  // on screen: the channel's takes this spare while it is hidden.
+  const channelComposerRef = useRef<HTMLTextAreaElement>(null);
+
+  // The thread's pane outlives the view by one slide, and what it was showing
+  // outlives the thread's own state with it: the exit needs a pane that is still
+  // there and a transcript that has not been emptied, or the slide is a blank
+  // sheet going away.
+  const held = useRef<{ messages: UiMessage[]; pending: Partial | null }>({
+    messages: [],
+    pending: null,
   });
 
-  /**
-   * Opens the settings in the window, or puts them away again: the form takes
-   * the chat's place, so the button that opened it is also the way back, and the
-   * JSON view is given up when it comes — the two are modes of one pane.
-   */
-  const toggleSettings = useCallback(() => {
-    setSettingsView((open) => !open);
-    setJsonView(false);
-  }, []);
+  // Leaving is decided while rendering the change rather than after it. A pane
+  // dropped on the render that flips the view and put back on the next one would
+  // never be seen to slide: it would leave the page and arrive again, playing the
+  // arrival's own animation a second time.
+  const [shownThread, setShownThread] = useState(threadOpen);
+  const [holding, setHolding] = useState(false);
+  if (shownThread !== threadOpen) {
+    setShownThread(threadOpen);
+    setHolding(!threadOpen);
+  }
+  const threadPane = threadOpen || holding;
 
-  const showJson = useCallback((on: boolean) => {
-    setJsonView(on);
-    if (on) setSettingsView(false);
-  }, []);
+  // What the pane last had, kept while the thread is the view.
+  useEffect(() => {
+    if (!threadOpen) return;
+    held.current = { messages: conversation.messages, pending: conversation.pending };
+  }, [threadOpen, conversation.messages, conversation.pending]);
 
-  // The window's shortcuts, beside the buttons that do the same thing: the rail
-  // offers two of these and the model chip the third, and there is no menu bar
-  // to carry any of them.
+  // One slide, then the pane is put away.
+  useEffect(() => {
+    if (!holding) return;
+    const done = window.setTimeout(() => setHolding(false), LEAVE_MS);
+    return () => window.clearTimeout(done);
+  }, [holding]);
+
+  // The window's shortcuts, beside the buttons that do the same thing. Escape is
+  // the taken-over pane's own: it leaves the settings or the JSON view first,
+  // and otherwise returns to the channel. ⌘J is the JSON view, and ⌘, the
+  // settings — the command the platform puts on that key.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      // Escape is the taken-over pane's own, and needs no chord: it does what
-      // the bar's ESC button does — the settings if they are up, the JSON view
-      // otherwise — whether or not a modifier is down.
-      if (event.key === "Escape" && (settingsView || jsonView)) {
-        event.preventDefault();
-        setSettingsView(false);
-        setJsonView(false);
+      // A control that has already taken the key — the composer's Escape giving
+      // up an edit — keeps it: the window's own reading of it must not fire on
+      // top of that.
+      if (event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        if (conversation.settingsView) {
+          event.preventDefault();
+          conversation.leaveSettings();
+        } else if (conversation.jsonView) {
+          event.preventDefault();
+          conversation.closeJson();
+        } else if (threadOpen) {
+          event.preventDefault();
+          conversation.backToChannel();
+        }
         return;
       }
       if (!mod(event) || event.repeat) return;
       const key = event.key.toLowerCase();
-      if (key === "b") {
+      if (key === "j" && threadOpen) {
+        // The JSON view belongs to a thread: a channel has no request to show.
         event.preventDefault();
-        setSidebarOpen((open) => !open);
-      } else if (key === "n") {
-        event.preventDefault();
-        conversation.newChat();
-      } else if (key === "j") {
-        // The JSON view, the way the three-dots toggles it: the settings are
-        // given up as it comes, since the two are modes of one pane.
-        event.preventDefault();
-        setSettingsView(false);
-        setJsonView((on) => !on);
+        conversation.showJson(!conversation.jsonView);
       } else if (key === ",") {
-        // The command the platform puts on this key, which is where anyone
-        // looking for the settings will press.
         event.preventDefault();
-        toggleSettings();
+        conversation.toggleSettings();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [conversation.newChat, toggleSettings, jsonView, settingsView]);
+  }, [
+    conversation.settingsView,
+    conversation.jsonView,
+    conversation.leaveSettings,
+    conversation.closeJson,
+    conversation.showJson,
+    conversation.toggleSettings,
+    conversation.backToChannel,
+    threadOpen,
+  ]);
+
+  // The panel's own bar, built for the pane it stands on: a thread's bar carries
+  // the way back and offers the JSON view, and a channel's carries neither, so
+  // nothing appears on one bar because of what another pane is doing.
+  const nav = (thread: boolean) => (
+    <ChatNav
+      thread={thread}
+      onBack={conversation.backToChannel}
+      jsonView={conversation.jsonView}
+      onJsonView={conversation.showJson}
+      onOpenSettings={conversation.toggleSettings}
+    />
+  );
 
   return (
     <div className="app">
       <div className="shell">
-        {/* The window's chrome floats over whatever is beneath it: the sidebar's
-            head while the sidebar is open, the chat panel's own top-left corner
-            while it is shut, so the panel keeps the whole window then. */}
-        <TitleBar
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((open) => !open)}
-          onNewChat={conversation.newChat}
-        />
-
-        {/* The sidebar is the window's history either way: a chat opened from
-            it while the JSON view is on shows its JSON, so the list is left
-            where it always is. */}
-        <div className={`left${sidebarOpen ? " open" : ""}`}>
-          <Sidebar
-            open={sidebarOpen}
-            chats={conversation.chats}
-            openId={conversation.chatId}
-            onOpen={conversation.openChat}
-            onRename={conversation.renameChat}
-            onDelete={conversation.deleteChat}
-            onOpenSettings={toggleSettings}
-          />
-        </div>
+        {/* The rail is the window's own corner now: the controls and the drag
+            region, and nothing that belongs to a pane. */}
+        <TitleBar />
 
         <main className="main">
-          <ChatNav
-            model={conversation.model}
-            models={config?.models ?? []}
-            onPick={conversation.setModel}
-            jsonView={jsonView}
-            onJsonView={showJson}
-          />
+          {/* The panes share one box so the feed can stay mounted under a thread
+              or the settings: opening one and coming back must not rebuild the
+              channel. The hidden pane keeps its place and its scroll. Each pane
+              draws the panel's bar itself, at its own top edge. */}
+          <div className="pane-stack">
+            <div className={`pane${channelVisible ? "" : " off"}`} inert={!channelVisible}>
+              {nav(false)}
+              <Channel
+                rows={conversation.rows}
+                author={conversation.author}
+                error={error}
+                onOpen={conversation.openThread}
+                onDelete={conversation.deleteChat}
+                composer={
+                  <Composer
+                    textareaRef={channelVisible ? composerRef : channelComposerRef}
+                    streaming={false}
+                    model={conversation.model}
+                    models={models}
+                    onModel={conversation.setModel}
+                    reasoning={conversation.reasoning}
+                    onReasoning={conversation.setReasoning}
+                    editingText={null}
+                    onCancelEdit={() => {}}
+                    servers={{
+                      declared: servers,
+                      tools,
+                      failures,
+                      costs,
+                      reading,
+                      chosen: conversation.chosen,
+                      loaded: conversation.loaded,
+                      onChoose: conversation.setChosen,
+                      onRefresh: () => readTools(true),
+                    }}
+                    onSubmit={conversation.post}
+                    onStop={() => {}}
+                  />
+                }
+              />
+            </div>
 
-          {/* Settings and the JSON view take the chat's place, one at a time,
-              and both are the same shape: a bar under the chat panel's naming
-              the mode and holding the way out, then a vertical list of sections
-              down the left and the pane they open on the right. */}
-          {settingsView ? (
-            <>
-              <ModeBar title="Settings" onClose={leaveSettings} />
-              {config ? (
-                <SettingsView config={config} onSaved={setConfig} />
-              ) : (
-                <div className="settings-body">
-                  <p className="json-note" style={{ padding: 24 }}>
-                    Reading the settings…
-                  </p>
-                </div>
-              )}
-            </>
-          ) : jsonView ? (
-            <>
-              <ModeBar title="JSON" onClose={() => setJsonView(false)} />
-              <div className="settings-body">
-                <SectionNav
-                  label="JSON sections"
-                  sections={JSON_SECTIONS}
-                  active={jsonTab}
-                  onSelect={(id) => setJsonTab(id as JsonTab)}
-                />
-                <JsonView
-                  tab={jsonTab}
-                  messages={conversation.messages}
-                  systemPrompt={config?.systemPrompt ?? ""}
-                  tools={conversation.sentTools}
+            {/* The thread's pane stays in the page while a mode stands in front
+                of it. The settings and the JSON view are panels over the chat
+                rather than another view of it, so nothing about the chat moves
+                when one opens or closes; it leaves the page only when the
+                channel is the view, and that is the movement the slide is for.
+                It is inert while a mode is in front, so a reader reaches the
+                panel and not the transcript behind it. */}
+            {threadPane && (
+              <div className={`pane thread${holding ? " off" : ""}`} inert={!threadVisible}>
+                <ChatPane
+                  nav={nav(true)}
+                  messages={threadVisible ? conversation.messages : held.current.messages}
+                  author={conversation.author}
+                  pending={threadVisible ? conversation.pending : held.current.pending}
+                  error={error || conversation.threadError || conversation.unreachable}
+                  follow={follow}
+                  onFollowChange={setFollow}
+                  canAct={conversation.canAct}
+                  onRegenerate={conversation.regenerate}
+                  onEdit={conversation.startEdit}
+                  awaiting={conversation.awaiting.length > 0 ? conversation.awaiting : null}
+                  onRun={conversation.allow}
+                  onDecline={conversation.decline}
+                  composerRef={threadVisible ? composerRef : channelComposerRef}
+                  model={conversation.model}
+                  models={models}
+                  onModel={conversation.setModel}
+                  reasoning={conversation.reasoning}
+                  onReasoning={conversation.setReasoning}
+                  editingText={conversation.editing?.text ?? null}
+                  onCancelEdit={() => conversation.setEditing(null)}
+                  servers={servers}
+                  tools={tools}
+                  failures={failures}
                   costs={costs}
-                  lazy={conversation.lazyServers}
+                  reading={reading}
+                  chosen={conversation.chosen}
+                  loaded={conversation.loaded}
+                  onChoose={conversation.setChosen}
+                  onRefresh={() => readTools(true)}
+                  onSubmit={conversation.submit}
+                  onStop={conversation.stop}
                 />
               </div>
-            </>
-          ) : (
-            <ChatPane
-              messages={conversation.messages}
-              pending={conversation.pending}
-              error={error || conversation.unreachable}
-              follow={follow}
-              onFollowChange={setFollow}
-              canAct={conversation.pending === null && config !== null}
-              onRegenerate={conversation.regenerate}
-              onEdit={conversation.startEdit}
-              awaiting={conversation.awaiting}
-              onRun={conversation.allow}
-              onDecline={conversation.decline}
-              composerRef={composerRef}
-              reasoning={conversation.reasoning}
-              onReasoning={conversation.setReasoning}
-              spent={conversation.spent}
-              editingText={conversation.editing?.text ?? null}
-              onCancelEdit={() => conversation.setEditing(null)}
-              servers={servers}
-              tools={tools}
-              failures={failures}
-              costs={costs}
-              reading={reading}
-              chosen={conversation.chosen}
-              loaded={conversation.loaded}
-              onChoose={conversation.setChosen}
-              onRefresh={() => readTools(true)}
-              onSubmit={conversation.submit}
-              onStop={conversation.stop}
-            />
-          )}
+            )}
+
+            {/* Settings and the JSON view take the pane, one at a time, and both
+                are the same shape: a bar naming the mode and holding the way out,
+                then a vertical list of sections down the left and the pane they
+                open on the right. */}
+            {conversation.settingsView ? (
+              <div className="pane">
+                {nav(threadOpen)}
+                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
+                {config ? (
+                  <SettingsView config={config} onSaved={setConfig} />
+                ) : (
+                  <div className="settings-body">
+                    <p className="json-note" style={{ padding: 24 }}>
+                      Reading the settings…
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : threadOpen && conversation.jsonView ? (
+              <div className="pane">
+                {nav(threadOpen)}
+                <ModeBar title="JSON" onClose={conversation.closeJson} />
+                <div className="settings-body">
+                  <SectionNav
+                    label="JSON sections"
+                    sections={JSON_SECTIONS}
+                    active={conversation.jsonTab}
+                    onSelect={(id) => conversation.setJsonTab(id as JsonTab)}
+                  />
+                  <JsonView tab={conversation.jsonTab} chat={view.chat} costs={costs} />
+                </div>
+              </div>
+            ) : null}
+          </div>
         </main>
       </div>
     </div>

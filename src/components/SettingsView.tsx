@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppConfig } from "../types";
 import * as api from "../api";
+import { useSaved } from "../useSaved";
 import { SettingsPanel } from "./SettingsPanel";
-
-/** How long the receipt for a save stays on screen, in milliseconds. */
-const SAVED_MS = 2000;
 
 interface Props {
   /** The config as the window last read it: the draft starts from it, and is
@@ -30,35 +28,15 @@ export function SettingsView({ config, onSaved }: Props) {
   const [error, setError] = useState("");
   // Set by a save and cleared by the next edit or by its own timer: it is a
   // receipt for what just happened, not a state the form is in.
-  const [saved, setSaved] = useState(false);
-  const savedTimer = useRef<number | null>(null);
+  const { saved, flash, clear } = useSaved();
 
   useEffect(() => setDraft(config), [config]);
-  useEffect(() => stopSavedTimer, []);
-
-  /** Clears the receipt, and the timer that would have cleared it. */
-  function stopSavedTimer() {
-    if (savedTimer.current !== null) {
-      window.clearTimeout(savedTimer.current);
-      savedTimer.current = null;
-    }
-  }
-
-  /** Shows the receipt for a moment, then takes it away again. */
-  function flashSaved() {
-    stopSavedTimer();
-    setSaved(true);
-    savedTimer.current = window.setTimeout(() => {
-      savedTimer.current = null;
-      setSaved(false);
-    }, SAVED_MS);
-  }
 
   async function save() {
     try {
       onSaved(await api.saveConfig(draft));
       setError("");
-      flashSaved();
+      flash();
     } catch (e) {
       setError(String(e));
     }
@@ -72,8 +50,7 @@ export function SettingsView({ config, onSaved }: Props) {
         notice={error !== "" ? <p className="notice">Error: {error}</p> : undefined}
         onChange={(patch) => {
           // An edit makes the receipt a lie the moment it is typed.
-          stopSavedTimer();
-          setSaved(false);
+          clear();
           setDraft((current) => ({ ...current, ...patch }));
         }}
         onSave={save}

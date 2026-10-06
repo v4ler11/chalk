@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { FileText, Plug, Plus, Settings2, X } from "lucide-react";
+import { FileText, Plug, Settings2 } from "lucide-react";
 import type { AppConfig } from "../types";
+import { AddButton, Field, IconButton } from "./Controls";
 import { McpSettings } from "./McpSettings";
 import { SectionNav } from "./SectionNav";
 
@@ -132,7 +133,7 @@ export function SettingsPanel({
 
             <div className="settings-actions">
               <button onClick={onSave}>Save</button>
-              {saved && <span className="settings-saved">Saved</span>}
+              {saved && <span className="saved">Saved</span>}
             </div>
           </>
         )}
@@ -155,8 +156,18 @@ function GeneralTab({
 }) {
   return (
     <div className="settings">
-      <label>
-        <span>Provider</span>
+      <Field label="Name">
+        <input
+          type="text"
+          value={config.name}
+          placeholder="You"
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </Field>
+      <p className="settings-note">
+        Drawn beside what you post in the channel, with a circle of its initials.
+      </p>
+      <Field label="Provider">
         <select
           value={config.provider}
           onChange={(e) => onChange({ provider: e.target.value })}
@@ -167,20 +178,19 @@ function GeneralTab({
             </option>
           ))}
         </select>
-      </label>
+      </Field>
       {/* Where a custom provider is, and — for OpenRouter — where it is going
           anyway, said out loud: the cache that comes with it is worth knowing
           about, since it is what makes a repeated request free. */}
       {config.provider === "custom" ? (
-        <label>
-          <span>Endpoint</span>
+        <Field label="Endpoint">
           <input
             type="text"
             value={config.endpoint}
             placeholder="https://example.com/v1"
             onChange={(e) => onChange({ endpoint: e.target.value })}
           />
-        </label>
+        </Field>
       ) : (
         <p className="settings-note">
           Requests go to <code>{OPENROUTER_URL}</code>. A request identical to one made within the
@@ -188,10 +198,9 @@ function GeneralTab({
           a model.
         </p>
       )}
-      <label>
-        <span>API key</span>
+      <Field label="API key">
         <SecretInput value={config.apiKey} onChange={(apiKey) => onChange({ apiKey })} />
-      </label>
+      </Field>
       <div className="settings-models">
         <span className="settings-label">Models</span>
         {config.models.map((name, i) => (
@@ -205,21 +214,20 @@ function GeneralTab({
             />
             {/* The list is the app's only source of models, so it cannot be
                 emptied: the last row's button is drawn, but disabled. */}
-            <button
+            <IconButton
               className="settings-model-remove"
               title="Remove model"
-              aria-label={`Remove ${name || "this model"}`}
+              ariaLabel={`Remove ${name || "this model"}`}
               disabled={config.models.length === 1}
               onClick={() => change(config.models.filter((_, j) => j !== i))}
-            >
-              <X />
-            </button>
+            />
           </div>
         ))}
-        <button className="settings-model-add" onClick={() => change([...config.models, ""])}>
-          <Plus />
-          Add model
-        </button>
+        <AddButton
+          className="settings-model-add"
+          label="Add model"
+          onClick={() => change([...config.models, ""])}
+        />
         <p className="settings-note">
           The first is what a new chat starts from, once the history has nothing to say; every chat
           keeps the model it was given.
@@ -243,8 +251,7 @@ function CustomizationTab({
 }) {
   return (
     <div className="settings">
-      <label className="settings-prompt">
-        <span>System prompt</span>
+      <Field label="System prompt" className="settings-prompt">
         <textarea
           value={config.systemPrompt}
           rows={10}
@@ -253,7 +260,7 @@ function CustomizationTab({
           aria-label="System prompt"
           onChange={(e) => onChange({ systemPrompt: e.target.value })}
         />
-      </label>
+      </Field>
     </div>
   );
 }

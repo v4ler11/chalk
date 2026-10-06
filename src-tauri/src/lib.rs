@@ -1,6 +1,7 @@
 pub mod logging;
 pub mod manage;
 pub mod mcp;
+pub mod runs;
 pub mod settings;
 pub mod store;
 pub mod types;
@@ -10,41 +11,41 @@ use futures_util::StreamExt;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{ipc::Channel, Emitter, Manager, State, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, State, WebviewWindowBuilder};
 
-use logging::{now_millis, LogEntry, Logger};
+use logging::{LogEntry, Logger};
 use settings::{AppConfig, Settings};
-use store::{ChatRecord, ChatSummary, Store};
-use types::chat::{Chunk, Post, ReasoningConfig, StreamOptions, Tool, Usage};
+use store::{ChatSummary, Store};
+use types::chat::{Chunk, Post, ReasoningConfig, StreamOptions, Tool};
 use types::chat_message::{Content, Message, Part, Role, ToolCallChunk};
 
-#[derive(Serialize, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum StreamEvent {
-    Reasoning { content: String },
-    Delta { content: String },
-    Usage { usage: Usage },
-    /// The tools the model asked for, once the stream has assembled them: the
-    /// arguments of a call arrive in pieces, and a call whose arguments are half
-    /// delivered is not one to act on.
-    ToolCalls { calls: Vec<WireCall> },
-    Done,
-    Error { message: String },
+/// What one round of a turn produced: the calls the answer asked for, and
+/// whether the request failed.
+///
+/// The answer itself is not here. It is streamed into the run as it arrives and
+/// committed by the run when the round is over, because a window that closes
+/// mid-answer must not be the thing the answer was arriving to.
+pub(crate) struct Round {
+    pub calls: Vec<WireCall>,
+    /// True when the request failed, which ends the turn rather than asking
+    /// again; `message` is what to say about it.
+    pub failed: bool,
+    pub message: String,
 }
 
 /// One tool call as the model asked for it.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-struct WireCall {
+pub(crate) struct WireCall {
     /// The provider's id for the call, which the answer must carry back.
-    id: String,
+    pub(crate) id: String,
     /// The tool's name, as the request offered it.
-    name: String,
+    pub(crate) name: String,
     /// The arguments, as the JSON text the provider streamed.
-    arguments: String,
+    pub(crate) arguments: String,
 }
 
-struct AppState {
+pub(crate) struct AppState {
     config: Mutex<AppConfig>,
     client: reqwest::Client,
     logger: Logger,
@@ -53,12 +54,14 @@ struct AppState {
     /// Chat history. `None` when the database could not be opened: the chat
     /// itself still works, and every history command reports why it does not.
     store: Option<Store>,
-    /// The running stream, so [`stop_stream`] can abort it.
-    inflight: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    /// The turns that are alive in the backend, one per chat. They are here
+    /// rather than in a window because they outlive every window: closing one
+    /// closes a view, and the answer goes on arriving.
+    runs: runs::Runs,
 }
 
 /// Records a log entry in the in-memory buffer, on stderr, and live to the webview.
-fn log(app: &tauri::AppHandle, level: &str, message: impl Into<String>) {
+pub(crate) fn log(app: &tauri::AppHandle, level: &str, message: impl Into<String>) {
     let entry = app.state::<AppState>().logger.push(level, message.into());
     eprintln!("[{}] {}", entry.level, entry.message);
     let _ = app.emit("app-log", entry);
@@ -81,7 +84,7 @@ fn truncate(s: String, max: usize) -> String {
 /// `none`, the gateways' own spelling for "do not reason" — and so is anything
 /// else that is not a level a model can be asked for, since a request over a typo
 /// should not quietly go out without the answer the user asked for.
-fn reasoning_level(level: Option<String>) -> String {
+pub(crate) fn reasoning_level(level: Option<String>) -> String {
     match level.as_deref() {
         Some(level @ ("low" | "medium" | "high")) => level.to_owned(),
         _ => "none".to_owned(),
@@ -121,6 +124,8 @@ fn carried_over(app: &tauri::AppHandle) -> Option<Settings> {
     // Its one model becomes the list's first entry.
     let (provider, endpoint) = settings::provider_from(&old.api_base, String::new());
     Some(Settings {
+        // The file this came from had nowhere to say who the user was.
+        name: String::new(),
         provider,
         endpoint,
         api_key: old.api_key,
@@ -278,61 +283,29 @@ fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<C
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
 }
 
-/// One chat, with its transcript. `None` when that chat is gone.
+/// The pictures a thread was opened with, for the row in the feed that stands
+/// for it. Asked for by rows that have any — the list says how many — since
+/// what comes back is the attachments themselves, a megabyte each.
 #[tauri::command]
-fn load_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64) -> Result<Option<ChatRecord>, String> {
-    history(&app, "could not load the chat", history_store(&state).and_then(|store| store.load(id)))
-}
-
-/// Writes a chat: creates it when `id` is null, and otherwise replaces that
-/// chat's title, model, reasoning level, servers and transcript. Returns the
-/// row, so a new chat learns its id.
-///
-/// `servers` is the choice the chat has made about which model context protocol
-/// servers it is sent with, and `None` is a chat that has never made one — which
-/// offers every enabled server.
-#[tauri::command]
-fn save_chat(
+fn root_images(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-    id: Option<i64>,
-    title: String,
-    model: String,
-    reasoning: String,
-    servers: Option<Vec<String>>,
-    messages: serde_json::Value,
-) -> Result<ChatSummary, String> {
-    let saved = history(
-        &app,
-        "could not save the chat",
-        history_store(&state).and_then(|store| {
-            store.save(id, &title, &model, &reasoning, servers.as_deref(), &messages, now_millis())
-        }),
-    )?;
-    // Only a chat that has just come into being is worth a line; every other save
-    // is routine and would bury the log.
-    if id.is_none() {
-        log(&app, "info", format!("chat {} created: {}", saved.id, saved.title));
-    }
-    Ok(saved)
-}
-
-/// Renames a chat, leaving its transcript alone.
-#[tauri::command]
-fn rename_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64, title: String) -> Result<(), String> {
+    chat: i64,
+) -> Result<Vec<String>, String> {
     history(
         &app,
-        "could not rename the chat",
-        history_store(&state).and_then(|store| store.rename(id, &title)),
-    )?;
-    log(&app, "info", format!("chat {id} renamed: {title}"));
-    Ok(())
+        "could not read the thread's pictures",
+        history_store(&state).and_then(|store| store.root_images(chat)),
+    )
 }
 
 /// Removes a chat and its transcript.
 #[tauri::command]
 fn delete_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     history(&app, "could not delete the chat", history_store(&state).and_then(|store| store.delete(id)))?;
+    // A run outlives the window that started it, so it is stopped by name here:
+    // a chat that is no longer there has nothing left to answer.
+    state.runs.forget(id);
     log(&app, "info", format!("chat {id} deleted"));
     Ok(())
 }
@@ -543,7 +516,7 @@ fn mark_cacheable(messages: &mut [Message]) {
 /// window holds, which is what keeps a prompt the user's own text — what an edit
 /// hands back, and what the store keeps — while what the model reads is the
 /// whole of what it is being told.
-fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
+pub(crate) fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
     stamp_prompts(messages);
     // Only OpenRouter is asked to reuse a prefix this way: the mark means
     // nothing to a gateway that does not know it, and a custom endpoint's own
@@ -554,79 +527,24 @@ fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>
     with_system_prompt(&config.system_prompt, lazy, messages);
 }
 
-/// The transcript as the request will carry it: every prompt headed with the
-/// time it was sent, the configured system prompt resolved and put in front of
-/// them, and the lazily imported servers named under it — the very assembly
-/// `chat` does on its way out, run here for the window.
+/// The request as the model will read it, for the JSON view: every prompt headed
+/// with the time it was sent, the system prompt resolved and put in front of
+/// them, the lazily imported servers named under it, and the tools the round
+/// would offer. It is the assembly a run does on its way out, run here for a
+/// window that wants to see it.
 ///
 /// The JSON view reads this rather than rendering the transcript itself, because
 /// the window's copy is not the request: it holds the prompt as written, with
-/// `@{{…}}` unresolved, the headers unwritten, and none of the lazy addendum,
-/// and it carries timings and usage the model is never sent. What the model
-/// reads is what this returns.
+/// `@{{…}}` unresolved, the headers unwritten and none of the lazy addendum, and
+/// it carries timings and usage the model is never sent.
 #[tauri::command]
-fn request_preview(
+async fn request_preview(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
-    messages: Vec<Message>,
-    lazy: Option<Vec<mcp::Lazy>>,
-) -> Vec<Message> {
-    let config = state.config.lock().clone();
-    let mut messages = messages;
-    assembled(&config, &lazy.unwrap_or_default(), &mut messages);
-    messages
-}
-
-/// Starts one completion and returns immediately: the stream, its failures and
-/// its usage all come back on `on_event`, because the command is no longer alive
-/// to return them.
-///
-/// The tools are the ones the frontend was offered for this turn, and are passed
-/// through rather than looked up here: what a request offers the model is the
-/// frontend's business — it is what asks for the calls to be carried out — and
-/// the tools it names are the ones it can act on. The lazily imported servers
-/// are passed the same way, for the same reason: which of them this chat has
-/// loaded is the chat's own state, and all the backend does with the list is
-/// name them in the prompt.
-#[tauri::command]
-fn chat(app: tauri::AppHandle, state: State<'_, AppState>, messages: Vec<Message>, model: Option<String>, reasoning: Option<String>, tools: Option<Vec<mcp::ToolOffer>>, lazy: Option<Vec<mcp::Lazy>>, on_event: Channel<StreamEvent>) -> Result<(), String> {
-    let config = state.config.lock().clone();
-    // The chat's own model, or the head of the configured list: a chat that has
-    // never been given one follows the settings rather than asking for nothing.
-    let model = model
-        .filter(|m| !m.trim().is_empty())
-        // The first real model in the list: a row someone left empty in the
-        // settings window is not one to ask a provider for.
-        .or_else(|| {
-            config
-                .models
-                .iter()
-                .find(|m| !m.trim().is_empty())
-                .cloned()
-        })
-        .unwrap_or_default();
-    // Off asks for no reasoning rather than leaving the model to think by
-    // default, so the control means what it says.
-    let reasoning = reasoning_level(reasoning);
-
-    let mut messages = messages;
-    assembled(&config, &lazy.unwrap_or_default(), &mut messages);
-
-    // One stream at a time: a new request replaces whatever is still running.
-    if let Some(previous) = state.inflight.lock().take() {
-        previous.abort();
-    }
-    let handle = tauri::async_runtime::spawn(stream_chat(app, config, model, reasoning, messages, tools, on_event));
-    *state.inflight.lock() = Some(handle);
-    Ok(())
-}
-
-/// Aborts the stream [`chat`] started, if it is still running.
-#[tauri::command]
-fn stop_stream(app: tauri::AppHandle, state: State<'_, AppState>) {
-    if let Some(handle) = state.inflight.lock().take() {
-        handle.abort();
-        log(&app, "info", "stream stopped by frontend");
-    }
+    chat: i64,
+) -> Result<runs::Preview, String> {
+    let run = runs::ensure(&state, chat)?.ok_or("that thread is gone")?;
+    Ok(run.preview(&app).await)
 }
 
 /* ---------------------------------------------------------------------- mcp */
@@ -694,19 +612,6 @@ async fn mcp_tools(
         ),
     );
     Ok(tools)
-}
-
-/// Calls one tool, by the name the request offered it under. `args` is the
-/// arguments as the JSON text the model sent.
-#[tauri::command]
-async fn mcp_call(app: tauri::AppHandle, state: State<'_, AppState>, name: String, args: Option<String>) -> Result<mcp::Call, String> {
-    // The app's own tools are answered here rather than by a server: they are
-    // not a server's, and they manage this app — its settings, its servers —
-    // against the very files the settings window writes.
-    if manage::owns(&name) {
-        return manage::call(&app, &state, &name, args.as_deref()).await;
-    }
-    state.mcp.call(&name, args).await
 }
 
 /// The app's own tools, as the window offers them.
@@ -811,28 +716,54 @@ fn absorb(calls: &mut Vec<WireCall>, fragments: &[ToolCallChunk]) {
     }
 }
 
-/// Ends a stream: the calls the answer asked for, when there are any, and then
-/// the end of the stream itself.
+/// A round is over: what it asked for, and whether it produced an answer at all.
 ///
-/// Both are sent from here so that the two ways a stream ends — the provider's
-/// closing frame and simply running out — leave the frontend in the same state.
 /// A call with no name is one the provider never finished; there is nothing to
 /// carry out, so it is dropped and said so.
-fn end_stream(app: &tauri::AppHandle, on_event: &Channel<StreamEvent>, calls: &[WireCall]) {
-    let named: Vec<WireCall> = calls.iter().filter(|call| !call.name.is_empty()).cloned().collect();
+fn finish(app: &tauri::AppHandle, calls: Vec<WireCall>) -> Round {
+    let named: Vec<WireCall> = calls
+        .iter()
+        .filter(|call| !call.name.is_empty())
+        .cloned()
+        .collect();
     if named.len() < calls.len() {
         log(app, "warn", "a tool call arrived without a name; it is not carried out");
     }
     if !named.is_empty() {
         log(app, "info", format!("{} tool call(s) asked for", named.len()));
-        let _ = on_event.send(StreamEvent::ToolCalls { calls: named });
     }
     log(app, "info", "stream finished");
-    let _ = on_event.send(StreamEvent::Done);
+    Round {
+        calls: named,
+        failed: false,
+        message: String::new(),
+    }
 }
 
-/// Streams a completion, reporting every outcome on `on_event`.
-async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, reasoning: String, messages: Vec<Message>, tools: Option<Vec<mcp::ToolOffer>>, on_event: Channel<StreamEvent>) {
+/// A round that failed before it produced an answer, which ends its turn.
+fn failed(message: String) -> Round {
+    Round {
+        calls: Vec::new(),
+        failed: true,
+        message,
+    }
+}
+
+/// One round trip to the model, streamed into the run as it arrives.
+///
+/// The answer is not returned: it is pushed into the run token by token, and the
+/// run commits it when the round is over. What comes back is the rest of what
+/// the round produced — the calls the model asked for, and whether the request
+/// failed, which ends a turn rather than asking it again.
+pub(crate) async fn one_round(
+    app: tauri::AppHandle,
+    config: AppConfig,
+    model: String,
+    reasoning: String,
+    messages: Vec<Message>,
+    tools: Option<Vec<mcp::ToolOffer>>,
+    run: &runs::Run,
+) -> Round {
     let client = app.state::<AppState>().client.clone();
     let url = format!(
         "{}/chat/completions",
@@ -880,8 +811,7 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
         Ok(resp) => resp,
         Err(e) => {
             log(&app, "error", format!("request failed: {e}"));
-            let _ = on_event.send(StreamEvent::Error { message: e.to_string() });
-            return;
+            return failed(e.to_string());
         }
     };
 
@@ -889,8 +819,7 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
         let status = resp.status();
         let message = format!("HTTP {status}: {}", truncate(resp.text().await.unwrap_or_default(), 2000));
         log(&app, "error", message.clone());
-        let _ = on_event.send(StreamEvent::Error { message });
-        return;
+        return failed(message);
     }
 
     // What the gateway said about its own cache, kept to be sent along with the
@@ -916,8 +845,7 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
             Ok(chunk) => chunk,
             Err(e) => {
                 log(&app, "error", format!("stream failed: {e}"));
-                let _ = on_event.send(StreamEvent::Error { message: e.to_string() });
-                return;
+                return failed(e.to_string());
             }
         };
         buffer.push_str(&String::from_utf8_lossy(&chunk));
@@ -927,46 +855,36 @@ async fn stream_chat(app: tauri::AppHandle, config: AppConfig, model: String, re
             let Some(data) = line.strip_prefix("data:") else { continue };
             let data = data.trim();
             if data == "[DONE]" {
-                end_stream(&app, &on_event, &calls);
-                return;
+                return finish(&app, calls);
             }
             if data.is_empty() { continue; }
             // Ignore non-`choices` frames (usage, keep-alives, unparseable lines).
             let Ok(chunk) = serde_json::from_str::<Chunk>(data) else { continue };
-            let mut closed = false;
             for choice in &chunk.choices {
                 // Thinking shares the stream with the answer and normally arrives
                 // first, in frames whose `content` is empty.
                 let reasoning = choice.delta.reasoning_text();
                 if !reasoning.is_empty() {
-                    closed = on_event.send(StreamEvent::Reasoning { content: reasoning }).is_err();
+                    run.push_reasoning(&app, &reasoning);
                 }
-                if !closed {
-                    if let Some(content) = choice.delta.content.as_deref().filter(|c| !c.is_empty()) {
-                        closed = on_event.send(StreamEvent::Delta { content: content.to_string() }).is_err();
-                    }
+                if let Some(content) = choice.delta.content.as_deref().filter(|c| !c.is_empty()) {
+                    run.push_delta(&app, content);
                 }
                 // A tool call rides the same stream as the answer, in fragments.
-                if !closed {
-                    if let Some(fragments) = &choice.delta.tool_calls {
-                        absorb(&mut calls, fragments);
-                    }
+                if let Some(fragments) = &choice.delta.tool_calls {
+                    absorb(&mut calls, fragments);
                 }
-            }
-            if closed {
-                log(&app, "warn", "channel closed by frontend; stopping stream");
-                return; // channel closed by frontend; stop cleanly
             }
             // Usage rides on the final frame, alongside the closing choice.
             if let Some(mut usage) = chunk.usage {
                 usage.cache_status = cache.clone();
-                let _ = on_event.send(StreamEvent::Usage { usage });
+                run.set_usage(usage);
             }
         }
     }
     // The provider closed the connection without its closing frame; whatever
     // arrived is still everything there is.
-    end_stream(&app, &on_event, &calls);
+    finish(&app, calls)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1004,7 +922,7 @@ pub fn run() {
                 logger: Logger::default(),
                 mcp,
                 store,
-                inflight: Mutex::new(None),
+                runs: runs::Runs::new(),
             });
             log(app.handle(), "info", format!("app started; {summary}"));
             match mcp::read(&mcp::path()?) {
@@ -1031,23 +949,49 @@ pub fn run() {
             save_config,
             get_logs,
             open_logs,
-            chat,
-            request_preview,
-            stop_stream,
             list_chats,
-            load_chat,
-            save_chat,
-            rename_chat,
+            root_images,
             delete_chat,
+            runs::run_start,
+            runs::run_stop,
+            runs::run_allow,
+            runs::run_decline,
+            runs::run_state,
+            runs::runs_state,
+            runs::chat_set,
+            request_preview,
             mcp_servers,
             mcp_save_servers,
             mcp_test,
             mcp_tools,
-            mcp_call,
             manage_tools
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // Closing the window is not closing the app. The runs are the backend's
+        // now, and a turn halfway through does not depend on a window being there
+        // to watch it, so the window hides: the webview stays alive with it, the
+        // answer goes on arriving into it, and the dock is how it comes back.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| match event {
+            // What the dock icon does for a window that hides: shows it again.
+            // Every macOS app with one main window answers this, and this one has
+            // to, because closing the window must not be the end of a turn.
+            tauri::RunEvent::Reopen { .. } => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            _ => {}
+        });
 }
 
 #[cfg(test)]
