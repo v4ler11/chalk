@@ -10,7 +10,9 @@ import { Composer } from "./components/Composer";
 import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
 import { SectionNav } from "./components/SectionNav";
 import { ModeBar } from "./components/ModeBar";
+import { PinsView } from "./components/PinsView";
 import { SettingsView } from "./components/SettingsView";
+import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import type { Partial, UiMessage } from "./types";
 import "./App.css";
@@ -48,11 +50,12 @@ function App() {
   // The feed stays mounted while a thread or the settings are showing, hidden
   // rather than unmounted, so its scroll and its half-typed draft survive the
   // trip. `visibility`, not `display: none`, is what keeps its scroll position.
-  const channelVisible = !conversation.settingsView && view.kind === "channel";
+  const channelVisible = !conversation.settingsView && !conversation.pinsView && view.kind === "channel";
   // The thread's pane is the one that slides, and it is the visible pane whenever
   // a thread is the view and neither the JSON view nor the settings has the
   // panel.
-  const threadVisible = threadOpen && !conversation.settingsView && !conversation.jsonView;
+  const threadVisible =
+    threadOpen && !conversation.settingsView && !conversation.jsonView && !conversation.pinsView;
   // Both composers are mounted at once, and the shared ref must land on the one
   // on screen: the channel's takes this spare while it is hidden.
   const channelComposerRef = useRef<HTMLTextAreaElement>(null);
@@ -158,6 +161,16 @@ function App() {
             region, and nothing that belongs to a pane. */}
         <TitleBar />
 
+        {/* What there is to look at, one row each: the channel the threads rest
+            in, and the pins gathered out of all of them. The column is the
+            window's own rather than any pane's, so it is the same in both views
+            — and it is narrow, because a view is a word. */}
+        <Sidebar
+          pinsOpen={conversation.pinsView}
+          onChannel={conversation.showChannel}
+          onPins={() => conversation.showPins(true)}
+        />
+
         <main className="main">
           {/* The panes share one box so the feed can stay mounted under a thread
               or the settings: opening one and coming back must not rebuild the
@@ -221,6 +234,14 @@ function App() {
                   canAct={conversation.canAct}
                   onRegenerate={conversation.regenerate}
                   onEdit={conversation.startEdit}
+                  focus={
+                    threadVisible && view.kind === "thread" && conversation.focus?.chat === view.chat
+                      ? conversation.focus
+                      : null
+                  }
+                  onPin={conversation.pinMessage}
+                  onUnpin={conversation.unpinMessage}
+                  onDelete={conversation.deleteMessage}
                   awaiting={conversation.awaiting.length > 0 ? conversation.awaiting : null}
                   onRun={conversation.allow}
                   onDecline={conversation.decline}
@@ -246,6 +267,24 @@ function App() {
                 />
               </div>
             )}
+
+            {/* The pins take the pane the way the settings do: a bar naming them
+                and holding the way out, and the list under it. The view they were
+                opened over stays mounted beneath, so closing them comes back to
+                the transcript that was there. */}
+            {conversation.pinsView ? (
+              <div className="pane">
+                {nav(false)}
+                <ModeBar title="Pins" onClose={() => conversation.showPins(false)} />
+                <div className="pins-scroll">
+                  <PinsView
+                    pins={conversation.pins}
+                    author={conversation.author}
+                    onOpen={conversation.openPin}
+                  />
+                </div>
+              </div>
+            ) : null}
 
             {/* Settings and the JSON view take the pane, one at a time, and both
                 are the same shape: a bar naming the mode and holding the way out,

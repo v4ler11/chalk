@@ -23,17 +23,16 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  /* Only as wide as its controls, and wearing no colour of its own: the pane's
-     bar is what shows behind it, so the band across the top is one surface from
-     the controls to the far edge, and a pane that slides takes its own corner
-     with it. Its rule is the beginning of the line the nav draws across the rest
-     of the window. The sidebar used to be this column's body; the channel is the
-     window now, so this corner is all of the chrome there is. */
-  width: var(--rail-collapsed);
+  /* As wide as the column it stands on, and wearing that column's own colour: the
+     chrome is the sidebar's head rather than a corner of the pane's, and its
+     right edge is the border the sidebar carries on down — so the two read as one
+     surface from the lights to the far edge, and the pane's bar begins where the
+     column ends. */
+  width: var(--sidebar-w);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: transparent;
-  border-right: 1px solid transparent;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }

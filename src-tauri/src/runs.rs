@@ -743,6 +743,63 @@ fn mine(messages: &[Value]) -> usize {
         .saturating_sub(1)
 }
 
+/// Marks a message as pinned, and says when.
+///
+/// The two keys are the window's own rather than the model's: a request is
+/// assembled from the stored JSON by name, so what is written here rides in the
+/// row — where every key the wire message type has never heard of survives a
+/// round trip — and is never sent to a provider.
+fn set_pin(message: &mut Value, at: i64) -> Result<(), String> {
+    let Value::Object(fields) = message else {
+        return Err("that message is not one this transcript wrote".to_string());
+    };
+    fields.insert("pinned".to_string(), Value::Bool(true));
+    fields.insert("pinnedAt".to_string(), json!(at));
+    Ok(())
+}
+
+/// Takes the pin off a message, leaving nothing of it behind: `pinned: false`
+/// would be a third state to read where there are two.
+fn clear_pin(message: &mut Value) {
+    if let Value::Object(fields) = message {
+        fields.remove("pinned");
+        fields.remove("pinnedAt");
+    }
+}
+
+/// Cuts a message out of a transcript, and with it the tool results that
+/// answered its calls: a call and what answered it are one row of the transcript,
+/// so what is removed is the row rather than half of it.
+///
+/// What answers a call is found by the id the result carries, which is the same
+/// pairing the window draws the two by. A result whose call is gone is a row
+/// about nothing, and the provider would be sent one.
+fn cut_message(messages: &mut Vec<Value>, index: usize) -> Result<(), String> {
+    let message = messages.get(index).ok_or("that message is gone")?;
+    let asked: Vec<String> = message
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .map(|calls| {
+            calls
+                .iter()
+                .filter_map(|call| call.get("id").and_then(Value::as_str))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    messages.remove(index);
+    if !asked.is_empty() {
+        messages.retain(|message| {
+            message
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .map(|id| !asked.iter().any(|asked| asked == id))
+                .unwrap_or(true)
+        });
+    }
+    Ok(())
+}
+
 /// The calls a transcript ends on unanswered, which are the ones a chat opened
 /// again has to ask about.
 fn held_calls(messages: &[Value]) -> Vec<WireCall> {
@@ -1384,6 +1441,125 @@ pub(crate) fn chat_set(
         run.emit_changed(&app);
     }
     Ok(())
+}
+
+/// The write itself: the row is read, its transcript changed, and the row written
+/// whole again — which is how everything here is written, so a pin lands with
+/// everything else the row holds rather than beside it.
+///
+/// The moment the row already had is the one written back into it. What a pin
+/// changes is not when the thread was last answered, and a row that moved for one
+/// would tell the feed a thread had been answered when it had only been marked.
+///
+/// Refused while the chat is answering, for the reason `chat_set` is: the run
+/// writes the whole row on every commit, and a write from here would be a second
+/// writer halfway through one.
+fn edit_transcript(
+    store: &crate::store::Store,
+    runs: &Runs,
+    chat: i64,
+    edit: impl FnOnce(&mut Vec<Value>) -> Result<(), String>,
+) -> Result<crate::store::ChatRecord, String> {
+    if runs.get(chat).map(|run| run.busy()).unwrap_or(false) {
+        return Err("this thread is still answering".to_string());
+    }
+    let crate::store::ChatRecord {
+        id,
+        updated_at,
+        title,
+        model,
+        reasoning,
+        servers,
+        messages,
+    } = store.load(chat)?.ok_or("that thread is gone")?;
+    let mut messages = match messages {
+        Value::Array(messages) => messages,
+        other => vec![other],
+    };
+    edit(&mut messages)?;
+    let messages = Value::Array(messages);
+    store.save(
+        Some(id),
+        &title,
+        &model,
+        &reasoning,
+        servers.as_deref(),
+        &messages,
+        updated_at,
+    )?;
+    Ok(crate::store::ChatRecord {
+        id,
+        updated_at,
+        title,
+        model,
+        reasoning,
+        servers,
+        messages,
+    })
+}
+
+/// Changes one of a chat's messages, and tells the windows what the row now says.
+///
+/// A pin, an unpin and a delete are the same write, differing only in what they do
+/// to the message. A window opening the chat reads the run rather than the row, so
+/// a chat with a run takes the record over again — or the next read would answer
+/// with the transcript the run still held. What a closed window left waiting is
+/// read afresh with it: a call answered by what was just removed is not one to
+/// wait on, and neither is a call that was removed itself.
+fn write_transcript(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    chat: i64,
+    edit: impl FnOnce(&mut Vec<Value>) -> Result<(), String>,
+) -> Result<(), String> {
+    let store = state.store.as_ref().ok_or("the history is not open")?;
+    let record = edit_transcript(store, &state.runs, chat, edit)?;
+    if let Some(run) = state.runs.get(chat) {
+        run.adopt(record);
+        run.emit_changed(app);
+    }
+    Ok(())
+}
+
+/// Pins a message of a chat, which is what the channel's own menu offers on one.
+#[tauri::command]
+pub(crate) fn pin_message(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    index: usize,
+) -> Result<(), String> {
+    write_transcript(&app, &state, chat, |messages| {
+        let at = now();
+        let message = messages.get_mut(index).ok_or("that message is gone")?;
+        set_pin(message, at)
+    })
+}
+
+/// Takes the pin off a message, which is the same menu's other reading of it.
+#[tauri::command]
+pub(crate) fn unpin_message(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    index: usize,
+) -> Result<(), String> {
+    write_transcript(&app, &state, chat, |messages| {
+        let message = messages.get_mut(index).ok_or("that message is gone")?;
+        clear_pin(message);
+        Ok(())
+    })
+}
+
+/// Deletes a message from a chat, and with it the results of the calls it made.
+#[tauri::command]
+pub(crate) fn delete_message(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    index: usize,
+) -> Result<(), String> {
+    write_transcript(&app, &state, chat, |messages| cut_message(messages, index))
 }
 
 #[cfg(test)]

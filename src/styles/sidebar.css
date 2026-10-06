@@ -1,0 +1,58 @@
+/* ------------------------------------------------------------------ sidebar */
+
+/* The window's own column: what there is to look at, one row each. It takes its
+   measure from the chrome standing on its head — the lights, the drag region and
+   the column are one surface — and it is there in both views, since a thread is
+   opened *in* the channel rather than instead of it. */
+.sidebar {
+  flex: none;
+  width: var(--sidebar-w);
+  height: 100%;
+  padding: calc(var(--titlebar) + 12px) 12px 12px;
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+/* The views, one to a row. Nothing scrolls: two rows fit, and a column with a
+   scrollbar in it for two rows would be a column wearing a mistake. */
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-row svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.nav-row:hover {
+  background-color: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+/* Where the reader is: a view that is showing rather than a button that did
+   something, so it is marked by the ground and the ink both. */
+.nav-row.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}

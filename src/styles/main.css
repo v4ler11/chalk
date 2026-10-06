@@ -53,8 +53,8 @@
 
 /* A pane's own bar: the strip that drags the window wherever the window's
    controls are not, and whose rule is what separates the bar from the pane below
-   it. Its controls begin clear of the rail's own: 16 of padding, the three lights
-   at 52, and the 12 the rail puts between them. */
+   it. Nothing is reserved at its left: the window's controls are on the sidebar's
+   head now, and this bar begins where that column ends. */
 .chat-nav {
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@
   gap: 6px;
   flex: none;
   height: var(--titlebar);
-  padding: 0 24px 0 80px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   background-color: var(--bg);
   user-select: none;
@@ -421,6 +421,9 @@
    beside it already say that, and the reader reads down one column instead of
    following the words from side to side. */
 .msg {
+  /* Positioned so the menu the pointer opens hangs off this message's own
+     corner rather than off the transcript's. */
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -618,6 +621,129 @@
    hover, so it takes no click of its own. */
 .msg-action.usage {
   cursor: default;
+}
+
+/* What a message offers while the pointer is in it, in its own top-right corner:
+   pin it, or delete it. The corner is empty — the name and the time are at the
+   message's left — and the menu is taken out of the flow, so nothing under it
+   moves and the transcript is the same height whether or not it is drawn. */
+.msg-menu {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background-color: var(--bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+/* Drawn under the pointer, or while something in it has the caret: a control
+   nobody can see is not one to press, and the question that takes the two
+   buttons' place has to stay drawn while it is being read. */
+.msg.acting:hover .msg-menu,
+.msg.acting .msg-menu:focus-within {
+  opacity: 1;
+  visibility: visible;
+}
+
+.msg-menu-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.msg-menu-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* The pin that is already on the message: the colour says which way the press
+   goes, so the two readings of one button are told apart before it is pressed. */
+.msg-menu-action.on {
+  color: var(--pin);
+}
+
+.msg-menu-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The question the bin asks, in the menu's own place: two answers, rather than an
+   icon of the thing about to be removed. */
+.msg-menu-word {
+  padding: 5px 9px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.msg-menu-word:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.msg-menu-word.danger {
+  color: var(--danger);
+}
+
+.msg-menu-word.danger:hover {
+  background-color: var(--danger-bg);
+}
+
+/* A pinned message: the block a channel gives one — a ground of its own, a rule
+   down its left edge, and the pin named above the message rather than beside it.
+   The block is the row's own box, reaching a little past the text at the left with
+   the rule standing in that reach, so the words stay on the column every other
+   message is on and the reader's eye is not moved by the marking. */
+.msg.pinned {
+  position: relative;
+  margin-left: -14px;
+  padding: 22px 14px 4px;
+  border-left: 3px solid var(--pin);
+  border-radius: 0 10px 10px 0;
+  background-color: var(--pin-bg);
+}
+
+/* What the pin is, and whose it is, on the line above the name — the way a
+   channel says a message was pinned rather than leaving it to the colour. */
+.pin-label {
+  position: absolute;
+  top: 5px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+}
+
+.pin-label svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--pin);
 }
 
 .msg.error {

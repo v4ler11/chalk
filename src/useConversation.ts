@@ -7,6 +7,7 @@ import {
   type ChatSummary,
   type McpFailure,
   type McpServer,
+  type Pin,
   type ReasoningLevel,
   type RunStatus,
   type ToolCallRequest,
@@ -75,6 +76,14 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const [settingsView, setSettingsView] = useState(false);
   const [jsonView, setJsonView] = useState(false);
   const [jsonTab, setJsonTab] = useState<JsonTab>("history");
+  // The pins list, and every pinned message there is. Nothing pushes it: a pin is
+  // the window's own fact, so the window is the one that asks for it — when the
+  // list is drawn, and after anything that changes what is pinned.
+  const [pinsView, setPinsView] = useState(false);
+  const [pins, setPins] = useState<Pin[]>([]);
+  // Where the transcript is asked to land: the message a pin was opened from. The
+  // moment is what makes a second look at the same message a request again.
+  const [focus, setFocus] = useState<{ chat: number; index: number; at: number } | null>(null);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   // The prompt being rewritten in a thread's composer: where it sits, and what
   // it said. Sending the edit starts the turn over from there.
@@ -171,6 +180,21 @@ export function useConversation({ config, servers, failures, setError, setFollow
     return () => setChatsRefresher(null);
   }, [refreshChats]);
 
+  /** Reads the pins. Like the history, it is read after a change rather than
+   *  pushed: what a pin is is the window's own record of it. */
+  const refreshPins = useCallback(async () => {
+    try {
+      setPins(await api.listPins());
+    } catch (e) {
+      fail(e);
+    }
+  }, [fail]);
+  // The list on the way in: a pin made in an earlier session is one the window
+  // has not been told about, and the list is the only place it is read from.
+  useEffect(() => {
+    if (pinsView) void refreshPins();
+  }, [pinsView, refreshPins]);
+
   // The caret belongs in the composer: the window opens on the feed to write
   // into it, and a thread is opened to reach for its composer too. The same ref
   // is the field whichever composer is mounted, and while the JSON view or the
@@ -258,6 +282,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
   /** Opens a thread, whether or not it is already running: the run's snapshot is
    *  read and the answer arriving comes with it. */
   const openThread = useCallback((chat: number) => {
+    setPinsView(false);
     setSettingsView(false);
     setEditing(null);
     actions.current.setFollow(true);
@@ -270,8 +295,83 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const backToChannel = useCallback(() => {
     setEditing(null);
     setJsonView(false);
+    setPinsView(false);
+    setFocus(null);
     setView({ kind: "channel" });
   }, []);
+
+  /**
+   * The pins list, and the way to it.
+   *
+   * It takes the pane the way the settings and the JSON view do, so the feed is
+   * still under it and a chat opened from the list comes back to a channel that
+   * never moved.
+   */
+  const showPins = useCallback((on: boolean) => {
+    setPinsView(on);
+    if (on) {
+      setSettingsView(false);
+      setJsonView(false);
+    }
+  }, []);
+
+  /** The sidebar's Channel row: the feed, with the list put away. */
+  const showChannel = useCallback(() => {
+    setPinsView(false);
+    backToChannel();
+  }, [backToChannel]);
+
+  /**
+   * Goes to a pinned message: its thread is opened with the view left where the
+   * message is rather than pulled to the end of it, and the transcript is asked
+   * to land on the message itself — which is what the index in a pin is for.
+   */
+  const openPin = useCallback((pin: Pin) => {
+    setPinsView(false);
+    setSettingsView(false);
+    setJsonView(false);
+    setEditing(null);
+    actions.current.setFollow(false);
+    actions.current.setError("");
+    setView({ kind: "thread", chat: pin.chat });
+    setFocus({ chat: pin.chat, index: pin.index, at: Date.now() });
+    void loadRun(pin.chat).catch((e) => actions.current.setError(String(e)));
+  }, []);
+
+  /**
+   * A change to one message of the open thread: pinning it, unpinning it, or
+   * deleting it. Each is one write of the row, and each is refused while the
+   * thread is answering — a second writer halfway through a turn's own write
+   * would put the row back to where this window last saw it — so what is left to
+   * do afterwards is the same either way: read the transcript again, and the
+   * list with it.
+   */
+  const changeMessage = useCallback(
+    (write: (chat: number, index: number) => Promise<void>, index: number) => {
+      const chat = live.current.thread;
+      if (chat === null) return;
+      void write(chat, index)
+        .then(async () => {
+          await loadRun(chat);
+          await refreshPins();
+        })
+        .catch((e) => actions.current.setError(String(e)));
+    },
+    [refreshPins],
+  );
+
+  const pinMessage = useCallback(
+    (index: number) => changeMessage(api.pinMessage, index),
+    [changeMessage],
+  );
+  const unpinMessage = useCallback(
+    (index: number) => changeMessage(api.unpinMessage, index),
+    [changeMessage],
+  );
+  const deleteMessage = useCallback(
+    (index: number) => changeMessage(api.deleteMessage, index),
+    [changeMessage],
+  );
 
   /** The composer's send inside a thread. A prompt being rewritten cuts the
    *  transcript back to it first, so the turn starts over from the edit. */
@@ -367,6 +467,12 @@ export function useConversation({ config, servers, failures, setError, setFollow
     showJson,
     leaveSettings,
     closeJson,
+    pinsView,
+    pins,
+    showPins,
+    showChannel,
+    openPin,
+    focus,
     rows,
     messages,
     pending,
@@ -387,6 +493,9 @@ export function useConversation({ config, servers, failures, setError, setFollow
     submit,
     regenerate,
     startEdit,
+    pinMessage,
+    unpinMessage,
+    deleteMessage,
     stop,
     allow,
     decline,

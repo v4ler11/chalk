@@ -15,7 +15,7 @@ use tauri::{Emitter, Manager, State, WebviewWindowBuilder};
 
 use logging::{LogEntry, Logger};
 use settings::{AppConfig, Settings};
-use store::{ChatSummary, Store};
+use store::{ChatSummary, Pin, Store};
 use types::chat::{Chunk, Post, ReasoningConfig, StreamOptions, Tool};
 use types::chat_message::{Content, Message, Part, Role, ToolCallChunk};
 
@@ -281,6 +281,14 @@ fn get_logs(state: State<'_, AppState>) -> Vec<LogEntry> {
 #[tauri::command]
 fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
+}
+
+/// Every pinned message there is, newest pin first: what the sidebar's Pins row
+/// draws. Read from the transcripts themselves rather than from a table of its
+/// own, since the pin lives in the message it belongs to.
+#[tauri::command]
+fn list_pins(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<Pin>, String> {
+    history(&app, "could not list the pins", history_store(&state).and_then(|store| store.pins()))
 }
 
 /// The pictures a thread was opened with, for the row in the feed that stands
@@ -952,6 +960,7 @@ pub fn run() {
             list_chats,
             root_images,
             delete_chat,
+            list_pins,
             runs::run_start,
             runs::run_stop,
             runs::run_allow,
@@ -959,6 +968,9 @@ pub fn run() {
             runs::run_state,
             runs::runs_state,
             runs::chat_set,
+            runs::pin_message,
+            runs::unpin_message,
+            runs::delete_message,
             request_preview,
             mcp_servers,
             mcp_save_servers,

@@ -146,6 +146,32 @@ pub struct ChatRecord {
     pub messages: Value,
 }
 
+/// One pinned message, as the pins list draws it: the thread it sits in, where
+/// it sits there, and what it says.
+///
+/// The chat is named as well as numbered, and by the prompt the thread was
+/// opened with, so a row can say which thread a pin belongs to without the list
+/// having to hold the history as well.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Pin {
+    pub chat: i64,
+    /// Where the message sits in its thread's transcript, which is what opening
+    /// it again scrolls to.
+    pub index: usize,
+    /// Who wrote it — `user` or `assistant` — so a row wears the right mark.
+    pub role: String,
+    /// The prompt the thread was opened with, which is what a thread is named by.
+    pub root: String,
+    /// What it says, run together and cut to what a row holds. Its pictures and
+    /// the calls it asked for are not words and are not read here.
+    pub text: String,
+    /// Unix time in milliseconds the message was sent, where the transcript says.
+    pub sent_at: Option<i64>,
+    /// Unix time in milliseconds it was pinned, which is what the list orders by.
+    pub pinned_at: i64,
+}
+
 /// The prompt a thread was opened with, as the query a list is drawn from reads
 /// it: the first thing the user said. Read through `json_each` rather than at
 /// `$[0]`, since what a transcript starts with is the first *user* message and
@@ -259,6 +285,21 @@ fn prompt_text(content: &Value) -> String {
             .join(" "),
         _ => String::new(),
     }
+}
+
+/// How much of a pinned message a row of the pins list holds.
+const SNIPPET: usize = 200;
+
+/// What a message says, as a row of a list reads it: its words, their runs of
+/// whitespace closed up so that a paragraph is one line, and as much of them as a
+/// row shows — a list is read rather than scrolled sideways.
+fn snippet(message: &Value) -> String {
+    let said = prompt_text(message.get("content").unwrap_or(&Value::Null));
+    let flat = said.split_whitespace().collect::<Vec<&str>>().join(" ");
+    if flat.chars().count() <= SNIPPET {
+        return flat;
+    }
+    flat.chars().take(SNIPPET).collect::<String>() + "…"
 }
 
 /// The pictures a prompt carries, in the order it carries them: what a row in
@@ -382,6 +423,67 @@ impl Store {
         // which holds no picture to draw.
         let parsed: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
         Ok(prompt_images(&parsed))
+    }
+
+    /// Every pinned message there is, newest pin first.
+    ///
+    /// A pin is a key on the message it belongs to rather than a row of its own:
+    /// a transcript is written whole by whoever holds it, and a second copy of a
+    /// pin would be a second thing to keep true. Reading them therefore means
+    /// reading every transcript, which is what this does — the app's own history,
+    /// walked once, when the list is drawn.
+    ///
+    /// A transcript that cannot be read holds no pins to list, and it is not this
+    /// list's business to say so: the chat that owns it says it when it is opened.
+    pub fn pins(&self) -> Result<Vec<Pin>, String> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT id, root, messages FROM chats")
+            .map_err(err)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(err)?;
+        let mut pins = Vec::new();
+        for row in rows {
+            let (chat, root, raw) = row.map_err(err)?;
+            let Ok(Value::Array(messages)) = serde_json::from_str::<Value>(&raw) else {
+                continue;
+            };
+            for (index, message) in messages.iter().enumerate() {
+                if message.get("pinned").and_then(Value::as_bool) != Some(true) {
+                    continue;
+                }
+                pins.push(Pin {
+                    chat,
+                    index,
+                    role: message
+                        .get("role")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    root: root.clone(),
+                    text: snippet(message),
+                    sent_at: message.get("sentAt").and_then(Value::as_i64),
+                    pinned_at: message.get("pinnedAt").and_then(Value::as_i64).unwrap_or(0),
+                });
+            }
+        }
+        // Newest pin first, and where two were pinned in the same millisecond —
+        // a script, or two windows at once — the later thread and the later
+        // message in it, so the order is the same every time it is read.
+        pins.sort_by(|a, b| {
+            b.pinned_at
+                .cmp(&a.pinned_at)
+                .then(b.chat.cmp(&a.chat))
+                .then(b.index.cmp(&a.index))
+        });
+        Ok(pins)
     }
 
     /// One chat with its transcript, or `None` if the row is gone.

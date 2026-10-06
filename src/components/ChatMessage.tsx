@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
+import { Check, Copy, Hash, Pencil, Pin, PinOff, RefreshCw, Trash2 } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
 import { useCopy } from "../useCopy";
@@ -9,6 +9,7 @@ import { Hint } from "./Hint";
 import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
 import { MessageHead } from "./MessageHead";
+import { useDeleteQuestion } from "./RowDelete";
 import { Thinking } from "./Thinking";
 import { ToolCall } from "./ToolCall";
 
@@ -55,6 +56,11 @@ interface Props {
   when?: number;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
+  /** Marks the message as pinned, or takes the pin off it again. */
+  onPin: (index: number) => void;
+  onUnpin: (index: number) => void;
+  /** Cuts the message out of the transcript, once the question is answered. */
+  onDelete: (index: number) => void;
 }
 
 /**
@@ -104,9 +110,16 @@ export const ChatMessage = memo(function ChatMessage({
   when,
   onRegenerate,
   onEdit,
+  onPin,
+  onUnpin,
+  onDelete,
 }: Props) {
   const toolCalls = message.tool_calls ?? [];
   const content = contentText(message.content);
+  // Whether the pointer is being asked about deleting it: deleting asks first,
+  // the way every other list in the app does, and Escape gives the question up.
+  const { asking: confirming, ask, giveUp } = useDeleteQuestion();
+  const pinned = message.pinned === true;
   // The images a prompt carries, in the order they were attached. Their text,
   // if any, flattens into `content` as before.
   const images: string[] = [];
@@ -166,10 +179,59 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <div
+      data-index={index}
       className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}${
         head ? "" : " headless"
-      }`}
+      }${pinned ? " pinned" : ""}`}
     >
+      {/* Whether it is pinned, and whose pin it is, said above the message the
+          way a channel says it — rather than the message merely being tinted and
+          the reader left to work out why. */}
+      {pinned && (
+        <div className="pin-label">
+          <Pin />
+          <span>{author === "You" ? "Pinned by you" : `Pinned by ${author}`}</span>
+        </div>
+      )}
+      {/* What the message offers while the pointer is in it, at its own top-right
+          corner: pin it, or delete it. It is out of the flow, since it sits over
+          that corner where nothing else is, so the transcript is the same height
+          whether or not it is drawn. Deleting asks first — the same question
+          every other list here asks — and the question takes the menu's place,
+          since the row it belongs to is the thing being deleted. */}
+      {canAct && (
+        <div className="msg-menu">
+          {confirming ? (
+            <>
+              <button className="msg-menu-word danger" onClick={() => onDelete(index)}>
+                Delete
+              </button>
+              <button className="msg-menu-word" onClick={giveUp}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={`msg-menu-action${pinned ? " on" : ""}`}
+                title={pinned ? "Unpin message" : "Pin message"}
+                aria-label={pinned ? "Unpin message" : "Pin message"}
+                onClick={() => (pinned ? onUnpin(index) : onPin(index))}
+              >
+                {pinned ? <PinOff /> : <Pin />}
+              </button>
+              <button
+                className="msg-menu-action"
+                title="Delete message"
+                aria-label="Delete message"
+                onClick={ask}
+              >
+                <Trash2 />
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {/* The face of whoever wrote it, against the line their name sits on — the
           shape a channel draws a message in, so a thread and the feed read the
           same way. */}

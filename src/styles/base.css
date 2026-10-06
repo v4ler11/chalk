@@ -19,6 +19,11 @@
   --reasoning: #2563eb;
   --reasoning-bg: #e7eefc;
   --reasoning-divider: #b9cdf5;
+  /* A pinned message: the ground it is drawn on, and the rule down its left
+     edge. Warm where the rest of the palette is neutral, so a pin reads as a
+     mark on the message rather than as another kind of surface. */
+  --pin-bg: #fbf3e2;
+  --pin: #c8952f;
   /* The JSON view's token colours: a key, a string, a number, and the three
      literals. Chosen to read on either scheme's panel. */
   --json-key: #0b62c4;
@@ -43,11 +48,11 @@
      and the transcript so the two always agree. Then the fixed measure a prompt
      is set to. */
   --content-w: clamp(420px, 72vw, 1120px);
-  /* The rail: its own padding and its controls — the three lights, and the gap
-     after them — 16 + 52 + 16. Only as wide as what it holds, so the chrome
-     covers just the corner of the panel beneath it; the panel's own bar reserves
-     the same strip, and the two read as one band. */
-  --rail-collapsed: 84px;
+  /* The window's own column: the sidebar, and the chrome that stands on its
+     head — 16 of padding, the three lights at 52, and the 16 after them, with
+     room for a view's name beside them. Narrow on purpose: what a row says is one
+     word, and the window is for the transcript. */
+  --sidebar-w: 168px;
   --titlebar: 48px;
   /* How much the composer grows past its design size: nothing at the 820px
      minimum window, 2px of extra type by 1600px. */

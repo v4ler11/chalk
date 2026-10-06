@@ -31,6 +31,12 @@ interface Props {
   canAct: boolean;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
+  /** Where the transcript is asked to land, or `null`: the message a pin was
+   *  opened from, which is scrolled to instead of to the end. */
+  focus: { index: number; at: number } | null;
+  onPin: (index: number) => void;
+  onUnpin: (index: number) => void;
+  onDelete: (index: number) => void;
 }
 
 export function MessageList({
@@ -43,6 +49,10 @@ export function MessageList({
   canAct,
   onRegenerate,
   onEdit,
+  focus,
+  onPin,
+  onUnpin,
+  onDelete,
 }: Props) {
   const scrollRef = useRef<HTMLElement>(null);
   const pin = useFollowEnd({ ref: scrollRef, follow, onFollowChange });
@@ -271,6 +281,24 @@ export function MessageList({
     pin.pass();
   }, [messages, pending, error, follow]);
 
+  /**
+   * A message opened from the pins list: the transcript is brought to it rather
+   * than to its end, which is where the follow would put it the moment the
+   * thread's messages arrived. The request is answered once — the moment it was
+   * made tells one request from the next, so asking for the same message twice
+   * scrolls twice and a re-render scrolls not at all — and it is taken up only
+   * when the message is there to be scrolled to, since a thread opened on a chat
+   * the window has not read yet arrives a pass later than the request.
+   */
+  const landed = useRef(0);
+  useLayoutEffect(() => {
+    if (!focus || focus.at === landed.current) return;
+    const row = scrollRef.current?.querySelector(`[data-index="${focus.index}"]`);
+    if (!row) return;
+    landed.current = focus.at;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focus, messages]);
+
   return (
     <div className="messages-wrap">
       <main className="messages" ref={scrollRef} onScroll={pin.onScroll} onWheel={pin.onWheel}>
@@ -299,6 +327,9 @@ export function MessageList({
                 canAct={canAct}
                 onRegenerate={onRegenerate}
                 onEdit={onEdit}
+                onPin={onPin}
+                onUnpin={onUnpin}
+                onDelete={onDelete}
               />
               {/* Under the message that opened the thread: how much was said
                   after it, and the line that sets those replies apart from it. */}

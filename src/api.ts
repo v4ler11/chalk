@@ -15,6 +15,7 @@ import type {
   McpServer,
   McpTool,
   McpTools,
+  Pin,
   RequestPreview,
   RunSnapshot,
   RunSummary,
@@ -30,6 +31,26 @@ export const listChats = () => invoke<ChatSummary[]>("list_chats");
  *  were sent as. Asked for by the rows that have any, when they are drawn. */
 export const rootImages = (chat: number) => invoke<string[]>("root_images", { chat });
 export const deleteChat = (id: number) => invoke<void>("delete_chat", { id });
+
+/**
+ * Pins a message of a chat, or takes the pin off one. The pin is the window's own
+ * fact about the message, kept in the cell the transcript is stored in and never
+ * sent; what the backend does with it is one write of the row.
+ */
+export const pinMessage = (chat: number, index: number) => invoke<void>("pin_message", { chat, index });
+export const unpinMessage = (chat: number, index: number) =>
+  invoke<void>("unpin_message", { chat, index });
+
+/** Cuts a message out of a chat, and with it the results of the calls it made. */
+export const deleteMessage = (chat: number, index: number) =>
+  invoke<void>("delete_message", { chat, index });
+
+/**
+ * Every pinned message there is, newest pin first. Read from the transcripts
+ * themselves rather than from a table of its own, since a pin lives in the
+ * message it belongs to.
+ */
+export const listPins = () => invoke<Pin[]>("list_pins");
 
 /**
  * Sends a prompt into a chat, starting its turn in the backend.

@@ -199,6 +199,17 @@ export interface UiMessage extends ChatMessage {
    * before the app kept them — and on a response that reported none.
    */
   usage?: Usage;
+  /**
+   * Whether the message is pinned.
+   *
+   * The window's own fact rather than the model's, and it stays the window's: it
+   * is written into the row the transcript is kept in — where every key the
+   * backend's message type has never heard of survives a round trip — and a
+   * request is assembled from that row by name, so it is never sent.
+   */
+  pinned?: boolean;
+  /** Epoch ms the pin was made, which is what the pins list orders by. */
+  pinnedAt?: number;
 }
 
 /**
@@ -255,6 +266,32 @@ export interface RunSummary {
   mine: number;
   /** How many tool calls are waiting on the user. */
   awaiting: number;
+}
+
+/**
+ * One pinned message as the pins list draws it: the thread it sits in, where it
+ * sits there, and what it says.
+ *
+ * The thread is named as well as numbered, by the prompt it was opened with, so
+ * a row can say which thread a pin belongs to without the window holding the
+ * history to look it up in.
+ */
+export interface Pin {
+  /** The chat the message belongs to. */
+  chat: number;
+  /** Where the message sits in that chat's transcript, which is what opening it
+   *  again scrolls to. */
+  index: number;
+  /** Who wrote it, so a row wears the right mark. */
+  role: string;
+  /** The prompt the thread was opened with, which is what a thread is named by. */
+  root: string;
+  /** What it says, cut to what a row holds. */
+  text: string;
+  /** Epoch ms it was sent, where the transcript says. */
+  sentAt?: number;
+  /** Epoch ms it was pinned, which is what the list orders by. */
+  pinnedAt: number;
 }
 
 /**

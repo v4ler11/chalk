@@ -30,6 +30,12 @@ interface Props {
   canAct: boolean;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
+  /** Where the transcript is asked to land, or `null`: the message a pin was
+   *  opened from, which is scrolled to instead of to the end. */
+  focus: { index: number; at: number } | null;
+  onPin: (index: number) => void;
+  onUnpin: (index: number) => void;
+  onDelete: (index: number) => void;
   /** The calls a server asked to run, held above the composer until they are
    *  allowed or declined. */
   awaiting: ToolCallRequest[] | null;
@@ -77,6 +83,10 @@ export function ChatPane({
   canAct,
   onRegenerate,
   onEdit,
+  focus,
+  onPin,
+  onUnpin,
+  onDelete,
   awaiting,
   onRun,
   onDecline,
@@ -118,6 +128,10 @@ export function ChatPane({
           canAct={canAct}
           onRegenerate={onRegenerate}
           onEdit={onEdit}
+          focus={focus}
+          onPin={onPin}
+          onUnpin={onUnpin}
+          onDelete={onDelete}
         />
       </div>
 

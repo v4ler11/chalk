@@ -9,7 +9,10 @@ import { ChatMessage } from "./components/ChatMessage";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
+import { ModeBar } from "./components/ModeBar";
+import { PinsView } from "./components/PinsView";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { Sidebar } from "./components/Sidebar";
 import type {
   AppConfig,
   McpCost,
@@ -17,6 +20,7 @@ import type {
   McpServer,
   McpTool,
   Partial,
+  Pin,
   ReasoningLevel,
   UiMessage,
 } from "./types";
@@ -199,12 +203,59 @@ const TOOL_TURN: UiMessage[] = [
   },
 ];
 
+/** The pins the list is drawn from: one of the person's own, one of the model's,
+ *  one with more words than a row holds, and one written before the app kept the
+ *  time a message was sent. */
+const PINS: Pin[] = [
+  {
+    chat: 3,
+    index: 4,
+    role: "user",
+    root: "Which accounts paid the two electricity bills?",
+    text: "here are some pics",
+    sentAt: Date.now() - 5 * 60_000,
+    pinnedAt: Date.now() - 4 * 60_000,
+  },
+  {
+    chat: 3,
+    index: 5,
+    role: "assistant",
+    root: "Which accounts paid the two electricity bills?",
+    text: "Both bills went out of the house account, on the 3rd of March and the 6th of April.",
+    sentAt: Date.now() - 4 * 60_000,
+    pinnedAt: Date.now() - 3 * 60_000,
+  },
+  {
+    chat: 1,
+    index: 2,
+    role: "user",
+    root: "A prompt long enough that the row under it has to say less than all of it.",
+    text: " ".repeat(0) + "A message whose words run past the two lines a row of the list holds, so that what is shown is cut off rather than wrapped down the page and the row stays the height every other row is.",
+    sentAt: Date.now() - 26 * 60 * 60_000,
+    pinnedAt: Date.now() - 25 * 60 * 60_000,
+  },
+  {
+    chat: 2,
+    index: 0,
+    role: "user",
+    root: "An older thread",
+    text: "Pinned from a message the app never timed.",
+    pinnedAt: Date.now() - 3 * 24 * 60 * 60_000,
+  },
+];
+
 function Harness() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState<string | null>("An earlier prompt being rewritten");
   const [reasoning, setReasoning] = useState<ReasoningLevel>("");
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [events, setEvents] = useState<string[]>([]);
+  // Whether the one message the page draws on its own is pinned, which is set
+  // from the console so the pinned block can be looked at without a transcript.
+  const [pinned, setPinned] = useState(false);
+  // Which of the sidebar's two rows is the one showing, so the column and the
+  // list it opens can both be looked at.
+  const [pinsOpen, setPinsOpen] = useState(false);
   const [config, setConfig] = useState<AppConfig>({
     name: "Valerii",
     provider: "openrouter",
@@ -216,6 +267,9 @@ function Harness() {
 
   Object.assign(window, { events: () => events });
   Object.assign(window, { setEditing });
+  // The one message below is pinned from here, so the pinned block can be
+  // looked at without a transcript to pin it in.
+  Object.assign(window, { setPinned });
 
   const assistant: UiMessage = {
     role: "assistant",
@@ -244,7 +298,7 @@ function Harness() {
           />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
-              message={assistant}
+              message={pinned ? { ...assistant, pinned: true, pinnedAt: Date.now() } : assistant}
               index={0}
               author="valerii"
               head
@@ -256,6 +310,9 @@ function Harness() {
               canAct
               onRegenerate={() => {}}
               onEdit={() => {}}
+              onPin={() => setPinned(true)}
+              onUnpin={() => setPinned(false)}
+              onDelete={() => {}}
             />
           </div>
           {/* The transcript is a scrolling pane, and a page that stacks its
@@ -276,9 +333,42 @@ function Harness() {
               canAct
               onRegenerate={() => {}}
               onEdit={() => {}}
+              focus={null}
+              onPin={() => {}}
+              onUnpin={() => {}}
+              onDelete={() => {}}
             />
           </div>
           <ScrollHarness />
+          {/* The window's own column, and the list one of its rows opens: the
+              components the app draws, with fixtures standing in for the
+              backend, so the two can be looked at and driven here. */}
+          <div style={{ display: "flex", flex: "none", height: 340, minHeight: 0 }}>
+            <Sidebar
+              pinsOpen={pinsOpen}
+              onChannel={() => setPinsOpen(false)}
+              onPins={() => setPinsOpen(true)}
+            />
+            <main className="main">
+              <ModeBar title="Pins" onClose={() => setPinsOpen(false)} />
+              <div className="pins-scroll">
+                <PinsView
+                  pins={PINS}
+                  author="valerii"
+                  onOpen={(pin) => setEvents((e) => [...e, `open pin ${pin.chat}:${pin.index}`])}
+                />
+              </div>
+            </main>
+          </div>
+          {/* And with nothing pinned: what the list says before there is any. */}
+          <div style={{ display: "flex", flex: "none", height: 220, minHeight: 0 }}>
+            <main className="main">
+              <ModeBar title="Pins" onClose={() => {}} />
+              <div className="pins-scroll">
+                <PinsView pins={[]} author="valerii" onOpen={() => {}} />
+              </div>
+            </main>
+          </div>
           {/* The plain-JSON view over the same turn: the system prompt in front,
               then every message with its calls, results and timings. */}
           <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>
@@ -434,6 +524,10 @@ function ScrollHarness() {
         canAct
         onRegenerate={() => {}}
         onEdit={() => {}}
+        focus={null}
+        onPin={() => {}}
+        onUnpin={() => {}}
+        onDelete={() => {}}
       />
     </div>
   );

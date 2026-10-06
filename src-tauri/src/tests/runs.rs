@@ -238,3 +238,148 @@ fn a_run_answers_with_what_the_chat_was_set_to() {
     // with, not to what has been said.
     assert_eq!(snapshot.messages.len(), 1);
 }
+
+/// A pin is the window's own fact about a message, and it stays the window's: it
+/// is written into the row the transcript is kept in — which the store carries
+/// back whole, keys the wire type has never heard of and all — and a request is
+/// assembled from that row by name, so none of it can reach a provider.
+#[test]
+fn a_pin_is_kept_in_the_row_and_never_sent() {
+    let mut message = json!({ "role": "user", "content": "hi", "sentAt": 1_760_000_000_000i64 });
+
+    set_pin(&mut message, 1_760_000_500_000).unwrap();
+    assert_eq!(message["pinned"], json!(true));
+    assert_eq!(message["pinnedAt"], json!(1_760_000_500_000i64));
+
+    let sent =
+        serde_json::to_value(serde_json::from_value::<Message>(message.clone()).unwrap()).unwrap();
+    assert!(sent.get("pinned").is_none(), "{sent}");
+    assert!(sent.get("pinnedAt").is_none(), "{sent}");
+    assert_eq!(sent["content"], json!("hi"));
+
+    // Unpinning leaves nothing behind: `pinned: false` would be a third state to
+    // read where the transcript has two.
+    clear_pin(&mut message);
+    assert!(message.get("pinned").is_none(), "{message}");
+    assert!(message.get("pinnedAt").is_none(), "{message}");
+    assert_eq!(message["content"], json!("hi"));
+
+    // A message that is not an object is not one this transcript wrote, and it is
+    // refused rather than given a key it cannot hold.
+    assert!(set_pin(&mut json!("hi"), 1).is_err());
+}
+
+/// Cutting a message out of a transcript cuts the results of its calls with it: a
+/// call and what answered it are drawn as one row, so a transcript left holding
+/// half of one would have a row about nothing in it — and the provider would be
+/// sent it.
+#[test]
+fn cutting_a_message_takes_its_tool_results_with_it() {
+    let asked = |id: &str| {
+        json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{ "type": "function", "id": id, "function": { "name": "f", "arguments": "{}" } }]
+        })
+    };
+    let answered = |id: &str| json!({ "role": "tool", "tool_call_id": id, "name": "f", "content": "done", "ms": 412 });
+
+    let mut messages = vec![
+        json!({ "role": "user", "content": "hi" }),
+        asked("call_1"),
+        answered("call_1"),
+        json!({ "role": "assistant", "content": "there" }),
+    ];
+    cut_message(&mut messages, 1).unwrap();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert_eq!(messages[0]["role"], json!("user"));
+    assert_eq!(messages[1]["content"], json!("there"));
+
+    // A turn that stopped on its call: the call goes, and its answer with it.
+    let mut stopped = vec![json!({ "role": "user", "content": "hi" }), asked("call_2"), answered("call_2")];
+    cut_message(&mut stopped, 1).unwrap();
+    assert_eq!(stopped.len(), 1, "{stopped:?}");
+
+    // A result whose call is not in the transcript is a row of its own — a chat
+    // cut short — so deleting it deletes only it.
+    let mut stray = vec![json!({ "role": "user", "content": "hi" }), answered("call_9")];
+    cut_message(&mut stray, 1).unwrap();
+    assert_eq!(stray.len(), 1, "{stray:?}");
+
+    // Nothing at that place is refused, rather than quietly doing nothing.
+    assert!(cut_message(&mut stray, 9).is_err());
+}
+
+/// A change to one message is one write of the row, and the row is what the model
+/// is sent next time: pinning writes a key the wire has never heard of, deleting
+/// takes the message out with whatever answered its calls, and neither moves the
+/// moment the row already had.
+#[test]
+fn a_messages_change_is_written_into_the_row() {
+    let store = crate::store::Store::in_memory().unwrap();
+    let runs = Runs::new();
+    let chat = store
+        .save(
+            None,
+            "hi",
+            "test/model",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "hi" },
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{ "type": "function", "id": "call_1",
+                                     "function": { "name": "f", "arguments": "{}" } }]
+                },
+                { "role": "tool", "tool_call_id": "call_1", "name": "f", "content": "done" },
+            ]),
+            10,
+        )
+        .unwrap();
+
+    // Pinning: the row keeps the fact, and keeps the moment it already had — a
+    // pin is not an answer, and a row that moved for one would say a thread had
+    // been answered when it had only been marked.
+    edit_transcript(&store, &runs, chat.id, |messages| set_pin(&mut messages[0], 99)).unwrap();
+    let record = store.load(chat.id).unwrap().unwrap();
+    assert_eq!(record.messages[0]["pinned"], json!(true));
+    assert_eq!(record.messages[0]["pinnedAt"], json!(99));
+    assert_eq!(record.messages[0]["content"], json!("hi"));
+    assert_eq!(record.updated_at, 10, "the row keeps the moment it had");
+    assert_eq!(store.pins().unwrap().len(), 1);
+
+    // Unpinning takes the fact back out, and the list with it.
+    edit_transcript(&store, &runs, chat.id, |messages| {
+        clear_pin(&mut messages[0]);
+        Ok(())
+    })
+    .unwrap();
+    assert!(store.load(chat.id).unwrap().unwrap().messages[0]
+        .get("pinned")
+        .is_none());
+    assert!(store.pins().unwrap().is_empty());
+
+    // Deleting the round takes the result of its call with it, and what is left
+    // is the transcript the model would be sent.
+    edit_transcript(&store, &runs, chat.id, |messages| cut_message(messages, 1)).unwrap();
+    let record = store.load(chat.id).unwrap().unwrap();
+    assert_eq!(
+        record.messages.as_array().unwrap().len(),
+        1,
+        "{:?}",
+        record.messages
+    );
+
+    // A thread that is answering refuses the change: its run writes the whole row
+    // on every commit, so a write from here would be a second writer halfway
+    // through one — and nothing is written when it is refused.
+    let run = Run::new(chat.id);
+    run.state.lock().status = Status::Running;
+    runs.put(run);
+    assert!(edit_transcript(&store, &runs, chat.id, |messages| set_pin(&mut messages[0], 1)).is_err());
+    assert!(store.load(chat.id).unwrap().unwrap().messages[0]
+        .get("pinned")
+        .is_none());
+}

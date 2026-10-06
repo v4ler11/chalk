@@ -529,3 +529,79 @@ fn saving_a_deleted_chat_fails() {
         )
         .is_err());
 }
+
+/// A pin is a key on the message it belongs to rather than a row of its own, so
+/// listing the pins means walking the transcripts. What comes back is every
+/// pinned message there is, newest pin first, each with the thread it sits in,
+/// where it sits there, and as much of what it says as a row shows.
+#[test]
+fn pins_are_listed_newest_first_with_their_thread() {
+    let store = Store::in_memory().unwrap();
+    let long = "word ".repeat(80);
+    let older = store
+        .save(
+            None,
+            "first",
+            "test/model",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "what we pinned" },
+                {
+                    "role": "assistant",
+                    "content": "an answer",
+                    "pinned": true,
+                    "pinnedAt": 100,
+                    "sentAt": 1_760_000_000_000i64
+                },
+            ]),
+            10,
+        )
+        .unwrap();
+    let newer = store
+        .save(
+            None,
+            "second",
+            "test/model",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": long, "pinned": true, "pinnedAt": 200 },
+                { "role": "assistant", "content": "not pinned" },
+            ]),
+            20,
+        )
+        .unwrap();
+
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 2);
+
+    // Newest pin first, whichever thread it is in.
+    assert_eq!(pins[0].chat, newer.id);
+    assert_eq!(pins[0].index, 0);
+    assert_eq!(pins[0].role, "user");
+    assert_eq!(pins[0].root, long, "a thread is named by its first prompt");
+    assert_eq!(pins[0].pinned_at, 200);
+    // The moment is the window's own and only there when it has one: a prompt
+    // written before the app kept it is listed without being given a guess.
+    assert_eq!(pins[0].sent_at, None);
+
+    // A row holds a snippet rather than a paragraph: what is read is a row, and
+    // the rest of the message is one click away.
+    assert!(pins[0].text.ends_with('…'), "{}", pins[0].text);
+    assert_eq!(pins[0].text.chars().count(), SNIPPET + 1);
+
+    assert_eq!(pins[1].chat, older.id);
+    assert_eq!(pins[1].index, 1);
+    assert_eq!(pins[1].role, "assistant");
+    assert_eq!(pins[1].text, "an answer");
+    assert_eq!(pins[1].pinned_at, 100);
+    assert_eq!(pins[1].sent_at, Some(1_760_000_000_000));
+
+    // A chat with nothing marked contributes nothing, and a deleted chat takes
+    // its pins with it.
+    store.delete(older.id).unwrap();
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].chat, newer.id);
+}

@@ -5,8 +5,10 @@
  *
  *   base          the palette, the reset, and the window's own box
  *   shell         the window's chrome, and the chat panel's column
+ *   sidebar       the window's own column, and the views there are to look at
  *   row           the delete control at the end of a list row
  *   main          the chat panel: its nav, the modes, and the transcript
+ *   pins          the pinned messages, gathered out of every thread
  *   composer      the bar the prompt is typed in, and the approval card
  *   side-windows  the settings' own chrome, and the log window
  *   mcp-settings  the MCP page
@@ -14,8 +16,10 @@
  */
 @import "./styles/base.css";
 @import "./styles/shell.css";
+@import "./styles/sidebar.css";
 @import "./styles/row.css";
 @import "./styles/main.css";
+@import "./styles/pins.css";
 @import "./styles/composer.css";
 @import "./styles/side-windows.css";
 @import "./styles/mcp-settings.css";
