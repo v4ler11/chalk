@@ -21,10 +21,9 @@
     --reasoning: #6f9dff;
     --reasoning-bg: #1d2b4a;
     --reasoning-divider: #34507f;
-    /* The row under the pointer at night: the same value the reference paints a
-       hovered message with, which is a cool grey where the night scheme is warm,
-       so a row that lifts reads as lifted rather than as another surface. */
-    --row-hover: #232529;
+    /* The row under the pointer at night. A cool grey rather than one of the
+       scheme's own warm ones, so a row that lifts reads as lifted. */
+    --row-hover: #222529;
     --pin-bg: #302e26;
     --pin: #d4a44a;
     --json-key: #7fb0ff;

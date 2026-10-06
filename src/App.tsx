@@ -50,12 +50,15 @@ function App() {
   // The feed stays mounted while a thread or the settings are showing, hidden
   // rather than unmounted, so its scroll and its half-typed draft survive the
   // trip. `visibility`, not `display: none`, is what keeps its scroll position.
-  const channelVisible = !conversation.settingsView && !conversation.pinsView && view.kind === "channel";
-  // The thread's pane is the one that slides, and it is the visible pane whenever
-  // a thread is the view and neither the JSON view nor the settings has the
-  // panel.
-  const threadVisible =
-    threadOpen && !conversation.settingsView && !conversation.jsonView && !conversation.pinsView;
+  const channelVisible =
+    !conversation.settingsView && !conversation.pinsView && view.kind === "channel";
+  // The pane the sidebar's row chose is the one under everything else: the feed,
+  // or the pins. A thread is drawn over it, and the settings or the JSON view over
+  // that — so what the sidebar says stays true while a thread is open, which is
+  // what makes coming back out of one land where the reader left from.
+  const threadVisible = threadOpen && !conversation.settingsView && !conversation.jsonView;
+  const pinsVisible =
+    conversation.pinsView && !threadVisible && !conversation.settingsView;
   // Both composers are mounted at once, and the shared ref must land on the one
   // on screen: the channel's takes this spare while it is hidden.
   const channelComposerRef = useRef<HTMLTextAreaElement>(null);
@@ -215,6 +218,27 @@ function App() {
               />
             </div>
 
+            {/* The pane the sidebar's other row chose: the pinned threads, in the
+                channel's own rows. It is drawn *under* a thread rather than over
+                one — a thread opened from this list is a thread over the pins,
+                and coming back out of it lands here — so it stays mounted while
+                the thread is up, with its scroll where the reader left it. */}
+            {conversation.pinsView ? (
+              <div className={`pane${pinsVisible ? "" : " off"}`} inert={!pinsVisible}>
+                {nav(false)}
+                <ModeBar title="Pins" onClose={() => conversation.showPins(false)} />
+                <div className="pins-scroll">
+                  <PinsView
+                    rows={conversation.pinRows}
+                    author={conversation.author}
+                    onOpen={conversation.openThread}
+                    onDelete={conversation.deleteChat}
+                    onPin={conversation.pin}
+                  />
+                </div>
+              </div>
+            ) : null}
+
             {/* The thread's pane stays in the page while a mode stands in front
                 of it. The settings and the JSON view are panels over the chat
                 rather than another view of it, so nothing about the chat moves
@@ -260,26 +284,6 @@ function App() {
                 />
               </div>
             )}
-
-            {/* The pins take the pane the way the settings do: a bar naming them
-                and holding the way out, and the list under it. The view they were
-                opened over stays mounted beneath, so closing them comes back to
-                the transcript that was there. */}
-            {conversation.pinsView ? (
-              <div className="pane">
-                {nav(false)}
-                <ModeBar title="Pins" onClose={() => conversation.showPins(false)} />
-                <div className="pins-scroll">
-                  <PinsView
-                    rows={conversation.pinRows}
-                    author={conversation.author}
-                    onOpen={conversation.openThread}
-                    onDelete={conversation.deleteChat}
-                    onPin={conversation.pin}
-                  />
-                </div>
-              </div>
-            ) : null}
 
             {/* Settings and the JSON view take the pane, one at a time, and both
                 are the same shape: a bar naming the mode and holding the way out,

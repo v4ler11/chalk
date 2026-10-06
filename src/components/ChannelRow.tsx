@@ -85,6 +85,14 @@ interface Props {
   onDelete: (chat: number) => void;
   /** Pins the thread this row is, or takes the pin off it. */
   onPin: (chat: number, pinned: boolean) => void;
+  /**
+   * Whether a pinned row is drawn as pinned: the ground, the rule and the mark.
+   * The pins list says no — everything in it is pinned, and the reader is there
+   * because of it, so a row that repeated the fact in colour would be a row
+   * shouting what the pane it is in already says. The pill is unaffected: unpinning
+   * is the one thing that list is for.
+   */
+  markPinned?: boolean;
 }
 
 /**
@@ -105,11 +113,14 @@ interface Props {
  * fields, so a row whose fields are unchanged is left alone.
  */
 export const ChannelRowItem = memo(
-  function ChannelRowItem({ row, author, onOpen, onDelete, onPin }: Props) {
+  function ChannelRowItem({ row, author, onOpen, onDelete, onPin, markPinned = true }: Props) {
     const { asking, ask, giveUp } = useDeleteQuestion();
     const status = statusLine(row);
     const images = usePictures(row.chat, row.images);
-    const pinned = row.pinnedAt > 0;
+    // Whether the thread is pinned, which the pill reads; and whether that is
+    // drawn, which the pane the row is in decides.
+    const isPinned = row.pinnedAt > 0;
+    const pinned = isPinned && markPinned;
     // When the row's line is the reply count and not a run's state, the row is a
     // thread summary: what belongs under it is who answered and when. A row that
     // is thinking, waiting on the user or failed is saying something else, and
@@ -201,12 +212,12 @@ export const ChannelRowItem = memo(
           ) : (
             <>
               <button
-                className={`row-menu-action${pinned ? " on" : ""}`}
-                title={pinned ? `Unpin "${firstLine(row.root)}"` : `Pin "${firstLine(row.root)}"`}
-                aria-label={pinned ? "Unpin thread" : "Pin thread"}
-                onClick={() => onPin(row.chat, !pinned)}
+                className={`row-menu-action${isPinned ? " on" : ""}`}
+                title={isPinned ? `Unpin "${firstLine(row.root)}"` : `Pin "${firstLine(row.root)}"`}
+                aria-label={isPinned ? "Unpin thread" : "Pin thread"}
+                onClick={() => onPin(row.chat, !isPinned)}
               >
-                {pinned ? <PinOff /> : <Pin />}
+                {isPinned ? <PinOff /> : <Pin />}
               </button>
               <button
                 className="row-menu-action"
@@ -236,5 +247,6 @@ export const ChannelRowItem = memo(
     before.row.thinking === after.row.thinking &&
     before.row.awaiting === after.row.awaiting &&
     before.row.active === after.row.active &&
-    before.author === after.author,
+    before.author === after.author &&
+    before.markPinned === after.markPinned,
 );

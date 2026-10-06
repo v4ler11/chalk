@@ -275,10 +275,16 @@ export function useConversation({ config, servers, failures, setError, setFollow
     [refreshChats],
   );
 
-  /** Opens a thread, whether or not it is already running: the run's snapshot is
-   *  read and the answer arriving comes with it. */
+  /**
+   * Opens a thread, whether or not it is already running: the run's snapshot is
+   * read and the answer arriving comes with it.
+   *
+   * Which pane the thread is opened over is not decided here. The sidebar's row
+   * says whether that pane is the channel or the pins, and a thread opened from
+   * either is the same thread over the same pane — so opening one, and coming back
+   * out of it, leaves the reader where they were rather than in the feed.
+   */
   const openThread = useCallback((chat: number) => {
-    setPinsView(false);
     setSettingsView(false);
     setEditing(null);
     actions.current.setFollow(true);
@@ -287,11 +293,14 @@ export function useConversation({ config, servers, failures, setError, setFollow
     void loadRun(chat).catch((e) => actions.current.setError(String(e)));
   }, []);
 
-  /** Returns to the feed. The JSON view belongs to a thread, so it is left. */
+  /**
+   * Leaves a thread. What is left showing is the pane beneath it — the channel's
+   * feed, or the pins, whichever the sidebar's row says — and the JSON view, which
+   * belongs to a thread, is given up with it.
+   */
   const backToChannel = useCallback(() => {
     setEditing(null);
     setJsonView(false);
-    setPinsView(false);
     setView({ kind: "channel" });
   }, []);
 

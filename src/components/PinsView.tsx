@@ -19,10 +19,13 @@ interface Props {
  * A thread is what is pinned, and a thread is a row: so the list is the channel's
  * own rows with the unpinned ones left out, and it is drawn by the channel's own
  * component rather than by a second one. What a row says about a thread — its
- * face, its pin, its prompt, the pictures it carries, who has answered and when it
- * last was — is therefore the same here as there, and the pill at its corner is
- * the same pill: pinning is the one thing this list is about, so unpinning is
- * offered where the pin is read.
+ * face, its prompt, the pictures it carries, who has answered and when it last
+ * was — is therefore the same here as there.
+ *
+ * The one thing it is not given is the pin's own drawing: every row here is
+ * pinned, and the reader is in this pane because of it, so the ground, the rule
+ * and the mark would be the pane repeating itself forty times. The pill is still
+ * offered, since taking a pin off is what this list is for.
  */
 export function PinsView({ rows, author, onOpen, onDelete, onPin }: Props) {
   if (rows.length === 0) {
@@ -46,6 +49,7 @@ export function PinsView({ rows, author, onOpen, onDelete, onPin }: Props) {
           onOpen={onOpen}
           onDelete={onDelete}
           onPin={onPin}
+          markPinned={false}
         />
       ))}
     </div>
