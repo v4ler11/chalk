@@ -25,6 +25,10 @@ interface Props {
  * holding a click away. The card is the rest of the same fact — the arguments
  * laid out, and what came back — and stays shut until it is asked for, since a
  * tool's result is usually long and rarely read twice.
+ *
+ * A call the app answers itself — the loader, and the tools that manage the
+ * models and the servers — has no server on it, so it is shown as the tool it
+ * is, with no separator and no chip standing for a server that never took part.
  */
 export function ToolCall({ name, args, result }: Props) {
   const [open, setOpen] = useState(false);
@@ -38,7 +42,7 @@ export function ToolCall({ name, args, result }: Props) {
       <button
         className="tool-call-row"
         aria-expanded={open}
-        aria-label={`${server} ${tool} — ${open ? "hide" : "show"} the call`}
+        aria-label={`${server ? `${server} ` : ""}${tool} — ${open ? "hide" : "show"} the call`}
         onClick={() => setOpen((shown) => !shown)}
       >
         {/* The timer holds its place whether or not there is one: a call still
@@ -48,8 +52,12 @@ export function ToolCall({ name, args, result }: Props) {
           {result?.ms != null ? formatBrief(result.ms) : ""}
         </span>
         <span className="tool-call-id">
-          <span className="tool-call-server">{server}</span>
-          <span className="tool-call-sep">·</span>
+          {server !== "" && (
+            <>
+              <span className="tool-call-server">{server}</span>
+              <span className="tool-call-sep">·</span>
+            </>
+          )}
           <span className="tool-call-tool">{tool}</span>
         </span>
         {arguments_ !== undefined && <code className="tool-call-args">{oneLine(arguments_)}</code>}
@@ -59,11 +67,15 @@ export function ToolCall({ name, args, result }: Props) {
         <div className="tool-call-card">
           <div className="tool-call-head">
             {/* The server's own chip, then the tool as the server names it: the
-                two halves of the name a request carries. */}
-            <span className="tool-call-chip">
-              <Plug />
-              {server}
-            </span>
+                two halves of the name a request carries. A call the app answers
+                itself carries no server, so there is nothing to chip and the
+                head is the tool. */}
+            {server !== "" && (
+              <span className="tool-call-chip">
+                <Plug />
+                {server}
+              </span>
+            )}
             <span className="tool-call-tool">{tool}</span>
           </div>
           {arguments_ !== undefined && (
