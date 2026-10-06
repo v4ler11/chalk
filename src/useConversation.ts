@@ -428,6 +428,14 @@ export function useConversation({ config, servers, failures, setError, setFollow
   // The feed, oldest first: each thread's root message, with its run's phase.
   const rows = useMemo<ChannelRow[]>(() => buildRows(chats, runs, thread), [chats, runs, thread]);
 
+  // The same rows for the pins list, with the unpinned ones left out and the
+  // order its own: most recently pinned first, which is the order the store
+  // answers in and one the feed's own ordering would undo.
+  const pinRows = useMemo<ChannelRow[]>(
+    () => buildRows(pins, runs, thread).sort((a, b) => b.pinnedAt - a.pinnedAt),
+    [pins, runs, thread],
+  );
+
   return {
     view,
     settingsView,
@@ -439,7 +447,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
     leaveSettings,
     closeJson,
     pinsView,
-    pins,
+    pinRows,
     showPins,
     showChannel,
     openPin,

@@ -1,92 +1,27 @@
 /* --------------------------------------------------------------------- pins */
 
-/* The list takes the pane under its bar, and is the thing that scrolls: the bar
-   stays where it is while a long list goes past it. */
+/* The pane: the pinned threads, drawn by the channel's own rows — the same
+   component, so a thread looks the same here as in the feed. What this sheet
+   holds is only what the pane adds around them. */
 .pins-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: none;
   padding: 20px 24px 48px;
-}
-
-.pin-list {
+  /* The feed centres its list; so does this, around the same list. */
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: var(--content-w);
+  align-items: center;
+}
+
+/* The channel's list, in a pane rather than under the window's chrome: the strip
+   its own first row reserves for the chrome is not needed — this pane has a bar
+   of its own above it — and the centring the feed's column does is repeated,
+   since the list is not inside that column here. */
+.pins-scroll .channel-list {
+  padding-top: 0;
   margin: 0 auto;
-  padding: 0;
-  list-style: none;
-}
-
-/* One pinned message as a row: the face of whoever said it, then what they said —
-   and under it the thread it was said in, which is where the click goes. */
-.pin-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 10px;
-  background-color: transparent;
-  color: inherit;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pin-row:hover {
-  background-color: var(--sidebar);
-}
-
-.pin-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.pin-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.pin-who {
-  color: var(--text-primary);
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.pin-when {
-  color: var(--text-muted);
-  font-size: 12.5px;
-}
-
-/* The message itself, in the transcript's own face: what is read here is the
-   message rather than a note about it. Two lines of it, and the rest of it is
-   where the click goes. */
-.pin-said {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-family: var(--font-message);
-  font-size: 15px;
-  line-height: 1.45;
-  color: var(--text-primary);
-}
-
-/* The thread it was said in, which is where the reader is taken. */
-.pin-thread {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-  font-size: 12.5px;
 }
 
 /* Nothing pinned yet: the pin, and what to do about it. */

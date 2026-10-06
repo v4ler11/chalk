@@ -7,6 +7,11 @@ import { ImageStrip } from "./ImageStrip";
 import { MessageHead } from "./MessageHead";
 import { useDeleteQuestion } from "./RowDelete";
 import type { ChannelRow } from "../feed";
+// The row's own sheet, imported here rather than by the feed that draws it: two
+// panes draw these rows now — the channel and the pins list — and a row that
+// looked like itself in one of them and like something else in the other would be
+// two drawings of one idea.
+import "../styles/channel.css";
 
 export type { ChannelRow };
 

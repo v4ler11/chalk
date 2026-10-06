@@ -271,9 +271,11 @@ function App() {
                 <ModeBar title="Pins" onClose={() => conversation.showPins(false)} />
                 <div className="pins-scroll">
                   <PinsView
-                    pins={conversation.pins}
+                    rows={conversation.pinRows}
                     author={conversation.author}
-                    onOpen={conversation.openPin}
+                    onOpen={conversation.openThread}
+                    onDelete={conversation.deleteChat}
+                    onPin={conversation.pin}
                   />
                 </div>
               </div>

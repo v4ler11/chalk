@@ -98,16 +98,3 @@ export function lastReply(at: number, now: number = Date.now()): string {
   if (days === 1) return `Last reply yesterday at ${time(at)}`;
   return `Last reply on ${day(at)} at ${time(at)}`;
 }
-
-/**
- * When a thread was pinned: `Pinned today at 10:15 AM`, and the same three
- * shapes again. It is the one thing about a pin that the thread's own row does
- * not say — the feed marks it and names whose it is — so it is what the pins
- * list says about a thread that the feed does not.
- */
-export function pinned(at: number, now: number = Date.now()): string {
-  const days = daysBefore(at, now);
-  if (days <= 0) return `Pinned today at ${time(at)}`;
-  if (days === 1) return `Pinned yesterday at ${time(at)}`;
-  return `Pinned on ${day(at)} at ${time(at)}`;
-}

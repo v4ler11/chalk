@@ -9,7 +9,6 @@ import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
 import { period } from "../clock";
 import { useFollowEnd } from "../useFollowEnd";
 import { ToBottom } from "./ToBottom";
-import "../styles/channel.css";
 
 export type { ChannelRow } from "./ChannelRow";
 

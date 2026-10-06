@@ -15,6 +15,7 @@ import { PinsView } from "./components/PinsView";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import type { ChannelRow } from "./feed";
+import { buildRows } from "./feed";
 import type {
   AppConfig,
   ChatSummary,
@@ -28,9 +29,6 @@ import type {
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
-// The feed's own sheet is imported by the component that draws it, so a page that
-// draws a feed row without the channel has to ask for it the same way.
-import "./styles/channel.css";
 
 /** The servers the tools control can hold: two that answer, one that answers and
  *  is imported lazily, one that does not, and one the settings window has
@@ -304,6 +302,12 @@ const FEED: ChannelRow[] = [
   },
 ];
 
+/** The pinned threads the pins pane is drawn from, as the pane draws them: the
+ *  channel's own rows, most recently pinned first. */
+const PIN_ROWS: ChannelRow[] = buildRows(PINS, new Map(), null).sort(
+  (a, b) => b.pinnedAt - a.pinnedAt,
+);
+
 function Harness() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState<string | null>("An earlier prompt being rewritten");
@@ -428,9 +432,11 @@ function Harness() {
               <ModeBar title="Pins" onClose={() => setPinsOpen(false)} />
               <div className="pins-scroll">
                 <PinsView
-                  pins={PINS}
+                  rows={PIN_ROWS}
                   author="valerii"
-                  onOpen={(pin) => setEvents((e) => [...e, `open pin ${pin.id}`])}
+                  onOpen={(chat) => setEvents((e) => [...e, `open pin ${chat}`])}
+                  onDelete={(chat) => setEvents((e) => [...e, `delete ${chat}`])}
+                  onPin={(chat, pinned) => setEvents((e) => [...e, `${pinned ? "pin" : "unpin"} ${chat}`])}
                 />
               </div>
             </main>
@@ -440,7 +446,7 @@ function Harness() {
             <main className="main">
               <ModeBar title="Pins" onClose={() => {}} />
               <div className="pins-scroll">
-                <PinsView pins={[]} author="valerii" onOpen={() => {}} />
+                <PinsView rows={[]} author="valerii" onOpen={() => {}} onDelete={() => {}} onPin={() => {}} />
               </div>
             </main>
           </div>

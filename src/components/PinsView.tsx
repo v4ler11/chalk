@@ -1,28 +1,31 @@
 import { Pin } from "lucide-react";
-import { lastReply, pinned } from "../clock";
-import type { ChatSummary } from "../types";
-import { Avatar } from "./Avatar";
+import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
 
 interface Props {
-  /** The pinned threads, most recently pinned first. */
-  pins: ChatSummary[];
+  /** The pinned threads, most recently pinned first, as the channel's own rows:
+   *  the face, the mark, the prompt, the pictures and the line under it. */
+  rows: ChannelRow[];
   /** What the app calls the person using it: a thread is what they posted, so the
    *  mark and the name a row wears are theirs. */
   author: string;
-  /** Opens the thread a pin is. */
-  onOpen: (pin: ChatSummary) => void;
+  onOpen: (chat: number) => void;
+  onDelete: (chat: number) => void;
+  onPin: (chat: number, pinned: boolean) => void;
 }
 
 /**
- * The threads that are pinned, gathered out of the channel.
+ * The threads that are pinned, drawn exactly as the channel draws them.
  *
- * A thread is what is pinned, so a row here has the shape of the row it has in
- * the feed — the face of whoever posted it, their prompt, and how much has come
- * back — and the one thing added is when it was pinned, which is what this list is
- * ordered by and the only thing about a pin the feed does not already say.
+ * A thread is what is pinned, and a thread is a row: so the list is the channel's
+ * own rows with the unpinned ones left out, and it is drawn by the channel's own
+ * component rather than by a second one. What a row says about a thread — its
+ * face, its pin, its prompt, the pictures it carries, who has answered and when it
+ * last was — is therefore the same here as there, and the pill at its corner is
+ * the same pill: pinning is the one thing this list is about, so unpinning is
+ * offered where the pin is read.
  */
-export function PinsView({ pins, author, onOpen }: Props) {
-  if (pins.length === 0) {
+export function PinsView({ rows, author, onOpen, onDelete, onPin }: Props) {
+  if (rows.length === 0) {
     return (
       <div className="pins-empty">
         <Pin />
@@ -34,26 +37,17 @@ export function PinsView({ pins, author, onOpen }: Props) {
   }
 
   return (
-    <ul className="pin-list">
-      {pins.map((pin) => (
-        <li key={pin.id}>
-          <button className="pin-row" onClick={() => onOpen(pin)}>
-            <Avatar who={author} size={30} />
-            <span className="pin-body">
-              <span className="pin-head">
-                <span className="pin-who">{author}</span>
-                <span className="pin-when">{pinned(pin.pinnedAt)}</span>
-              </span>
-              <span className="pin-said">{pin.root === "" ? "(no words)" : pin.root}</span>
-              <span className="pin-thread">
-                {pin.replies === 0
-                  ? "no replies yet"
-                  : `${pin.replies === 1 ? "1 reply" : `${pin.replies} replies`} · ${lastReply(pin.updatedAt)}`}
-              </span>
-            </span>
-          </button>
-        </li>
+    <div className="channel-list">
+      {rows.map((row) => (
+        <ChannelRowItem
+          key={row.chat}
+          row={row}
+          author={author}
+          onOpen={onOpen}
+          onDelete={onDelete}
+          onPin={onPin}
+        />
       ))}
-    </ul>
+    </div>
   );
 }
