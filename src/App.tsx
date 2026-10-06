@@ -168,6 +168,7 @@ function App() {
               {nav(false)}
               <Channel
                 rows={conversation.rows}
+                author={conversation.author}
                 error={error}
                 onOpen={conversation.openThread}
                 onDelete={conversation.deleteChat}

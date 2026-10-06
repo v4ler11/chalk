@@ -1157,7 +1157,10 @@ pub(crate) async fn run_start(
             let servers = servers.clone().or(record.servers);
             // The row is written here, whole, rather than by the run a moment
             // later: what a post changes is what the row holds, and one write is
-            // one moment at which it is true.
+            // one moment at which it is true. That moment is what the record
+            // answers with, so the caller and the row agree on when this turn's
+            // prompt landed.
+            let at = now();
             store.save(
                 Some(chat),
                 &record.title,
@@ -1165,10 +1168,11 @@ pub(crate) async fn run_start(
                 &reasoning,
                 servers.as_deref(),
                 &messages,
-                now(),
+                at,
             )?;
             crate::store::ChatRecord {
                 id: chat,
+                updated_at: at,
                 title: record.title,
                 model,
                 reasoning,
@@ -1317,6 +1321,10 @@ pub(crate) fn chat_set(
     let model = model.unwrap_or(record.model);
     let reasoning = reasoning.unwrap_or(record.reasoning);
     let servers = servers.unwrap_or(record.servers);
+    // The row keeps the time it already had: what the channel says about a
+    // thread — when it was last answered — is about its messages, and a change
+    // of level or of servers is not one. `now` is what a save carries, so the
+    // row's own time is what goes back in.
     store.save(
         Some(chat),
         &record.title,
@@ -1324,7 +1332,7 @@ pub(crate) fn chat_set(
         &reasoning,
         servers.as_deref(),
         &record.messages,
-        now(),
+        record.updated_at,
     )?;
     if let Some(run) = state.runs.get(chat) {
         run.retune(model, reasoning, servers);

@@ -233,6 +233,7 @@ function Harness() {
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [config, setConfig] = useState<AppConfig>({
+    name: "Valerii",
     provider: "openrouter",
     endpoint: "",
     apiKey: "sk-or-v1-abcdefghijklmnop",

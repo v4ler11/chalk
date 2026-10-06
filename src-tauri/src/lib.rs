@@ -124,6 +124,8 @@ fn carried_over(app: &tauri::AppHandle) -> Option<Settings> {
     // Its one model becomes the list's first entry.
     let (provider, endpoint) = settings::provider_from(&old.api_base, String::new());
     Some(Settings {
+        // The file this came from had nowhere to say who the user was.
+        name: String::new(),
         provider,
         endpoint,
         api_key: old.api_key,

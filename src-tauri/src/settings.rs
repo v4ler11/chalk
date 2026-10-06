@@ -27,6 +27,12 @@ pub const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1";
 /// The settings as the file holds them: the keys are the file's keys.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Settings {
+    /// What the channel calls the person using it: their own words, drawn
+    /// beside what they post. Nothing in the app needs it to work, so a file
+    /// without one is a file that was written before there was anywhere to put
+    /// it, and reads as nothing at all.
+    #[serde(default)]
+    pub name: String,
     /// Where requests go: [`OPENROUTER`], or [`CUSTOM`].
     pub provider: String,
     /// Where a custom provider is: the base URL of an OpenAI-compatible API,
@@ -50,6 +56,7 @@ pub struct Settings {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    pub name: String,
     pub provider: String,
     pub endpoint: String,
     pub api_key: String,
@@ -60,6 +67,7 @@ pub struct AppConfig {
 impl From<&Settings> for AppConfig {
     fn from(settings: &Settings) -> Self {
         AppConfig {
+            name: settings.name.clone(),
             provider: settings.provider.clone(),
             endpoint: settings.endpoint.clone(),
             api_key: settings.api_key.clone(),
@@ -72,6 +80,7 @@ impl From<&Settings> for AppConfig {
 impl From<&AppConfig> for Settings {
     fn from(config: &AppConfig) -> Self {
         Settings {
+            name: config.name.clone(),
             provider: config.provider.clone(),
             endpoint: config.endpoint.clone(),
             api_key: config.api_key.clone(),
@@ -87,6 +96,10 @@ impl From<&AppConfig> for Settings {
 /// written in a shape this file no longer has — see [`provider_from`].
 #[derive(Deserialize)]
 struct Raw {
+    /// Absent from every file written before there was a name to hold, which is
+    /// no name rather than a file that cannot be read.
+    #[serde(default)]
+    name: String,
     #[serde(default)]
     provider: String,
     #[serde(default)]
@@ -161,6 +174,7 @@ impl From<Raw> for Settings {
         }
         let (provider, endpoint) = provider_from(&raw.provider, raw.endpoint);
         Settings {
+            name: raw.name,
             provider,
             endpoint,
             api_key: raw.api_key,
@@ -229,6 +243,9 @@ pub fn write_to(path: &Path, settings: &Settings) -> Result<(), String> {
 /// What a first run starts with.
 pub fn defaults() -> Settings {
     Settings {
+        // Nobody has said who they are yet, and the app does not need to know:
+        // the channel draws "You" until they write their name in.
+        name: String::new(),
         provider: OPENROUTER.into(),
         endpoint: String::new(),
         // No key ships with the app: the file is the user's, and the key in it

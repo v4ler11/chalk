@@ -33,6 +33,12 @@ export interface FeedRow {
   /** How many pictures the prompt was posted with, which is what tells the row
    *  whether it has any to draw — the pictures themselves are read by the row. */
   images: number;
+  /** The model this thread is with: who answered it, as its circle is drawn. */
+  model: string;
+  /** Unix time in ms of the thread's last message, which is when it was last
+   *  answered: what the channel says under the reply count. A change of model
+   *  or level leaves it where it was, since it is not a reply. */
+  updatedAt: number;
   status: RunStatus;
   /** True while the turn is going and no answer token has arrived yet. */
   thinking: boolean;
@@ -122,6 +128,10 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const model = thread === null ? composeModel || defaultModel(chats, config) : snapshot?.model ?? "";
   const reasoning = thread === null ? composeReasoning : asReasoningLevel(snapshot?.reasoning ?? "");
   const chosen = thread === null ? composeChosen : snapshot?.servers ?? null;
+  // What the channel calls the person writing: their own name, and "You" until
+  // they have written one — the feed draws it, with a circle of its initials,
+  // beside every prompt it holds.
+  const author = (config?.name ?? "").trim() || "You";
   // A prompt's actions are offered while its thread is not answering: a run that
   // is only queued still counts as answering, so its transcript is left alone.
   const canAct = thread !== null && status !== "running" && config !== null;
@@ -426,6 +436,8 @@ export function useConversation({ config, servers, failures, setError, setFollow
         createdAt: chat.createdAt,
         replies,
         images: chat.images,
+        model: chat.model,
+        updatedAt: chat.updatedAt,
         status,
         thinking,
         awaiting,
@@ -454,6 +466,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
     model,
     reasoning,
     chosen,
+    author,
     loaded,
     editing,
     setEditing,

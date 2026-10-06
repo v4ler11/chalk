@@ -156,6 +156,18 @@ function GeneralTab({
   return (
     <div className="settings">
       <label>
+        <span>Name</span>
+        <input
+          type="text"
+          value={config.name}
+          placeholder="You"
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </label>
+      <p className="settings-note">
+        Drawn beside what you post in the channel, with a circle of its initials.
+      </p>
+      <label>
         <span>Provider</span>
         <select
           value={config.provider}

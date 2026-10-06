@@ -125,6 +125,12 @@ pub struct ChatSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ChatRecord {
     pub id: i64,
+    /// Unix time in milliseconds of the row's last write, which is when its last
+    /// message landed. Not the row's own business but its caller's: a change of
+    /// model or level is written through the same save a message is, and a row
+    /// that moved for one of those would say a thread had been answered when it
+    /// had only been retuned.
+    pub updated_at: i64,
     pub title: String,
     pub model: String,
     pub reasoning: String,
@@ -359,23 +365,24 @@ impl Store {
         let conn = self.conn.lock();
         let row = conn
             .query_row(
-                "SELECT id, title, model, reasoning, servers, messages FROM chats WHERE id = ?1",
+                "SELECT id, updated_at, title, model, reasoning, servers, messages FROM chats WHERE id = ?1",
                 [id],
                 |row| {
                     Ok((
                         row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(1)?,
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
                         row.get::<_, String>(4)?,
                         row.get::<_, String>(5)?,
+                        row.get::<_, String>(6)?,
                     ))
                 },
             )
             .optional()
             .map_err(err)?;
 
-        row.map(|(id, title, model, reasoning, servers, raw)| {
+        row.map(|(id, updated_at, title, model, reasoning, servers, raw)| {
             let messages =
                 serde_json::from_str(&raw).map_err(|e| format!("chat {id} holds unreadable JSON: {e}"))?;
             // A chat that has never chosen holds an empty string, which is not
@@ -390,6 +397,7 @@ impl Store {
             };
             Ok(ChatRecord {
                 id,
+                updated_at,
                 title,
                 model,
                 reasoning,

@@ -92,6 +92,24 @@
   height: 16px;
 }
 
+/* A face in the channel — or wherever the window draws one: initials in a circle
+   of the colour their name hashes to. The colour arrives inline, since it is
+   derived from the name rather than chosen here, and white reads on all of them.
+   It takes no pointer and no selection: it is a mark, not a control. */
+.avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* A button's name and its shortcut, under the button and under the pointer. It
    is out of the flow so the rail is the same width whether or not it is drawn,
    and it takes no clicks, so it never stands between the pointer and the button

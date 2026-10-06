@@ -7,6 +7,12 @@
  */
 
 export interface AppConfig {
+  /**
+   * What the channel calls the person using it, drawn beside what they post.
+   * Empty until they write it in — a file written before there was anywhere to
+   * put it — and the channel says "You" instead.
+   */
+  name: string;
   /** `openrouter`, or `custom` — the two the settings' selector offers. */
   provider: string;
   /**

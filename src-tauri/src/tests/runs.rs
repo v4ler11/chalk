@@ -216,6 +216,7 @@ fn a_run_answers_with_what_the_chat_was_set_to() {
     let run = Run::new(1);
     run.adopt(crate::store::ChatRecord {
         id: 1,
+        updated_at: 1_700_000_000_000,
         title: "one".into(),
         model: "old/model".into(),
         reasoning: "low".into(),

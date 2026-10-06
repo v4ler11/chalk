@@ -17,6 +17,7 @@ fn temp(name: &str) -> PathBuf {
 fn settings_round_trip_through_a_file() {
     let path = temp("round-trip");
     let settings = Settings {
+        name: "Valerii".into(),
         provider: CUSTOM.into(),
         endpoint: "https://api.groq.com/openai/v1".into(),
         api_key: "sk-1".into(),
@@ -194,6 +195,7 @@ fn the_endpoint_is_the_one_the_provider_names() {
 #[test]
 fn the_config_crosses_to_the_frontend_in_its_own_spelling() {
     let settings = Settings {
+        name: "Valerii".into(),
         provider: OPENROUTER.into(),
         endpoint: String::new(),
         api_key: "sk-1".into(),
@@ -203,7 +205,7 @@ fn the_config_crosses_to_the_frontend_in_its_own_spelling() {
     let config = AppConfig::from(&settings);
     assert_eq!(
         serde_json::to_string(&config).unwrap(),
-        r#"{"provider":"openrouter","endpoint":"","apiKey":"sk-1","models":["some/model"],"systemPrompt":"Be brief."}"#
+        r#"{"name":"Valerii","provider":"openrouter","endpoint":"","apiKey":"sk-1","models":["some/model"],"systemPrompt":"Be brief."}"#
     );
     assert_eq!(Settings::from(&config), settings);
 }

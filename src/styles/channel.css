@@ -61,18 +61,33 @@
   background-color: var(--sidebar-hover);
 }
 
-/* The wave keeps its column on the message's first line rather than the row's
-   middle, and lifts to the reading colour under the pointer or on the open
-   thread, the way a history row's does. */
-.channel-row .chat-wave {
-  flex: none;
-  margin-top: 3px;
-  color: var(--text-muted);
+/* The face at the row's left sits against the line its name sits on rather than
+   the row's middle, the way a channel stands an avatar against a message. */
+.channel-row > .avatar {
+  margin-top: 1px;
 }
 
-.channel-row:hover .chat-wave,
-.channel-row.active .chat-wave {
+/* Who wrote it, and when: the name in the app's own voice, the time a step
+   behind it, both on the line the face sits against. */
+.channel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.channel-who {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+.channel-when {
+  flex: none;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 
 .channel-body {
@@ -150,14 +165,30 @@
   object-fit: cover;
 }
 
-/* What the run is doing: UI chrome, in the sans face and quiet by default. The
-   wait and the reply count are grey; a thread that needs the user wears the
-   app's blue, since it is the one state that is the user's move, and a failure
-   wears the error red. */
+/* What the run is doing, and — once it is done — who answered it and when: the
+   model's circle, the count of what it said, and the moment it last did. */
 .channel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-body);
   font-size: 12.5px;
   color: var(--text-muted);
+}
+
+/* The count is the louder of the two things on that line, the way a channel's is
+   — the circle and how many it wrote — with the moment it last did behind them.
+   A thread that needs the user wears the app's blue instead: that is the one
+   state that is the user's move, and the count is not one. A failure wears the
+   error red. */
+.channel-status.replies {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.channel-last {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 .channel-status.needs {

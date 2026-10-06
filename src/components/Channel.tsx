@@ -15,6 +15,9 @@ export type { ChannelRow } from "./ChannelRow";
 interface ChannelProps {
   /** The threads, oldest first: the feed draws them in that order. */
   rows: ChannelRow[];
+  /** What the channel calls the person whose prompts these are: their name out
+   *  of the settings, or "You" while they have not written one. */
+  author: string;
   /** What the channel has to say about the last thing that failed. */
   error: string;
   onOpen: (chat: number) => void;
@@ -46,6 +49,7 @@ const LAND_MS = 120;
 
 export function Channel({
   rows,
+  author,
   error,
   onOpen,
   onDelete,
@@ -187,7 +191,7 @@ export function Channel({
         >
           <div className="channel-list">
             {rows.map((row) => (
-              <ChannelRowItem key={row.chat} row={row} onOpen={onOpen} onDelete={onDelete} />
+              <ChannelRowItem key={row.chat} row={row} author={author} onOpen={onOpen} onDelete={onDelete} />
             ))}
           </div>
           {error !== "" && <div className="channel-error">Error: {error}</div>}
