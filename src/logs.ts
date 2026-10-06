@@ -5,11 +5,11 @@
  * `get_logs` command and streamed live as `app-log` events) and the webview
  * itself (console.error/warn, uncaught errors, unhandled rejections).
  *
- * A small external store so the log panel and the error badge can subscribe
- * without forcing the whole app to re-render on every entry.
+ * A small external store so the log panel can subscribe without forcing the whole
+ * app to re-render on every entry.
  */
 
-export type LogLevel = "info" | "warn" | "error";
+type LogLevel = "info" | "warn" | "error";
 
 export interface LogEntry {
   /** Backend-assigned sequence id; absent for webview-origin entries. */
@@ -31,7 +31,7 @@ function notify() {
 }
 
 /** Appends a webview-origin entry. */
-export function pushLog(level: LogLevel, message: string, timestamp = Date.now()) {
+function pushLog(level: LogLevel, message: string, timestamp = Date.now()) {
   entries = [...entries, { level, message, timestamp }].slice(-MAX);
   notify();
 }
@@ -65,13 +65,6 @@ export function subscribeLogs(listener: () => void): () => void {
   return () => {
     listeners.delete(listener);
   };
-}
-
-/** Number of `error`-level entries. */
-export function errorCount(): number {
-  let count = 0;
-  for (const entry of entries) if (entry.level === "error") count += 1;
-  return count;
 }
 
 /** Captures webview errors into the log store. Idempotent. */

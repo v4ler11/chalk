@@ -376,8 +376,7 @@
 }
 
 .key-hint kbd,
-.menu-option kbd,
-.sidebar-settings kbd {
+.menu-option kbd {
   padding: 1px 4px;
   border: 1px solid var(--border);
   border-radius: 5px;

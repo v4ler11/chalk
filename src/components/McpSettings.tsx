@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import * as api from "../api";
-import { RowDelete, useDeleteQuestion } from "./RowDelete";
 import type { McpReport, McpServer } from "../types";
-
-/** How long the receipt for a save stays on screen, in milliseconds. */
-const SAVED_MS = 2000;
+import { useSaved } from "../useSaved";
+import { AddButton, Checkbox, Field, IconButton } from "./Controls";
+import { RowDelete, useDeleteQuestion } from "./RowDelete";
 
 /**
  * One row of a header or environment list, while it is being edited. The wire
@@ -200,12 +198,13 @@ export function McpSettings() {
   // file yet.
   const [from, setFrom] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  // Set by a save and cleared by its own timer: a receipt for what just
+  // happened, not a state the page is in.
+  const { saved, flash } = useSaved();
   const [busy, setBusy] = useState(false);
   // What the last test answered. Selecting another server leaves it behind
   // rather than showing one server's tools under another's name.
   const [result, setResult] = useState<{ report?: McpReport; error?: string } | null>(null);
-  const savedTimer = useRef<number | null>(null);
 
   useEffect(() => {
     api
@@ -221,26 +220,7 @@ export function McpSettings() {
         setError(String(e));
         setServers([]);
       });
-    return stopSavedTimer;
   }, []);
-
-  /** Clears the receipt, and the timer that would have cleared it. */
-  function stopSavedTimer() {
-    if (savedTimer.current !== null) {
-      window.clearTimeout(savedTimer.current);
-      savedTimer.current = null;
-    }
-  }
-
-  /** Shows the receipt for a moment, then takes it away again. */
-  function flashSaved() {
-    stopSavedTimer();
-    setSaved(true);
-    savedTimer.current = window.setTimeout(() => {
-      savedTimer.current = null;
-      setSaved(false);
-    }, SAVED_MS);
-  }
 
   /** Opens one server of `list` for editing. */
   function show(list: Draft[], at: number) {
@@ -335,7 +315,7 @@ export function McpSettings() {
       setServers(list);
       show(list, from === null ? list.length - 1 : from);
       setError("");
-      flashSaved();
+      flash();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -361,10 +341,7 @@ export function McpSettings() {
   return (
     <div className="mcp">
       <div className="mcp-list">
-        <button className="mcp-new" onClick={add}>
-          <Plus />
-          New server
-        </button>
+        <AddButton className="mcp-new" label="New server" onClick={add} />
         {servers.map((server, i) => (
           // Keyed by the server rather than by its place: a row is a row about
           // *that* server, and the question it may be asking belongs to it — a
@@ -391,25 +368,17 @@ export function McpSettings() {
           </p>
         ) : (
           <>
-            <label className="mcp-check">
-              <input
-                type="checkbox"
-                checked={draft.enabled}
-                onChange={(e) => patch({ enabled: e.target.checked })}
-              />
-              <span className="mcp-check-box" aria-hidden="true">{draft.enabled && <Check />}</span>
-              <span>Enabled</span>
-            </label>
+            <Checkbox
+              checked={draft.enabled}
+              label="Enabled"
+              onChange={(enabled) => patch({ enabled })}
+            />
 
-            <label className="mcp-check">
-              <input
-                type="checkbox"
-                checked={draft.lazy}
-                onChange={(e) => patch({ lazy: e.target.checked })}
-              />
-              <span className="mcp-check-box" aria-hidden="true">{draft.lazy && <Check />}</span>
-              <span>Import lazily</span>
-            </label>
+            <Checkbox
+              checked={draft.lazy}
+              label="Import lazily"
+              onChange={(lazy) => patch({ lazy })}
+            />
             <p className="settings-note">
               Its tools are held back until the model asks for them with{" "}
               <code>load_lazy_mcp</code>; until then all it is given is the name and the
@@ -417,26 +386,23 @@ export function McpSettings() {
             </p>
 
             <div className="settings">
-              <label>
-                <span>Type</span>
+              <Field label="Type">
                 <select value={draft.type} onChange={(e) => setType(e.target.value as Draft["type"])}>
                   <option value="http">HTTP Server (http)</option>
                   <option value="stdio">stdio Server (stdio)</option>
                 </select>
-              </label>
+              </Field>
 
               <div className="settings-row">
-                <label>
-                  <span>Name</span>
+                <Field label="Name">
                   <input
                     type="text"
                     value={draft.name}
                     placeholder="What the list calls it"
                     onChange={(e) => patch({ name: e.target.value })}
                   />
-                </label>
-                <label>
-                  <span>ID</span>
+                </Field>
+                <Field label="ID">
                   <input
                     type="text"
                     value={draft.id}
@@ -444,22 +410,21 @@ export function McpSettings() {
                     spellCheck={false}
                     onChange={(e) => patch({ id: e.target.value })}
                   />
-                </label>
+                </Field>
               </div>
               <p className="settings-note">
                 Names the server in tool names — <code>&lt;id&gt;__&lt;tool&gt;</code> — so it is
                 one word.
               </p>
 
-              <label>
-                <span>Description</span>
+              <Field label="Description">
                 <input
                   type="text"
                   value={draft.description}
                   placeholder="What it holds, in the model's own words"
                   onChange={(e) => patch({ description: e.target.value })}
                 />
-              </label>
+              </Field>
               <p className="settings-note">
                 What the model reads where a lazy server's tools would be, and what it has to
                 decide by when it is loading one.
@@ -467,8 +432,7 @@ export function McpSettings() {
 
               {draft.type === "http" ? (
                 <>
-                  <label>
-                    <span>URL</span>
+                  <Field label="URL">
                     <input
                       type="text"
                       value={draft.url}
@@ -476,7 +440,7 @@ export function McpSettings() {
                       spellCheck={false}
                       onChange={(e) => patch({ url: e.target.value })}
                     />
-                  </label>
+                  </Field>
                   <KeyValueList
                     label="HTTP headers"
                     noun="header"
@@ -486,8 +450,7 @@ export function McpSettings() {
                 </>
               ) : (
                 <>
-                  <label>
-                    <span>Command</span>
+                  <Field label="Command">
                     <input
                       type="text"
                       value={draft.command}
@@ -495,9 +458,8 @@ export function McpSettings() {
                       spellCheck={false}
                       onChange={(e) => patch({ command: e.target.value })}
                     />
-                  </label>
-                  <label>
-                    <span>Args</span>
+                  </Field>
+                  <Field label="Args">
                     <textarea
                       rows={3}
                       value={draft.args}
@@ -505,7 +467,7 @@ export function McpSettings() {
                       spellCheck={false}
                       onChange={(e) => patch({ args: e.target.value })}
                     />
-                  </label>
+                  </Field>
                   <KeyValueList
                     label="Environment"
                     noun="variable"
@@ -530,7 +492,7 @@ export function McpSettings() {
               <button className="mcp-secondary" onClick={test} disabled={busy}>
                 Test server
               </button>
-              {saved && <span className="mcp-saved">Saved</span>}
+              {saved && <span className="saved">Saved</span>}
             </div>
           </>
         )}
@@ -560,14 +522,12 @@ function KeyValueList({
     <div className="mcp-kv">
       <div className="mcp-kv-head">
         <span className="settings-label">{label}</span>
-        <button
+        <AddButton
           className="mcp-kv-add"
           title={`Add ${noun}`}
-          aria-label={`Add ${noun}`}
+          ariaLabel={`Add ${noun}`}
           onClick={() => onChange([...rows, { key: "", value: "" }])}
-        >
-          <Plus />
-        </button>
+        />
       </div>
       {rows.map((row, i) => (
         <div className="mcp-kv-row" key={i}>
@@ -589,14 +549,12 @@ function KeyValueList({
               onChange(rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
             }
           />
-          <button
+          <IconButton
             className="mcp-kv-remove"
             title={`Remove ${row.key || "this row"}`}
-            aria-label={`Remove ${row.key || "this row"}`}
+            ariaLabel={`Remove ${row.key || "this row"}`}
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
-          >
-            <X />
-          </button>
+          />
         </div>
       ))}
     </div>

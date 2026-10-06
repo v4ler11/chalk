@@ -299,18 +299,6 @@ fn root_images(
     )
 }
 
-/// Renames a chat, leaving its transcript alone.
-#[tauri::command]
-fn rename_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64, title: String) -> Result<(), String> {
-    history(
-        &app,
-        "could not rename the chat",
-        history_store(&state).and_then(|store| store.rename(id, &title)),
-    )?;
-    log(&app, "info", format!("chat {id} renamed: {title}"));
-    Ok(())
-}
-
 /// Removes a chat and its transcript.
 #[tauri::command]
 fn delete_chat(app: tauri::AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
@@ -624,19 +612,6 @@ async fn mcp_tools(
         ),
     );
     Ok(tools)
-}
-
-/// Calls one tool, by the name the request offered it under. `args` is the
-/// arguments as the JSON text the model sent.
-#[tauri::command]
-async fn mcp_call(app: tauri::AppHandle, state: State<'_, AppState>, name: String, args: Option<String>) -> Result<mcp::Call, String> {
-    // The app's own tools are answered here rather than by a server: they are
-    // not a server's, and they manage this app — its settings, its servers —
-    // against the very files the settings window writes.
-    if manage::owns(&name) {
-        return manage::call(&app, &state, &name, args.as_deref()).await;
-    }
-    state.mcp.call(&name, args).await
 }
 
 /// The app's own tools, as the window offers them.
@@ -976,7 +951,6 @@ pub fn run() {
             open_logs,
             list_chats,
             root_images,
-            rename_chat,
             delete_chat,
             runs::run_start,
             runs::run_stop,
@@ -990,7 +964,6 @@ pub fn run() {
             mcp_save_servers,
             mcp_test,
             mcp_tools,
-            mcp_call,
             manage_tools
         ])
         // Closing the window is not closing the app. The runs are the backend's

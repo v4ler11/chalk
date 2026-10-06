@@ -87,19 +87,27 @@ function start(): Promise<void> {
   return startPromise;
 }
 
+/**
+ * One run's state as the store keeps it after a summary: a chat whose full
+ * snapshot is held keeps it, since only the snapshot carries the transcript and
+ * the calls waiting on the user, and a chat only heard of is the summary itself.
+ */
+function merged(chat: number, summary: RunSummary): RunEntry {
+  const entry = entries.get(chat);
+  if (entry?.kind === "snapshot") {
+    return {
+      kind: "snapshot",
+      snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
+    };
+  }
+  return { kind: "summary", summary };
+}
+
 /** Every run there is, merged into what is already known. */
 async function refresh(): Promise<void> {
   const summaries = await api.runsState();
   for (const summary of summaries) {
-    const entry = entries.get(summary.chat);
-    if (entry?.kind === "snapshot") {
-      entries.set(summary.chat, {
-        kind: "snapshot",
-        snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
-      });
-    } else {
-      entries.set(summary.chat, { kind: "summary", summary });
-    }
+    entries.set(summary.chat, merged(summary.chat, summary));
   }
   emit();
 }
@@ -109,19 +117,17 @@ async function refresh(): Promise<void> {
  * is what the feed draws, and the snapshot — for a chat whose thread is open —
  * is read again, since the calls waiting on the user and the transcript are only
  * in the full snapshot.
+ *
+ * The list is read again too, on every move rather than only for a chat it has
+ * never seen: what the run does not carry is the moment the thread was last
+ * answered, which is what the row says under its count, and a thread answered
+ * again would go on naming the first answer's time if the list were left alone.
  */
 function changed(summary: RunSummary) {
   const entry = entries.get(summary.chat);
-  if (entry?.kind === "snapshot") {
-    entries.set(summary.chat, {
-      kind: "snapshot",
-      snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
-    });
-    void loadRun(summary.chat).catch(() => {});
-  } else {
-    entries.set(summary.chat, { kind: "summary", summary });
-  }
-  if (!entry) refreshChats?.();
+  entries.set(summary.chat, merged(summary.chat, summary));
+  if (entry?.kind === "snapshot") void loadRun(summary.chat).catch(() => {});
+  refreshChats?.();
   emit();
 }
 

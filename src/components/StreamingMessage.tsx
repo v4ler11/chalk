@@ -1,9 +1,9 @@
 import type { Partial } from "../types";
 import { splitBlocks } from "../blocks";
-import { sentAt } from "../clock";
 import { useTicker } from "../timer";
 import { ASSISTANT, ASSISTANT_NAME, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { Markdown } from "./Markdown";
+import { MessageHead } from "./MessageHead";
 import { Thinking } from "./Thinking";
 
 interface Props {
@@ -49,10 +49,7 @@ export function StreamingMessage({ pending, head }: Props) {
       {head && <Avatar who={ASSISTANT} size={36} colour={ASSISTANT_TINT} />}
       <div className="bubble">
         {head && (
-          <div className="msg-head">
-            <span className="msg-who">{ASSISTANT_NAME}</span>
-            <span className="msg-when">{sentAt(pending.firstTokenAt ?? pending.startedAt)}</span>
-          </div>
+          <MessageHead who={ASSISTANT_NAME} when={pending.firstTokenAt ?? pending.startedAt} />
         )}
         <Thinking text={pending.reasoning} waitMs={waitMs} thinkingMs={thinkingMs} />
         {parts.map((text, i) => (

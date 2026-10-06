@@ -137,29 +137,6 @@
   margin-top: 1px;
 }
 
-/* Who wrote it, and when: the name in the app's own voice, the time a step
-   behind it, both on the line the face sits against. */
-.channel-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-.channel-who {
-  font-family: var(--font-body);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.channel-when {
-  flex: none;
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
 .channel-body {
   flex: 1;
   min-width: 0;

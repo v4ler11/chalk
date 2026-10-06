@@ -2,11 +2,13 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
-import { copyText } from "../clipboard";
-import { sentAt } from "../clock";
+import { useCopy } from "../useCopy";
 import { price } from "../money";
 import { ASSISTANT, ASSISTANT_NAME, ASSISTANT_TINT, Avatar } from "./Avatar";
+import { Hint } from "./Hint";
+import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
+import { MessageHead } from "./MessageHead";
 import { Thinking } from "./Thinking";
 import { ToolCall } from "./ToolCall";
 
@@ -113,7 +115,7 @@ export const ChatMessage = memo(function ChatMessage({
       if (part.type === "image_url") images.push(part.image_url.url);
     }
   }
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const usage = message.usage;
 
   // A prompt longer than the bubble shows is folded to its first lines, and the
@@ -152,12 +154,6 @@ export const ChatMessage = memo(function ChatMessage({
     );
   }
 
-  async function copy() {
-    if (!(await copyText(content))) return;
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-  }
-
   // A message that only asked for tools is a step in the turn rather than
   // something said: it is closed up against its neighbours, so a run of rounds
   // reads as one stretch of work instead of a stack of messages — and what it
@@ -185,12 +181,7 @@ export const ChatMessage = memo(function ChatMessage({
         />
       )}
       <div className="bubble">
-        {head && (
-          <div className="msg-head">
-            <span className="msg-who">{who}</span>
-            {when != null && <span className="msg-when">{sentAt(when)}</span>}
-          </div>
-        )}
+        {head && <MessageHead who={who} when={when} />}
         {thought && (
           <Thinking text={thought.text} waitMs={thought.waitMs} thinkingMs={thought.thinkingMs} />
         )}
@@ -211,11 +202,7 @@ export const ChatMessage = memo(function ChatMessage({
               </button>
             )}
             {images.length > 0 && (
-              <div className="msg-images">
-                {images.map((url, i) => (
-                  <img key={i} className="msg-image" src={url} alt={`Attached image ${i + 1}`} />
-                ))}
-              </div>
+              <ImageStrip images={images} wrapClass="msg-images" imageClass="msg-image" />
             )}
           </>
         ) : (
@@ -262,7 +249,7 @@ export const ChatMessage = memo(function ChatMessage({
               className="msg-action"
               title="Copy message"
               aria-label="Copy message"
-              onClick={copy}
+              onClick={() => copy(content)}
             >
               {copied ? <Check /> : <Copy />}
             </button>
@@ -292,14 +279,13 @@ export const ChatMessage = memo(function ChatMessage({
           // the message there is the calls under it.
           content !== "" && (
             <div className="msg-actions">
-              <div className="hint">
-                <button className="msg-action" aria-label="Copy message" onClick={copy}>
+              <Hint label="Copy message">
+                <button className="msg-action" aria-label="Copy message" onClick={() => copy(content)}>
                   {copied ? <Check /> : <Copy />}
                 </button>
-                <span className="key-hint">Copy message</span>
-              </div>
+              </Hint>
               {usage && (
-                <div className="hint">
+                <Hint label={consumption(usage)}>
                   <span
                     className="msg-action usage"
                     role="img"
@@ -307,8 +293,7 @@ export const ChatMessage = memo(function ChatMessage({
                   >
                     <Hash />
                   </span>
-                  <span className="key-hint">{consumption(usage)}</span>
-                </div>
+                </Hint>
               )}
             </div>
           )

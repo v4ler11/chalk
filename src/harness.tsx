@@ -3,17 +3,15 @@
 // driven, without the desktop window. Not part of the app: `harness.html` is the
 // only thing that loads it.
 import ReactDOM from "react-dom/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
 import { ChatMessage } from "./components/ChatMessage";
-import { Sidebar } from "./components/Sidebar";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import type {
   AppConfig,
-  ChatSummary,
   McpCost,
   McpFailure,
   McpServer,
@@ -24,33 +22,6 @@ import type {
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
-
-const CHATS: ChatSummary[] = [
-  {
-    id: 1,
-    title: "First chat",
-    updatedAt: Date.now(),
-    model: "m",
-    reasoning: "",
-    createdAt: Date.now() - 60_000,
-    root: "First chat",
-    replies: 3,
-    mine: 1,
-    images: 0,
-  },
-  {
-    id: 2,
-    title: "Second chat",
-    updatedAt: Date.now() - 10_000,
-    model: "m",
-    reasoning: "high",
-    createdAt: Date.now() - 20_000,
-    root: "Second chat",
-    replies: 1,
-    mine: 0,
-    images: 0,
-  },
-];
 
 /** The servers the tools control can hold: two that answer, one that answers and
  *  is imported lazily, one that does not, and one the settings window has
@@ -263,18 +234,7 @@ function Harness() {
   return (
     <div className="app">
       <div className="shell">
-        <div className="left open">
-          <Sidebar
-            open
-            chats={CHATS}
-            openId={1}
-            onOpen={(id) => setEvents((e) => [...e, `open ${id}`])}
-            onRename={(id) => setEvents((e) => [...e, `rename ${id}`])}
-            onDelete={(id) => setEvents((e) => [...e, `delete ${id}`])}
-            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
-          />
-        </div>
-        <main className="main">
+                <main className="main">
           <ChatNav
             thread
             onBack={() => setEvents((e) => [...e, "back"])}
@@ -401,6 +361,23 @@ function ScrollHarness() {
     usage: null,
   };
 
+  // The driver, reachable from a tool that drives the page from outside the
+  // page's own world — a script runner sees the same DOM and nothing of these
+  // globals — so it is asked through an event, and answers in the same event.
+  useEffect(() => {
+    function call(event: Event) {
+      const { fn, args } = (event as CustomEvent<{ fn: string; args: unknown[] }>).detail ?? {
+        fn: "",
+        args: [],
+      };
+      const asked = (window as unknown as Record<string, (...a: unknown[]) => unknown>)[fn];
+      const result = asked ? asked(...args) : null;
+      document.body.dataset.harness = JSON.stringify({ fn, result });
+    }
+    window.addEventListener("harness-call", call);
+    return () => window.removeEventListener("harness-call", call);
+  }, []);
+
   Object.assign(window, {
     grow: (words = 40) =>
       setMessages((all) => {
@@ -428,12 +405,12 @@ function ScrollHarness() {
     /** What a send does: the app asks for the view by setting follow. */
     followNow: (state = true) => setFollow(state),
     scrollState: () => {
-      const el = document.querySelector(".messages-wrap .messages") as HTMLElement;
+      const el = document.querySelector("#scroll-harness .messages") as HTMLElement;
       const bubble = el.lastElementChild?.getBoundingClientRect();
       const box = el.getBoundingClientRect();
       return {
         follow,
-        arrow: !!document.querySelector(".messages-wrap .to-bottom"),
+        arrow: !!document.querySelector("#scroll-harness .to-bottom"),
         atBottom: el.scrollHeight - el.scrollTop - el.clientHeight <= 16,
         top: Math.round(el.scrollTop),
         max: Math.round(el.scrollHeight - el.clientHeight),
@@ -444,6 +421,7 @@ function ScrollHarness() {
 
   return (
     <div
+      id="scroll-harness"
       style={{ display: "flex", flexDirection: "column", flex: "none", height: 420, minHeight: 0 }}
     >
       <MessageList

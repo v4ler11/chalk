@@ -488,21 +488,6 @@ impl Store {
         .map_err(err)
     }
 
-    /// Renames a chat, leaving its transcript alone.
-    ///
-    /// `updated_at` is left as it was: it orders the list and decides which day a
-    /// chat is filed under, and both follow the conversation, not its name.
-    pub fn rename(&self, id: i64, title: &str) -> Result<(), String> {
-        let conn = self.conn.lock();
-        let changed = conn
-            .execute("UPDATE chats SET title = ?2 WHERE id = ?1", params![id, title])
-            .map_err(err)?;
-        if changed == 0 {
-            return Err(format!("chat {id} is gone"));
-        }
-        Ok(())
-    }
-
     /// Removes a chat and its transcript.
     pub fn delete(&self, id: i64) -> Result<(), String> {
         let conn = self.conn.lock();

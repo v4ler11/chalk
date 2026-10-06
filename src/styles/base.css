@@ -41,10 +41,8 @@
 
   /* The content measure: a share of the window, capped, shared by the composer
      and the transcript so the two always agree. Then the fixed measure a prompt
-     is set to, and the sidebar width — which the title bar's rail matches so
-     their borders line up. */
+     is set to. */
   --content-w: clamp(420px, 72vw, 1120px);
-  --sidebar-w: 246px;
   /* The rail: its own padding and its controls — the three lights, and the gap
      after them — 16 + 52 + 16. Only as wide as what it holds, so the chrome
      covers just the corner of the panel beneath it; the panel's own bar reserves

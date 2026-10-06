@@ -497,23 +497,6 @@ fn listing_is_most_recently_written_first() {
 }
 
 #[test]
-fn rename_keeps_the_transcript() {
-    let store = Store::in_memory().unwrap();
-    let messages = json!([{ "role": "user", "content": "keep me" }]);
-    let chat = store
-        .save(None, "before", "test/model", "", None, &messages, 10)
-        .unwrap();
-
-    store.rename(chat.id, "after").unwrap();
-
-    let loaded = store.load(chat.id).unwrap().unwrap();
-    assert_eq!(loaded.title, "after");
-    assert_eq!(loaded.messages, messages);
-    // A rename is not activity: the chat keeps its place in the list.
-    assert_eq!(store.list().unwrap()[0].updated_at, 10);
-}
-
-#[test]
 fn delete_removes_the_chat() {
     let store = Store::in_memory().unwrap();
     let chat = store

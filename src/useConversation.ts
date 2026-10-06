@@ -13,8 +13,8 @@ import {
   type UiMessage,
 } from "./types";
 import * as api from "./api";
-import { offeredServers } from "./components/ServersMenu";
-import { waiting } from "./lazy";
+import { buildRows, type ChannelRow } from "./feed";
+import { unreachableServers } from "./lazy";
 import { defaultModel } from "./conversation";
 import { forget, loadRun, setChatsRefresher } from "./runs";
 import { useRuns } from "./useRuns";
@@ -22,34 +22,7 @@ import type { JsonTab } from "./components/JsonView";
 
 /** Which of the window's two views is showing: the channel's feed of threads,
  *  or one thread's own transcript. */
-export type View = { kind: "channel" } | { kind: "thread"; chat: number };
-
-/** One row of the channel's feed: a thread's root message, and where its run is. */
-export interface FeedRow {
-  chat: number;
-  root: string;
-  createdAt: number;
-  replies: number;
-  /** How many of those the user wrote, the prompt that opened the thread not
-   *  among them: it says whether they are a participant in it. */
-  mine: number;
-  /** How many pictures the prompt was posted with, which is what tells the row
-   *  whether it has any to draw — the pictures themselves are read by the row. */
-  images: number;
-  /** The model this thread is with: who answered it, as its circle is drawn. */
-  model: string;
-  /** Unix time in ms of the thread's last message, which is when it was last
-   *  answered: what the channel says under the reply count. A change of model
-   *  or level leaves it where it was, since it is not a reply. */
-  updatedAt: number;
-  status: RunStatus;
-  /** True while the turn is going and no answer token has arrived yet. */
-  thinking: boolean;
-  /** How many tool calls are waiting on the user. */
-  awaiting: number;
-  /** Whether this row's thread is the one open. */
-  active: boolean;
-}
+type View = { kind: "channel" } | { kind: "thread"; chat: number };
 
 interface Options {
   config: AppConfig | null;
@@ -140,19 +113,8 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const canAct = thread !== null && status !== "running" && config !== null;
 
   // A server the open thread calls and nobody can reach is worth saying: its
-  // tools are absent from the request, and an absence is not a reason. A lazy
-  // server not yet loaded is outside this, since none of what it holds is in the
-  // request by design.
-  const unloaded = new Set(
-    waiting({ servers, chosen, loaded, failed: failures.map((failure) => failure.server) }).map(
-      (server) => server.id,
-    ),
-  );
-  const unreachable = failures
-    .filter((failure) => !unloaded.has(failure.server))
-    .filter((failure) => offeredServers(servers, chosen).includes(failure.server))
-    .map((failure) => `${failure.name || failure.server}: ${failure.message}`)
-    .join("\n");
+  // tools are absent from the request, and an absence is not a reason.
+  const unreachable = unreachableServers(servers, chosen, loaded, failures);
 
   const live = useRef<Live>({
     config,
@@ -349,33 +311,20 @@ export function useConversation({ config, servers, failures, setError, setFollow
     setEditing({ index, text: contentText(message.content) });
   }, []);
 
-  const stop = useCallback(() => {
+  /**
+   * What the run controls do: stop, allow and decline are one command each to
+   * the backend for the open thread, with the same plumbing — nothing to send
+   * when no thread is open, and the failure reported where every other failure
+   * is. Each is named for what it does rather than left as a command.
+   */
+  const runCommand = useCallback((send: (chat: number) => Promise<void>) => {
     const chat = live.current.thread;
     if (chat === null) return;
-    void api.runStop(chat).catch((e) => actions.current.setError(String(e)));
+    void send(chat).catch((e) => actions.current.setError(String(e)));
   }, []);
-  const allow = useCallback(() => {
-    const chat = live.current.thread;
-    if (chat === null) return;
-    void api.runAllow(chat).catch((e) => actions.current.setError(String(e)));
-  }, []);
-  const decline = useCallback(() => {
-    const chat = live.current.thread;
-    if (chat === null) return;
-    void api.runDecline(chat).catch((e) => actions.current.setError(String(e)));
-  }, []);
-
-  const renameChat = useCallback(
-    async (id: number, title: string) => {
-      try {
-        await api.renameChat(id, title);
-        setChats((all) => all.map((chat) => (chat.id === id ? { ...chat, title } : chat)));
-      } catch (e) {
-        fail(e);
-      }
-    },
-    [fail],
-  );
+  const stop = useCallback(() => runCommand(api.runStop), [runCommand]);
+  const allow = useCallback(() => runCommand(api.runAllow), [runCommand]);
+  const decline = useCallback(() => runCommand(api.runDecline), [runCommand]);
 
   const deleteChat = useCallback(
     async (id: number) => {
@@ -406,49 +355,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const closeJson = useCallback(() => setJsonView(false), []);
 
   // The feed, oldest first: each thread's root message, with its run's phase.
-  // The phase comes from `status` and `thinking`, never from `replies`, which
-  // stays still for the whole of a run and only moves when the answer lands.
-  const rows = useMemo<FeedRow[]>(() => {
-    const ordered = [...chats].sort((a, b) => a.createdAt - b.createdAt);
-    return ordered.map((chat) => {
-      const run = runs.get(chat.id);
-      const status: RunStatus =
-        run?.kind === "snapshot" ? run.snapshot.status : run?.kind === "summary" ? run.summary.status : "idle";
-      const thinking =
-        run?.kind === "snapshot"
-          ? run.snapshot.status === "running" &&
-            (run.snapshot.partial === null || run.snapshot.partial.thinking)
-          : run?.kind === "summary"
-            ? run.summary.thinking
-            : false;
-      const awaiting =
-        run?.kind === "snapshot"
-          ? run.snapshot.awaiting.length
-          : run?.kind === "summary"
-            ? run.summary.awaiting
-            : 0;
-      const replies =
-        run?.kind === "snapshot"
-          ? run.snapshot.replies
-          : run?.kind === "summary"
-            ? run.summary.replies
-            : chat.replies;
-      return {
-        chat: chat.id,
-        root: chat.root,
-        createdAt: chat.createdAt,
-        replies,
-        mine: chat.mine,
-        images: chat.images,
-        model: chat.model,
-        updatedAt: chat.updatedAt,
-        status,
-        thinking,
-        awaiting,
-        active: thread === chat.id,
-      };
-    });
-  }, [chats, runs, thread]);
+  const rows = useMemo<ChannelRow[]>(() => buildRows(chats, runs, thread), [chats, runs, thread]);
 
   return {
     view,
@@ -483,7 +390,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     stop,
     allow,
     decline,
-    renameChat,
     deleteChat,
     setModel,
     setReasoning,

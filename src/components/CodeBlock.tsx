@@ -1,9 +1,9 @@
-import { memo, useState } from "react";
+import { memo } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import { Check, Copy } from "lucide-react";
 import type { Element, ElementContent } from "hast";
 import type { ExtraProps } from "react-markdown";
-import { copyText } from "../clipboard";
+import { useCopy } from "../useCopy";
 
 /** What the fence said the block was written in, if it said anything. */
 function languageOf(node: Element | undefined): string | null {
@@ -51,15 +51,9 @@ export const CodeBlock = memo(function CodeBlock({
   children,
   ...rest
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   const language = languageOf(node);
   const text = textOf(node);
-
-  async function copy() {
-    if (!(await copyText(text.replace(/\n$/, "")))) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
 
   return (
     <div className="code-block">
@@ -71,7 +65,7 @@ export const CodeBlock = memo(function CodeBlock({
           className="code-copy"
           title="Copy code"
           aria-label="Copy code"
-          onClick={copy}
+          onClick={() => copy(text.replace(/\n$/, ""))}
         >
           {copied ? <Check className="icon" /> : <Copy className="icon" />}
         </button>

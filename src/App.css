@@ -5,7 +5,7 @@
  *
  *   base          the palette, the reset, and the window's own box
  *   shell         the window's chrome, and the chat panel's column
- *   sidebar       the history down the left
+ *   row           the delete control at the end of a list row
  *   main          the chat panel: its nav, the modes, and the transcript
  *   composer      the bar the prompt is typed in, and the approval card
  *   side-windows  the settings' own chrome, and the log window
@@ -14,7 +14,7 @@
  */
 @import "./styles/base.css";
 @import "./styles/shell.css";
-@import "./styles/sidebar.css";
+@import "./styles/row.css";
 @import "./styles/main.css";
 @import "./styles/composer.css";
 @import "./styles/side-windows.css";
