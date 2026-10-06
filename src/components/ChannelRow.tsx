@@ -157,42 +157,49 @@ export const ChannelRowItem = memo(
               ) : undefined
             }
           />
-          {asking ? (
-            // While the question is up the row keeps its face and its place, and
-            // what there is to read is the question rather than the message.
-            <span className="channel-root">Delete this thread?</span>
-          ) : (
+          {/* The message and the question stand in the same box: the message is
+              what the row's height is made of, so it keeps its place — hidden,
+              and with the click off it — while the question is drawn over the box
+              it keeps. Asking a row anything moves nothing in it. */}
+          <div className="channel-message">
             <button className="channel-open" onClick={() => onOpen(row.chat)}>
               <span className="channel-root">{row.root}</span>
             </button>
-          )}
-          {!asking && images.length > 0 && (
-            <ImageStrip images={images} wrapClass="channel-images" imageClass="channel-image" />
+            {asking && <span className="channel-ask">Delete this thread?</span>}
+          </div>
+          {row.images > 0 && (
+            <ImageStrip
+              images={images}
+              count={row.images}
+              wrapClass="channel-images"
+              imageClass="channel-image"
+            />
           )}
           {/* And under it the line about the thread: who answered, the count of
               what was said, and the moment it last was. It is drawn whether or
               not it has anything to say — it holds its height, so a first answer
-              landing does not grow the row under the reader. */}
-          {!asking && (
-            <div className={`channel-status ${status.tone}`}>
-              {answered && (
-                <span className="channel-participants">
-                  {/* The prompt that opened the thread is the thread, not a reply
-                      to it, so posting it does not make the person a participant
-                      — answering it does. */}
-                  {row.mine > 0 && <Avatar who={author} size={18} label={author} />}
-                  <Avatar
-                    who={ASSISTANT}
-                    colour={ASSISTANT_TINT}
-                    size={18}
-                    label={row.model === "" ? "Answered" : `Answered by ${row.model}`}
-                  />
-                </span>
-              )}
-              {status.text !== "" && <span>{status.text}</span>}
-              {answered && <span className="channel-last">{lastReply(row.updatedAt, now)}</span>}
-            </div>
-          )}
+              landing does not grow the row under the reader — and it is drawn
+              whether or not the question is up, for the same reason. Its tone
+              classes are named apart from every other block's, so a rule written
+              for one of those cannot reach in here and move the line. */}
+          <div className={`channel-status tone-${status.tone}`}>
+            {answered && (
+              <span className="channel-participants">
+                {/* The prompt that opened the thread is the thread, not a reply
+                    to it, so posting it does not make the person a participant
+                    — answering it does. */}
+                {row.mine > 0 && <Avatar who={author} size={18} label={author} />}
+                <Avatar
+                  who={ASSISTANT}
+                  colour={ASSISTANT_TINT}
+                  size={18}
+                  label={row.model === "" ? "Answered" : `Answered by ${row.model}`}
+                />
+              </span>
+            )}
+            {status.text !== "" && <span>{status.text}</span>}
+            {answered && <span className="channel-last">{lastReply(row.updatedAt, now)}</span>}
+          </div>
         </div>
         {/* What the row offers while the pointer is in it, at its own top-right
             corner: pin the thread, or delete it. It is out of the flow, since

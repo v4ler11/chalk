@@ -302,10 +302,34 @@
   overflow-wrap: anywhere;
 }
 
-/* While the question is up the row's words step back behind it, dimmed rather
-   than hidden, as a history row's do. */
-.channel-row.confirming .channel-root {
+/* The message's own box, which the question is drawn over: what the row's height
+   is made of stays where it is while a row is asked about, and only the words in
+   it are taken out of sight. */
+.channel-message {
+  position: relative;
+}
+
+/* The question the row asks in its own words, over the box the message keeps: the
+   same face and the same measure as the message, since it stands where the
+   message stands, and one line inside a box that may be three. */
+.channel-ask {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-message);
+  font-size: 15.5px;
+  line-height: 1.45;
   color: var(--text-secondary);
+}
+
+/* While the question is up the message steps out of sight — the box it fills
+   stays exactly as it was, so the row does not move — and it stops taking clicks,
+   so the question's own row is not a way into the thread. */
+.channel-row.confirming .channel-root {
+  visibility: hidden;
+}
+
+.channel-row.confirming .channel-open {
+  pointer-events: none;
 }
 
 /* The pictures the prompt was posted with, under the words it was posted as: a
@@ -331,11 +355,22 @@
   object-fit: cover;
 }
 
+/* A box whose picture has not been read yet: it is the size and the place the
+   picture will be, and nothing is drawn in it rather than something that is not
+   the picture. */
+.channel-image.held {
+  visibility: hidden;
+}
+
 /* The line under the prompt: what the run is doing, and — once it is done — who
    answered it, how much was said, and the moment it last was. It holds its height
    whether or not it has anything to say: a row is created with what it was
    created with, and a thread whose first answer lands must not grow under the
-   reader and push every row below it down. */
+   reader and push every row below it down. Its tone classes are namespaced
+   (`tone-thinking` and the rest) because a bare `thinking` or `failed` on a feed
+   row is a name the transcript's own blocks answer to as well: a rule written for
+   one of those, with a margin of its own, would reach in here and move the line
+   the moment a run began thinking. */
 .channel-status {
   display: flex;
   align-items: center;
@@ -351,7 +386,7 @@
    A thread that needs the user wears the app's blue instead: that is the one
    state that is the user's move, and the count is not one. A failure wears the
    error red. */
-.channel-status.replies {
+.channel-status.tone-replies {
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -371,11 +406,11 @@
   font-weight: 400;
 }
 
-.channel-status.needs {
+.channel-status.tone-needs {
   color: var(--reasoning);
 }
 
-.channel-status.failed {
+.channel-status.tone-failed {
   color: var(--danger);
 }
 
