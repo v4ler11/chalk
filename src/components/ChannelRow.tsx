@@ -123,18 +123,24 @@ export const ChannelRowItem = memo(
       >
         <Avatar who={author} size={36} />
         <div className="channel-body">
-          {/* A pin is a mark on the thread rather than on anything said in it, so
-              it is said above the thread: whose pin it is, on the line before the
-              name, rather than left to the colour of the row. */}
-          {pinned && (
-            <div className="pin-label">
-              <Pin />
-              <span>{author === "You" ? "Pinned by you" : `Pinned by ${author}`}</span>
-            </div>
-          )}
           {/* Who wrote it, and when, above it — the line a channel starts a
-              message with. */}
-          <MessageHead who={author} when={row.createdAt} now={now} />
+              message with. A pin puts its mark on that line rather than on one of
+              its own: a row's height is settled when it is written, and a pin
+              added later must not move what is under it. */}
+          <MessageHead
+            who={author}
+            when={row.createdAt}
+            now={now}
+            mark={
+              pinned ? (
+                <Pin
+                  className="pin-mark"
+                  role="img"
+                  aria-label={author === "You" ? "Pinned by you" : `Pinned by ${author}`}
+                />
+              ) : undefined
+            }
+          />
           {asking ? (
             // While the question is up the row keeps its face and its place, and
             // what there is to read is the question rather than the message.
@@ -147,11 +153,11 @@ export const ChannelRowItem = memo(
           {!asking && images.length > 0 && (
             <ImageStrip images={images} wrapClass="channel-images" imageClass="channel-image" />
           )}
-          {/* And under it, everyone who has said something in the thread and
-              when it was last answered: the person, once they have spoken here,
-              the assistant that answered, the count of what was said, and the
-              moment it last was. */}
-          {status.text !== "" && !asking && (
+          {/* And under it the line about the thread: who answered, the count of
+              what was said, and the moment it last was. It is drawn whether or
+              not it has anything to say — it holds its height, so a first answer
+              landing does not grow the row under the reader. */}
+          {!asking && (
             <div className={`channel-status ${status.tone}`}>
               {answered && (
                 <span className="channel-participants">
@@ -167,7 +173,7 @@ export const ChannelRowItem = memo(
                   />
                 </span>
               )}
-              <span>{status.text}</span>
+              {status.text !== "" && <span>{status.text}</span>}
               {answered && <span className="channel-last">{lastReply(row.updatedAt, now)}</span>}
             </div>
           )}

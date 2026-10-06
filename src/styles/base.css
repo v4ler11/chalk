@@ -19,6 +19,10 @@
   --reasoning: #2563eb;
   --reasoning-bg: #e7eefc;
   --reasoning-divider: #b9cdf5;
+  /* A list row under the pointer. It is the sidebar's hover made to read: the
+     feed is the window's main surface, and a row that lifts by a shade nobody
+     can see is a row that does not answer the pointer. */
+  --row-hover: #f0efe9;
   /* A pinned message: the ground it is drawn on, and the rule down its left
      edge. Warm where the rest of the palette is neutral, so a pin reads as a
      mark on the message rather than as another kind of surface. */

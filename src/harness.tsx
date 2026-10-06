@@ -285,6 +285,23 @@ const FEED: ChannelRow[] = [
     awaiting: 0,
     active: false,
   },
+  {
+    // A thread nothing has come back to yet: the case the line under it is held
+    // open for, since the row must be the same height with and without it.
+    chat: 5,
+    root: "A new thread nothing has answered.",
+    createdAt: Date.now() - 60_000,
+    replies: 0,
+    mine: 0,
+    images: 0,
+    model: "deepseek/deepseek-v4.1-flash",
+    pinnedAt: 0,
+    updatedAt: Date.now() - 60_000,
+    status: "idle",
+    thinking: false,
+    awaiting: 0,
+    active: false,
+  },
 ];
 
 function Harness() {
@@ -326,7 +343,10 @@ function Harness() {
   };
 
   return (
-    <div className="app">
+    // The window's own box, with the watcher's one change: the app clips its
+    // overflow because a window does not scroll, and a scratch page whose blocks
+    // are taller than the viewport has to.
+    <div className="app" style={{ overflowY: "auto" }}>
       <div className="shell">
                 <main className="main">
           <ChatNav

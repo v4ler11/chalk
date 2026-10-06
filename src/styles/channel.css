@@ -212,33 +212,15 @@
   background-color: var(--danger-bg);
 }
 
-/* A pinned thread: the block a channel gives one — a ground of its own and a rule
-   down its left edge — and the pin named above the thread rather than beside it.
-   The padding the rule and the mark take is given back, so the face, the name and
-   the words stay on the column every other row is on. */
-.channel-row.pinned {
-  padding-left: 11px;
-  border-left: 3px solid var(--pin);
-  border-radius: 0 10px 10px 0;
-  background-color: var(--pin-bg);
-}
-
-/* What the pin is, and whose it is, on the line above the name — the way a
-   channel says a message was pinned rather than leaving it to the colour. */
-.pin-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-}
-
-.pin-label svg {
+/* The pin, on the line the name is on rather than on one of its own: a row's
+   height is settled when it is written, and a mark added later must not move
+   what is under it. */
+.pin-mark {
   flex: none;
   width: 13px;
   height: 13px;
   color: var(--pin);
+  transform: translateY(1px);
 }
 
 .channel-row.active {
@@ -246,7 +228,20 @@
 }
 
 .channel-row:hover {
-  background-color: var(--sidebar-hover);
+  background-color: var(--row-hover);
+}
+
+/* A pinned thread: the block a channel gives one — a ground of its own and a rule
+   down its left edge. It is written after the two rules above on purpose: a pin is
+   a state of the row rather than a thing the pointer does to it, so hovering a
+   pinned row, or opening it, leaves its ground where it is. The padding the rule
+   takes is given back, so the face, the name and the words stay on the column
+   every other row is on. */
+.channel-row.pinned {
+  padding-left: 11px;
+  border-left: 3px solid var(--pin);
+  border-radius: 0 10px 10px 0;
+  background-color: var(--pin-bg);
 }
 
 /* The face at the row's left sits against the line its name sits on rather than
@@ -333,12 +328,16 @@
   object-fit: cover;
 }
 
-/* What the run is doing, and — once it is done — who answered it and when: the
-   model's circle, the count of what it said, and the moment it last did. */
+/* The line under the prompt: what the run is doing, and — once it is done — who
+   answered it, how much was said, and the moment it last was. It holds its height
+   whether or not it has anything to say: a row is created with what it was
+   created with, and a thread whose first answer lands must not grow under the
+   reader and push every row below it down. */
 .channel-status {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 20px;
   font-family: var(--font-body);
   font-size: 12.5px;
   color: var(--text-muted);
