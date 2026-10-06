@@ -6,14 +6,12 @@ import ReactDOM from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
 import { ChatMessage } from "./components/ChatMessage";
-import { Sidebar } from "./components/Sidebar";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import type {
   AppConfig,
-  ChatSummary,
   McpCost,
   McpFailure,
   McpServer,
@@ -24,33 +22,6 @@ import type {
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
-
-const CHATS: ChatSummary[] = [
-  {
-    id: 1,
-    title: "First chat",
-    updatedAt: Date.now(),
-    model: "m",
-    reasoning: "",
-    createdAt: Date.now() - 60_000,
-    root: "First chat",
-    replies: 3,
-    mine: 1,
-    images: 0,
-  },
-  {
-    id: 2,
-    title: "Second chat",
-    updatedAt: Date.now() - 10_000,
-    model: "m",
-    reasoning: "high",
-    createdAt: Date.now() - 20_000,
-    root: "Second chat",
-    replies: 1,
-    mine: 0,
-    images: 0,
-  },
-];
 
 /** The servers the tools control can hold: two that answer, one that answers and
  *  is imported lazily, one that does not, and one the settings window has
@@ -263,18 +234,7 @@ function Harness() {
   return (
     <div className="app">
       <div className="shell">
-        <div className="left open">
-          <Sidebar
-            open
-            chats={CHATS}
-            openId={1}
-            onOpen={(id) => setEvents((e) => [...e, `open ${id}`])}
-            onRename={(id) => setEvents((e) => [...e, `rename ${id}`])}
-            onDelete={(id) => setEvents((e) => [...e, `delete ${id}`])}
-            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
-          />
-        </div>
-        <main className="main">
+                <main className="main">
           <ChatNav
             thread
             onBack={() => setEvents((e) => [...e, "back"])}
