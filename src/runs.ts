@@ -87,19 +87,27 @@ function start(): Promise<void> {
   return startPromise;
 }
 
+/**
+ * One run's state as the store keeps it after a summary: a chat whose full
+ * snapshot is held keeps it, since only the snapshot carries the transcript and
+ * the calls waiting on the user, and a chat only heard of is the summary itself.
+ */
+function merged(chat: number, summary: RunSummary): RunEntry {
+  const entry = entries.get(chat);
+  if (entry?.kind === "snapshot") {
+    return {
+      kind: "snapshot",
+      snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
+    };
+  }
+  return { kind: "summary", summary };
+}
+
 /** Every run there is, merged into what is already known. */
 async function refresh(): Promise<void> {
   const summaries = await api.runsState();
   for (const summary of summaries) {
-    const entry = entries.get(summary.chat);
-    if (entry?.kind === "snapshot") {
-      entries.set(summary.chat, {
-        kind: "snapshot",
-        snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
-      });
-    } else {
-      entries.set(summary.chat, { kind: "summary", summary });
-    }
+    entries.set(summary.chat, merged(summary.chat, summary));
   }
   emit();
 }
@@ -112,15 +120,10 @@ async function refresh(): Promise<void> {
  */
 function changed(summary: RunSummary) {
   const entry = entries.get(summary.chat);
-  if (entry?.kind === "snapshot") {
-    entries.set(summary.chat, {
-      kind: "snapshot",
-      snapshot: { ...entry.snapshot, status: summary.status, replies: summary.replies },
-    });
-    void loadRun(summary.chat).catch(() => {});
-  } else {
-    entries.set(summary.chat, { kind: "summary", summary });
-  }
+  entries.set(summary.chat, merged(summary.chat, summary));
+  // A chat whose thread is open reads its calls and its transcript again, which
+  // are only in the full snapshot.
+  if (entry?.kind === "snapshot") void loadRun(summary.chat).catch(() => {});
   if (!entry) refreshChats?.();
   emit();
 }

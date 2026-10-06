@@ -1,46 +1,13 @@
 import { memo, useEffect, useState } from "react";
-import type { RunStatus } from "../types";
 import * as api from "../api";
 import { lastReply } from "../clock";
 import { ASSISTANT, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { ImageStrip } from "./ImageStrip";
 import { MessageHead } from "./MessageHead";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
+import type { ChannelRow } from "../feed";
 
-/**
- * One thread as the channel lists it: the root message that opened it, and, under
- * it, one quiet line about where the thread stands. The row is a chat's own
- * summary plus what its run is doing, which is why the status lives here rather
- * than in the feed: every row has its own.
- */
-export type ChannelRow = {
-  /** The chat the row opens. */
-  chat: number;
-  /** The message that opened the thread, as it was typed. */
-  root: string;
-  /** Unix time in ms the thread was opened, which orders the feed. */
-  createdAt: number;
-  /** How many messages the thread holds after its opening one. */
-  replies: number;
-  /** How many of those the user wrote, the prompt that opened the thread not
-   *  among them: it is what says whether they are a participant in it. */
-  mine: number;
-  /** How many pictures the prompt was posted with, which is what the row asks
-   *  for them by: none is a row that has nothing to draw. */
-  images: number;
-  /** The model this thread is with: who answered it, as its circle is drawn. */
-  model: string;
-  /** Unix time in ms of the thread's last message, which is when it was last
-   *  answered — what the row says under the count of what was said. */
-  updatedAt: number;
-  status: RunStatus;
-  /** True while the run has not answered yet: it is thinking, not answering. */
-  thinking: boolean;
-  /** The calls the run is holding for the user. */
-  awaiting: number;
-  /** Whether this thread is the one on screen. */
-  active: boolean;
-};
+export type { ChannelRow };
 
 /** The root message's first line, to name the thread in a control. */
 function firstLine(text: string): string {

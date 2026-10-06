@@ -11,7 +11,6 @@ import type {
   AppConfig,
   ChatSummary,
   Content,
-  McpCallResult,
   McpReport,
   McpServer,
   McpTool,
@@ -114,9 +113,6 @@ export const mcpTest = (server: McpServer) => invoke<McpReport>("mcp_test", { se
  * to, so a server that has grown a tool since is only seen by reconnecting.
  */
 export const mcpTools = (refresh = false) => invoke<McpTools>("mcp_tools", { refresh });
-/** Calls one tool, named as the request named it; `args` is its JSON text. */
-export const mcpCall = (name: string, args: string) =>
-  invoke<McpCallResult>("mcp_call", { name, args });
 
 /**
  * The app's own tools: the ones that manage its settings and its servers rather

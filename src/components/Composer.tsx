@@ -4,7 +4,8 @@ import { ArrowUp, Brain, Check, ChevronDown, Hammer, Paperclip, Pencil, Square, 
 import { MOD, mod } from "../keybinds";
 import { newAttachment, processImage, type Attachment } from "../images";
 import { REASONING_LEVELS, type ReasoningLevel } from "../types";
-import { ServersMenu, offeredServers, type ServersProps } from "./ServersMenu";
+import { ServersMenu, type ServersProps } from "./ServersMenu";
+import { offeredServers } from "../lazy";
 
 interface Props {
   /**

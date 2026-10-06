@@ -35,7 +35,7 @@ export interface AppConfig {
   systemPrompt: string;
 }
 
-export type Role = "developer" | "system" | "user" | "assistant" | "tool" | "function";
+type Role = "developer" | "system" | "user" | "assistant" | "tool" | "function";
 
 /**
  * How hard a chat asks the model to think. `""` is off: no level is asked for,
@@ -65,7 +65,7 @@ export function asReasoningLevel(level: string): ReasoningLevel {
   return known ? known.level : "";
 }
 
-export type ContentPart =
+type ContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } }
   | { type: "input_audio"; input_audio: { data: string; format: string } }
@@ -74,12 +74,12 @@ export type ContentPart =
 
 export type Content = string | ContentPart[];
 
-export interface FunctionCall {
+interface FunctionCall {
   name: string;
   arguments: string;
 }
 
-export interface CustomCall {
+interface CustomCall {
   name: string;
   input: string;
 }
@@ -88,7 +88,7 @@ export type ToolCall =
   | { type: "function"; id: string; function: FunctionCall }
   | { type: "custom"; id: string; custom: CustomCall };
 
-export type ReasoningDetail =
+type ReasoningDetail =
   | { type: "reasoning.summary"; summary: string; id?: string | null; format?: string; index?: number }
   | { type: "reasoning.encrypted"; data: string; id?: string | null; format?: string; index?: number }
   | {
@@ -362,13 +362,6 @@ export function userContent(text: string, images: string[]): Content {
   return parts;
 }
 
-/** The images a content carries, in the order it carries them: what a prompt
- *  re-sent as it was — a regenerate — hands back to `run_start` beside it. */
-export function imageUrls(content?: Content): string[] {
-  if (content == null || typeof content === "string") return [];
-  return content.flatMap((part) => (part.type === "image_url" ? [part.image_url.url] : []));
-}
-
 /** Flatten a message's reasoning (thinking) to display text, if any. */
 export function reasoningText(message: ChatMessage): string {
   if (message.reasoning) return message.reasoning;
@@ -391,7 +384,7 @@ export function reasoningText(message: ChatMessage): string {
  * one JSON-RPC message per line. `http` posts each message to a URL, the
  * streamable HTTP transport, with whatever headers the server needs.
  */
-export type McpTransport =
+type McpTransport =
   | { type: "stdio"; command: string; args: string[]; env: Record<string, string> }
   | { type: "http"; url: string; headers: Record<string, string> };
 
@@ -424,7 +417,7 @@ export interface Thought {
 /** One lazily imported server as the system prompt names it: what it is called,
  *  what it is for, and the names of the tools it is holding back — the names
  *  alone, since it is their definitions the prompt is spared. */
-export interface LazyServer {
+interface LazyServer {
   name: string;
   description: string;
   tools: string[];
@@ -478,16 +471,4 @@ export interface McpTools {
   failures: McpFailure[];
   /** What each server's tools cost, so its row can say what it costs. */
   costs: McpCost[];
-}
-
-/** What a tool call answered. */
-export interface McpCallResult {
-  /** The result as text, which is what the model is given back. */
-  text: string;
-  /** True when the tool reported its own failure. */
-  isError: boolean;
-  /** The structured result, when the server sent one. */
-  structured?: unknown;
-  /** How long the call took, in milliseconds. */
-  ms: number;
 }
