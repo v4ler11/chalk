@@ -157,17 +157,35 @@ export function useFollowEnd({
     [],
   );
 
-  // A view whose box changes height under it — a window resize, or the composer
-  // growing — moves the end of it, which a pass has to follow even though
-  // nothing grew.
+  // A view whose box changes height under it moves the end of it, and a box is
+  // not content: the composer under a pane grows a line at a time, and the window
+  // is resized, and neither of those is a claim on the view. What the box takes
+  // first is the air at the view's own foot — the padding under its last line,
+  // which is what one line of a composer is worth — so the line that grows the
+  // composer from one to two moves nothing at all, and the reader typing it sees
+  // the feed stand still. Past that air the content would leave the view, and the
+  // view follows it, by the difference exactly.
+  //
+  // The scroll is written here rather than asked for as a pass, so that it lands
+  // in the same frame as the box change that caused it: one movement, where a
+  // pass would be a movement and then a jump. A box that *grows* needs nothing
+  // written at all, since the browser clamps an offset that has fallen past its
+  // own end while it lays the change out.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     let height = el.clientHeight;
     const observer = new ResizeObserver(() => {
-      if (el.clientHeight === height) return;
-      height = el.clientHeight;
-      pass();
+      const now = el.clientHeight;
+      if (now === height) return;
+      height = now;
+      // A view the reader has taken, and a wheel still landing, are the reader's
+      // and not the layout's to move.
+      if (!following.current) return;
+      if (performance.now() < gesture.current) return;
+      const air = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      const short = el.scrollHeight - air - (el.scrollTop + el.clientHeight);
+      if (short > 0) el.scrollTop += short;
     });
     observer.observe(el);
     return () => observer.disconnect();
