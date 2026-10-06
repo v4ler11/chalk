@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, Plug } from "lucide-react";
 import { formatBrief } from "../timer";
-import { hasArguments, laidOut, toolParts } from "../tools";
+import { laidOut, toolParts } from "../tools";
 
 interface Props {
   /** The name the call carries: the server's id and the tool's own name, joined. */
@@ -36,7 +36,10 @@ interface Props {
 export function ToolCall({ name, args, result }: Props) {
   const [open, setOpen] = useState(false);
   const { server, tool } = toolParts(name);
-  const arguments_ = hasArguments(args) ? args : undefined;
+  // The row shows none of this. The card shows what there was: a call that
+  // carried `{}` carried an empty object, which is a fact about it and not the
+  // same as a call that carried nothing at all.
+  const arguments_ = args !== undefined && args !== "" ? args : undefined;
 
   return (
     <div className={`tool-call${open ? " open" : ""}`}>

@@ -419,6 +419,15 @@
   background-color: var(--border);
 }
 
+/* The replies begin under the rule at the ordinary distance between one message
+   and the next. A round that only asked for tools is held against what it
+   follows, since its calls are the rest of the same stretch of work — but the
+   rule is the seam the replies begin under rather than a round, so the first of
+   them keeps the gap and the count above it does not sit on the calls. */
+.reply-rule + .msg {
+  margin-top: 28px;
+}
+
 /* Every message is one row: the face of whoever wrote it at the left, their name
    and the time over what they said, and the words themselves beside the face. It
    is the shape a channel draws a message in rather than the shape a chat does —
@@ -848,13 +857,15 @@
   color: var(--text-muted);
 }
 
-/* The chevron onto the card: out of the way until the row is under the pointer
-   or has the caret, since an idle transcript is a record rather than a list of
-   controls — and turned down while the card is open, as a chevron onto
-   something always is. */
+/* The chevron onto the card: at the row's own end, since it is what the whole
+   row does rather than something the name ends with, and out of the way until
+   the row is under the pointer or has the caret, since an idle transcript is a
+   record rather than a list of controls — and turned down while the card is
+   open, as a chevron onto something always is. */
 .tool-call-chevron {
   flex: none;
   align-self: center;
+  margin-left: auto;
   width: 13px;
   height: 13px;
   opacity: 0;
