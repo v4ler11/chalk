@@ -3,7 +3,7 @@
 // driven, without the desktop window. Not part of the app: `harness.html` is the
 // only thing that loads it.
 import ReactDOM from "react-dom/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
 import { ChatMessage } from "./components/ChatMessage";
 import { Sidebar } from "./components/Sidebar";
@@ -401,6 +401,23 @@ function ScrollHarness() {
     usage: null,
   };
 
+  // The driver, reachable from a tool that drives the page from outside the
+  // page's own world — a script runner sees the same DOM and nothing of these
+  // globals — so it is asked through an event, and answers in the same event.
+  useEffect(() => {
+    function call(event: Event) {
+      const { fn, args } = (event as CustomEvent<{ fn: string; args: unknown[] }>).detail ?? {
+        fn: "",
+        args: [],
+      };
+      const asked = (window as unknown as Record<string, (...a: unknown[]) => unknown>)[fn];
+      const result = asked ? asked(...args) : null;
+      document.body.dataset.harness = JSON.stringify({ fn, result });
+    }
+    window.addEventListener("harness-call", call);
+    return () => window.removeEventListener("harness-call", call);
+  }, []);
+
   Object.assign(window, {
     grow: (words = 40) =>
       setMessages((all) => {
@@ -428,12 +445,12 @@ function ScrollHarness() {
     /** What a send does: the app asks for the view by setting follow. */
     followNow: (state = true) => setFollow(state),
     scrollState: () => {
-      const el = document.querySelector(".messages-wrap .messages") as HTMLElement;
+      const el = document.querySelector("#scroll-harness .messages") as HTMLElement;
       const bubble = el.lastElementChild?.getBoundingClientRect();
       const box = el.getBoundingClientRect();
       return {
         follow,
-        arrow: !!document.querySelector(".messages-wrap .to-bottom"),
+        arrow: !!document.querySelector("#scroll-harness .to-bottom"),
         atBottom: el.scrollHeight - el.scrollTop - el.clientHeight <= 16,
         top: Math.round(el.scrollTop),
         max: Math.round(el.scrollHeight - el.clientHeight),
@@ -444,6 +461,7 @@ function ScrollHarness() {
 
   return (
     <div
+      id="scroll-harness"
       style={{ display: "flex", flexDirection: "column", flex: "none", height: 420, minHeight: 0 }}
     >
       <MessageList
