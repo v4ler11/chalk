@@ -194,9 +194,10 @@ fn the_loader_offers_a_name_and_nothing_else() {
     assert_eq!(loader.parameters["required"][0], "name");
 }
 
-/// A reply is something said: the user's words and the model's answers, counted
-/// together, with what the tools answered left out — which is the same count the
-/// store derives in the query a list is drawn from.
+/// A reply is something said: the user's words and the answers the model gave,
+/// counted together, with what the tools answered and the rounds that only
+/// called them left out — which is the same count the store derives in the query
+/// a list is drawn from.
 #[test]
 fn a_reply_is_something_said() {
     let messages = json!([
@@ -205,7 +206,7 @@ fn a_reply_is_something_said() {
         { "role": "tool", "tool_call_id": "call_1", "content": "done" },
         { "role": "assistant", "content": "two" },
     ]);
-    assert_eq!(spoken(messages.as_array().unwrap()), 3);
+    assert_eq!(spoken(messages.as_array().unwrap()), 2);
     // And none of them are the user's own: they wrote once, which opened the
     // thread rather than answering it.
     assert_eq!(mine(messages.as_array().unwrap()), 0);

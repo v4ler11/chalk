@@ -168,9 +168,13 @@ FROM json_each(messages) WHERE json_extract(value, '$.role') = 'user' LIMIT 1";
 ///
 /// How many replies a thread has is derived here rather than kept beside it: it
 /// is the one value in a row that can be told without guessing, so it is told —
-/// and told the same way the run tells it, which is why the tools' results are
-/// left out. A turn that called three tools and then answered has said two
-/// things, not five.
+/// and told the way `spoken` in the run tells it, which is why the tools' results
+/// and the rounds that only called them are left out. A turn that loaded a
+/// server, ran a tool and then answered has said one thing, not five.
+///
+/// The two must agree: a transcript counted one way in the window that is open
+/// on it and another way in the list it is listed in would be two answers to the
+/// same question.
 ///
 /// How many of them are the user's own is derived the same way, and for the same
 /// reason: the prompt that opened the thread is the thread, not a reply to it.
@@ -186,8 +190,17 @@ FROM json_each(messages) WHERE json_extract(value, '$.role') = 'user' LIMIT 1";
 fn summary_columns() -> String {
     format!(
         "id, title, updated_at, model, reasoning, created_at, root, \
-         MAX((SELECT COUNT(*) FROM json_each(messages) \
-              WHERE json_extract(value, '$.role') IN ('user', 'assistant')) - 1, 0), \
+         MAX((SELECT COUNT(*) FROM json_each(messages) AS msg \
+              WHERE json_extract(msg.value, '$.role') = 'user' \
+                 OR (json_extract(msg.value, '$.role') = 'assistant' \
+                     AND CASE json_type(msg.value, '$.content') \
+                           WHEN 'text' THEN trim(json_extract(msg.value, '$.content')) <> '' \
+                           WHEN 'array' THEN EXISTS (\
+                               SELECT 1 FROM json_each(json_extract(msg.value, '$.content')) AS part \
+                               WHERE trim(COALESCE(json_extract(part.value, '$.text'), '')) <> '' \
+                                  OR trim(COALESCE(json_extract(part.value, '$.refusal'), '')) <> '') \
+                           ELSE 0 \
+                         END)) - 1, 0), \
          (SELECT COALESCE(SUM(CASE parts.type \
                                 WHEN 'object' THEN json_extract(parts.value, '$.type') = 'image_url' \
                                 ELSE 0 END), 0) \

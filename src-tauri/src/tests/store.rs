@@ -205,10 +205,11 @@ fn a_thread_is_named_by_its_prompt_and_counts_what_follows() {
     assert_eq!(listed.replies, 1);
 }
 
-/// A turn that calls tools writes more than one message, and only some of them
-/// are things said: a tool's result is what came back from what the model asked
-/// for. A thread answered through a call is two replies — the round that asked
-/// and the answer it led to — and not the four messages it took to get there.
+/// A turn that calls tools writes more than one message, and most of them are
+/// not things said: a tool's result is what came back from a call, and a round
+/// that called one without writing a word is a step between two messages of its
+/// own. A thread answered through a call has said one thing — the answer — and
+/// not the four messages it took to get there.
 #[test]
 fn a_turns_tools_are_not_replies() {
     let store = Store::in_memory().unwrap();
@@ -226,6 +227,35 @@ fn a_turns_tools_are_not_replies() {
                 ] },
                 { "role": "tool", "tool_call_id": "call_1", "name": "one", "content": "12" },
                 { "role": "assistant", "content": "a euro" },
+            ]),
+            42,
+        )
+        .unwrap();
+
+    assert_eq!(chat.replies, 1);
+    assert_eq!(store.list().unwrap()[0].replies, 1);
+}
+
+/// An answer that used a tool is an answer: a round with words of its own counts
+/// whether or not it also called something, which is the one difference between
+/// it and a round that only called.
+#[test]
+fn an_answer_that_called_a_tool_still_counts() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "what did I spend",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "what did I spend" },
+                { "role": "assistant", "content": "Let me look.", "tool_calls": [
+                    { "id": "call_1", "type": "function", "function": { "name": "one", "arguments": "{}" } },
+                ] },
+                { "role": "tool", "tool_call_id": "call_1", "name": "one", "content": "12" },
+                { "role": "assistant", "content": "A euro." },
             ]),
             42,
         )

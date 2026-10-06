@@ -685,23 +685,48 @@ fn due(state: &mut Inner) -> Option<Partial> {
     state.partial.clone()
 }
 
+/// Whether a message says anything: what the window would flatten to display,
+/// which is the text of a message and its refusals. A round that only asked for
+/// tools carries no words of its own — the transcript draws it closed up against
+/// its neighbours for the same reason — and so says nothing.
+fn said(message: &Value) -> bool {
+    let text = match message.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(|part| match part.get("type").and_then(Value::as_str) {
+                Some("text") => part.get("text").and_then(Value::as_str),
+                Some("refusal") => part.get("refusal").and_then(Value::as_str),
+                _ => None,
+            })
+            .collect::<String>(),
+        _ => String::new(),
+    };
+    !text.trim().is_empty()
+}
+
 /// How many messages a thread has said since the prompt that opened it: the
-/// user's own words and the model's answers, counted together, with the tools'
-/// results left out. A result is a record of what was done rather than anything
-/// said, so a turn that called three tools and then answered has said two
-/// things and not five — which is what a row offers to read.
+/// user's words and the answers the model actually gave, and nothing that was
+/// only a step in the turn.
+///
+/// Three things are left out, all for the same reason. A tool's result is what
+/// came back from a call rather than anything said. A call the model made is not
+/// something it said either. And a round that called one without writing a word
+/// is a step between two of its own messages — so a turn that loaded a server,
+/// ran a tool, and then answered has said one thing, not five.
 ///
 /// Read off the transcript rather than kept beside it, because it is the one
-/// value in a row that can be derived without guessing. The store derives it
-/// the same way, in the query a list is drawn from.
+/// value in a row that can be derived without guessing. The store derives it the
+/// same way, in the query a list is drawn from.
 fn spoken(messages: &[Value]) -> usize {
     messages
         .iter()
-        .filter(|message| {
-            matches!(
-                message.get("role").and_then(Value::as_str),
-                Some("user") | Some("assistant")
-            )
+        .filter(|message| match message.get("role").and_then(Value::as_str) {
+            // What the user writes is a thing said, always: a prompt is the
+            // whole of it, and there is no such thing as an empty one.
+            Some("user") => true,
+            Some("assistant") => said(message),
+            _ => false,
         })
         .count()
 }
