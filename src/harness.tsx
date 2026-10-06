@@ -10,7 +10,6 @@ import { ChatMessage } from "./components/ChatMessage";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
-import { ModeBar } from "./components/ModeBar";
 import { PinsView } from "./components/PinsView";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
@@ -429,7 +428,6 @@ function Harness() {
               onPins={() => setPinsOpen(true)}
             />
             <main className="main">
-              <ModeBar title="Pins" onClose={() => setPinsOpen(false)} />
               <div className="pins-scroll">
                 <PinsView
                   rows={PIN_ROWS}
@@ -444,7 +442,6 @@ function Harness() {
           {/* And with nothing pinned: what the list says before there is any. */}
           <div style={{ display: "flex", flex: "none", height: 220, minHeight: 0 }}>
             <main className="main">
-              <ModeBar title="Pins" onClose={() => {}} />
               <div className="pins-scroll">
                 <PinsView rows={[]} author="valerii" onOpen={() => {}} onDelete={() => {}} onPin={() => {}} />
               </div>

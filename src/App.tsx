@@ -219,14 +219,17 @@ function App() {
             </div>
 
             {/* The pane the sidebar's other row chose: the pinned threads, in the
-                channel's own rows. It is drawn *under* a thread rather than over
-                one — a thread opened from this list is a thread over the pins,
-                and coming back out of it lands here — so it stays mounted while
-                the thread is up, with its scroll where the reader left it. */}
+                channel's own rows. It takes the pane the way the channel does —
+                the same strip at the top, then the list — since it is a tab and
+                not a mode standing in for the chat: nothing here names it and
+                nothing here is a way out of it, because the sidebar's row is
+                both. It is drawn *under* a thread rather than over one — a thread
+                opened from this list is a thread over the pins, and coming back
+                out of it lands here — so it stays mounted while the thread is up,
+                with its scroll where the reader left it. */}
             {conversation.pinsView ? (
               <div className={`pane${pinsVisible ? "" : " off"}`} inert={!pinsVisible}>
                 {nav(false)}
-                <ModeBar title="Pins" onClose={() => conversation.showPins(false)} />
                 <div className="pins-scroll">
                   <PinsView
                     rows={conversation.pinRows}
