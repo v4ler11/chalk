@@ -40,15 +40,21 @@ export type ChannelRow = {
  * Where one chat's run stands, as the feed reads it.
  *
  * The phase comes from `status` and `thinking`, never from `replies`, which stays
- * still for the whole of a run and only moves when the answer lands. A chat whose
- * run the store has heard of through its summary alone is read from that summary,
- * since the transcript and the calls waiting on the user are only in the full
- * snapshot, and a chat it has not heard of at all is idle on the list's own count.
+ * still for the whole of a run and only moves when the answer lands.
+ *
+ * What the row says about the thread's own messages — how many were said, and how
+ * many of those the user said — is read from the run wherever there is one, and
+ * from the chat list only for a chat no run knows about. The two are read
+ * together for a reason: the list is read when the feed is built and not again
+ * for every message a thread takes, so a row that took its count from the run and
+ * its participant count from the list would answer the same question twice and
+ * disagree with itself — a thread where the user had answered, still drawn as
+ * theirs alone.
  */
 export function phase(
   run: RunEntry | undefined,
   chat: ChatSummary,
-): { status: RunStatus; thinking: boolean; awaiting: number; replies: number } {
+): { status: RunStatus; thinking: boolean; awaiting: number; replies: number; mine: number } {
   if (run?.kind === "snapshot") {
     const snapshot = run.snapshot;
     return {
@@ -59,6 +65,7 @@ export function phase(
       thinking: snapshot.status === "running" && (snapshot.partial === null || snapshot.partial.thinking),
       awaiting: snapshot.awaiting.length,
       replies: snapshot.replies,
+      mine: snapshot.mine,
     };
   }
   if (run?.kind === "summary") {
@@ -67,9 +74,10 @@ export function phase(
       thinking: run.summary.thinking,
       awaiting: run.summary.awaiting,
       replies: run.summary.replies,
+      mine: run.summary.mine,
     };
   }
-  return { status: "idle", thinking: false, awaiting: 0, replies: chat.replies };
+  return { status: "idle", thinking: false, awaiting: 0, replies: chat.replies, mine: chat.mine };
 }
 
 /**
@@ -87,7 +95,6 @@ export function buildRows(
       chat: chat.id,
       root: chat.root,
       createdAt: chat.createdAt,
-      mine: chat.mine,
       images: chat.images,
       model: chat.model,
       updatedAt: chat.updatedAt,

@@ -117,14 +117,17 @@ async function refresh(): Promise<void> {
  * is what the feed draws, and the snapshot — for a chat whose thread is open —
  * is read again, since the calls waiting on the user and the transcript are only
  * in the full snapshot.
+ *
+ * The list is read again too, on every move rather than only for a chat it has
+ * never seen: what the run does not carry is the moment the thread was last
+ * answered, which is what the row says under its count, and a thread answered
+ * again would go on naming the first answer's time if the list were left alone.
  */
 function changed(summary: RunSummary) {
   const entry = entries.get(summary.chat);
   entries.set(summary.chat, merged(summary.chat, summary));
-  // A chat whose thread is open reads its calls and its transcript again, which
-  // are only in the full snapshot.
   if (entry?.kind === "snapshot") void loadRun(summary.chat).catch(() => {});
-  if (!entry) refreshChats?.();
+  refreshChats?.();
   emit();
 }
 
