@@ -18,6 +18,9 @@ interface Props {
    *  is a pane's top edge rather than the space above one. */
   nav: ReactNode;
   messages: UiMessage[];
+  /** What the app calls the person whose prompts these are: the name and the
+   *  mark the transcript heads them with. */
+  author: string;
   pending: Partial | null;
   /** The chat's own error, or a server the chat calls that nobody can reach. */
   error: string;
@@ -66,6 +69,7 @@ interface Props {
 export function ChatPane({
   nav,
   messages,
+  author,
   pending,
   error,
   follow,
@@ -106,6 +110,7 @@ export function ChatPane({
       <div className="transcript">
         <MessageList
           messages={messages}
+          author={author}
           pending={pending}
           error={error}
           follow={follow}

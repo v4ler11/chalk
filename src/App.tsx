@@ -213,6 +213,7 @@ function App() {
                 <ChatPane
                   nav={nav(true)}
                   messages={threadVisible ? conversation.messages : held.current.messages}
+                  author={conversation.author}
                   pending={threadVisible ? conversation.pending : held.current.pending}
                   error={error || conversation.threadError || conversation.unreachable}
                   follow={follow}

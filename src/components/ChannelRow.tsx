@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from "react";
 import type { RunStatus } from "../types";
 import * as api from "../api";
 import { lastReply, sentAt } from "../clock";
-import { ASSISTANT_TINT, Avatar } from "./Avatar";
+import { ASSISTANT, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
 
 /**
@@ -101,17 +101,6 @@ function statusLine(row: ChannelRow): { text: string; tone: string } {
   if (row.replies === 0) return { text: "", tone: "" };
   return { text: row.replies === 1 ? "1 reply" : `${row.replies} replies`, tone: "replies" };
 }
-
-/**
- * The mark the assistant wears wherever it answers.
- *
- * It is the app's own rather than the model's: a thread is answered by whichever
- * model it happens to be holding, and the circle is the assistant in every
- * thread — so it is one mark and one colour, fixed, and not a monogram that
- * changes with the model. What answered is named in the circle's own label, and
- * the model is on the chip in the composer, which is where a model is chosen.
- */
-const ASSISTANT = "A";
 
 interface Props {
   row: ChannelRow;

@@ -45,6 +45,9 @@ const LAND_MS = 120;
 
 interface Props {
   messages: UiMessage[];
+  /** What the app calls the person whose prompts these are: the name and the
+   *  mark every one of their messages is headed with. */
+  author: string;
   /** The response currently arriving, if any. */
   pending: Partial | null;
   error: string;
@@ -59,6 +62,7 @@ interface Props {
 
 export function MessageList({
   messages,
+  author,
   pending,
   error,
   follow,
@@ -171,6 +175,62 @@ export function MessageList({
 
     return out;
   }, [messages]);
+
+  /**
+   * Where each message is headed: what the name and the time over it belong to.
+   *
+   * A turn is one block in the transcript however many rounds it took to answer,
+   * so its head is drawn once, on the round that opened it — the person's own
+   * message, and then the model's first round. Everything the turn did after that
+   * was said under that head: the rounds that went round again ask for tools and
+   * say nothing of their own, and they are drawn down the same column as the
+   * prose they belong to, which is where a reader looking for what the answer did
+   * will look for it. Putting the head on the message that has the last word
+   * instead would leave every call standing above the name of whoever asked for
+   * it.
+   *
+   * A prompt carries the time it was sent. An answer does not — what it has is
+   * what it waited, from the request to its first token — so the round that opens
+   * a turn is marked with the moment the model began speaking, the prompt's own
+   * time plus that wait, which is also the moment the live row is marked with
+   * while it arrives. A message written before the app kept either is headed with
+   * its name and no time, rather than with a time worked out from what it does
+   * not say.
+   */
+  const heads = useMemo(() => {
+    const where = new Set<UiMessage>();
+    const when = new Map<UiMessage, number>();
+    let written: number | undefined;
+    // Whether the next round the model writes opens its turn. A prompt opens one,
+    // and everything the model says before its next prompt is that turn.
+    let opening = true;
+    for (const message of messages) {
+      if (message.role === "user") {
+        written = message.sentAt;
+        opening = true;
+        where.add(message);
+        if (written != null) when.set(message, written);
+        continue;
+      }
+      if (message.role !== "assistant" || !opening) continue;
+      opening = false;
+      where.add(message);
+      if (written != null && message.waitMs != null) when.set(message, written + message.waitMs);
+    }
+    return { where, when };
+  }, [messages]);
+
+  /**
+   * Whether the answer arriving opens the block it is drawn in. A turn whose
+   * rounds are already in the transcript wears its head on the round that opened
+   * it, and what arrives after that is a step inside that block; a response that
+   * is the turn's first is what a head is drawn for. A `tool` message counts as a
+   * round of the model's for the same reason it is not drawn here: the call that
+   * asked for it is in the transcript, so the answer being watched is not the
+   * first thing the turn has said.
+   */
+  const last = messages[messages.length - 1];
+  const pendingHead = last === undefined || (last.role !== "assistant" && last.role !== "tool");
 
   /**
    * What one message's calls were answered with, in the order it asked for them.
@@ -373,6 +433,9 @@ export function MessageList({
               key={i}
               message={message}
               index={i}
+              author={author}
+              head={heads.where.has(message)}
+              when={heads.when.get(message)}
               thought={thoughtFor(message)}
               results={resultsFor(message)}
               canAct={canAct}
@@ -381,7 +444,7 @@ export function MessageList({
             />
           );
         })}
-        {pending && <StreamingMessage pending={pending} />}
+        {pending && <StreamingMessage pending={pending} head={pendingHead} />}
         {error !== "" && <div className="msg error">Error: {error}</div>}
       </main>
       {!follow && (

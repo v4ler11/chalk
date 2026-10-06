@@ -35,6 +35,27 @@ const TINTS = ["#b4552a", "#3f63c9", "#2f8f5b", "#8a5cd6", "#a8813a", "#2f7f95"]
 export const ASSISTANT_TINT = "#4d5566";
 
 /**
+ * The mark the assistant wears wherever it answers.
+ *
+ * It is the app's own rather than the model's: a thread is answered by whichever
+ * model it happens to be holding, and the circle is the assistant in every
+ * thread — so it is one mark and one colour, fixed, and not a monogram that
+ * changes with the model. What answered is named in the circle's own label, and
+ * the model is on the chip in the composer, which is where a model is chosen.
+ */
+export const ASSISTANT = "A";
+
+/**
+ * What the assistant is called above what it says, where a name sits over a
+ * message rather than in a label. It is the app's own assistant rather than the
+ * model that answered: a model's name written here would be the chat's current
+ * one rather than the one that answered, which is a claim the transcript cannot
+ * stand behind. What answered is named on the chip in the composer, which is
+ * where a model is chosen.
+ */
+export const ASSISTANT_NAME = "Assistant";
+
+/**
  * The letters a circle wears: the first letter of the name's first word and of
  * its last, so "Lisa Zhang" is `LZ` and "gemini-3.8-flash" is `GF`. A name with
  * nothing letterlike in it — a thread whose model was never named — wears a

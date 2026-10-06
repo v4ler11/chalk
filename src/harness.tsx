@@ -153,7 +153,7 @@ const LOADED: string[] = [];
  *  then a long query the way a model writes them and a plain call, then the
  *  answer — which is where all three rounds' reasoning is read. */
 const TOOL_TURN: UiMessage[] = [
-  { role: "user", content: "what did I spend on electricity?" },
+  { role: "user", content: "what did I spend on electricity?", sentAt: Date.now() - 4 * 60_000 },
   {
     role: "assistant",
     content: "",
@@ -286,6 +286,8 @@ function Harness() {
             <ChatMessage
               message={assistant}
               index={0}
+              author="valerii"
+              head
               thought={{
                 text: assistant.reasoning ?? "",
                 waitMs: assistant.waitMs ?? 0,
@@ -302,6 +304,7 @@ function Harness() {
           <div style={{ display: "flex", height: 520 }}>
             <MessageList
               messages={TOOL_TURN}
+              author="valerii"
               pending={null}
               error=""
               // Not following, so the turn is read from its start rather than
@@ -379,8 +382,8 @@ function Harness() {
  */
 function ScrollHarness() {
   const [messages, setMessages] = useState<UiMessage[]>([
-    { role: "user", content: "First prompt" },
-    { role: "assistant", content: "An answer." },
+    { role: "user", content: "First prompt", sentAt: Date.now() - 90_000 },
+    { role: "assistant", content: "An answer.", waitMs: 1_400 },
   ]);
   const [pending, setPending] = useState<Partial | null>(null);
   const [follow, setFollow] = useState(true);
@@ -440,9 +443,12 @@ function ScrollHarness() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: 420, minHeight: 0 }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", flex: "none", height: 420, minHeight: 0 }}
+    >
       <MessageList
         messages={messages}
+        author="valerii"
         pending={pending}
         error=""
         follow={follow}

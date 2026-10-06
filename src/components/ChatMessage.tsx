@@ -3,7 +3,9 @@ import { Check, Copy, Hash, Pencil, RefreshCw } from "lucide-react";
 import type { Thought, UiMessage, Usage } from "../types";
 import { contentText } from "../types";
 import { copyText } from "../clipboard";
+import { sentAt } from "../clock";
 import { price } from "../money";
+import { ASSISTANT, ASSISTANT_NAME, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { Markdown } from "./Markdown";
 import { Thinking } from "./Thinking";
 import { ToolCall } from "./ToolCall";
@@ -30,6 +32,25 @@ interface Props {
   results?: (UiMessage | undefined)[];
   /** Whether the actions are offered; false while a response is arriving. */
   canAct: boolean;
+  /**
+   * Whether this message opens its turn, and so wears the face, the name and the
+   * time: the person's own message, and the model's first round. What the rest of
+   * the turn says is drawn under that head, down the column it opened — the calls
+   * a round asked for belong to the answer, and are read under it rather than
+   * standing above the name of whoever asked for them.
+   */
+  head: boolean;
+  /** What the app calls the person whose prompts these are, which is the name
+   *  their messages are headed with and the mark their circle wears. */
+  author: string;
+  /**
+   * When the message was sent, in epoch ms, where that is known: the prompt's
+   * own time, and for an answer the moment it began speaking. The transcript
+   * heads every message with it the way a channel does, and a message whose time
+   * is not known — one written before the app kept them — is headed with its
+   * name alone rather than with a guess.
+   */
+  when?: number;
   onRegenerate: (index: number) => void;
   onEdit: (index: number) => void;
 }
@@ -76,6 +97,9 @@ export const ChatMessage = memo(function ChatMessage({
   thought,
   results,
   canAct,
+  head,
+  author,
+  when,
   onRegenerate,
   onEdit,
 }: Props) {
@@ -120,7 +144,7 @@ export const ChatMessage = memo(function ChatMessage({
   // name and answer are all there is to show.
   if (message.role === "tool") {
     return (
-      <div className="msg tool">
+      <div className="msg tool headless">
         <div className="bubble">
           <ToolCall name={message.name ?? ""} result={{ text: content, ms: message.ms }} />
         </div>
@@ -140,11 +164,33 @@ export const ChatMessage = memo(function ChatMessage({
   // thought is read with the answer it led to.
   const asking = toolCalls.length > 0 && content === "";
 
+  // What to call whoever wrote this: the person's own name, or the assistant's,
+  // which is the app's own rather than the model that happened to answer.
+  const who = message.role === "user" ? author : ASSISTANT_NAME;
+
   return (
     <div
-      className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}`}
+      className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}${
+        head ? "" : " headless"
+      }`}
     >
+      {/* The face of whoever wrote it, against the line their name sits on — the
+          shape a channel draws a message in, so a thread and the feed read the
+          same way. */}
+      {head && (
+        <Avatar
+          who={message.role === "user" ? author : ASSISTANT}
+          size={36}
+          colour={message.role === "user" ? undefined : ASSISTANT_TINT}
+        />
+      )}
       <div className="bubble">
+        {head && (
+          <div className="msg-head">
+            <span className="msg-who">{who}</span>
+            {when != null && <span className="msg-when">{sentAt(when)}</span>}
+          </div>
+        )}
         {thought && (
           <Thinking text={thought.text} waitMs={thought.waitMs} thinkingMs={thought.thinkingMs} />
         )}
@@ -171,8 +217,6 @@ export const ChatMessage = memo(function ChatMessage({
                 ))}
               </div>
             )}
-            {/* The design rules off every prompt with its own wavy line. */}
-            <div className="prompt-rule" aria-hidden="true" />
           </>
         ) : (
           <Markdown text={content} />
