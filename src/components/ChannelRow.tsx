@@ -172,17 +172,21 @@ export const ChannelRowItem = memo(
               ))}
             </div>
           )}
-          {/* And under it, who answered and when: the assistant's own mark, the
-              count of what it said, and the moment it last did. */}
+          {/* And under it, everyone the thread is made of and when it was last
+              answered: the person who posted it, the assistant that answered,
+              the count of what was said, and the moment it last was. */}
           {status.text !== "" && !asking && (
             <div className={`channel-status ${status.tone}`}>
               {answered && (
-                <Avatar
-                  who={ASSISTANT}
-                  colour={ASSISTANT_TINT}
-                  size={18}
-                  label={row.model === "" ? "Answered" : `Answered by ${row.model}`}
-                />
+                <span className="channel-participants">
+                  <Avatar who={author} size={18} label={author} />
+                  <Avatar
+                    who={ASSISTANT}
+                    colour={ASSISTANT_TINT}
+                    size={18}
+                    label={row.model === "" ? "Answered" : `Answered by ${row.model}`}
+                  />
+                </span>
               )}
               <span>{status.text}</span>
               {answered && <span className="channel-last">{lastReply(row.updatedAt, now)}</span>}
