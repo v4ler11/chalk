@@ -27,13 +27,14 @@
      chrome is the sidebar's head rather than a corner of the pane's, and its
      right edge is the border the sidebar carries on down — so the two read as one
      surface from the lights to the far edge, and the pane's bar begins where the
-     column ends. */
+     column ends. Nothing rules the rail off from the column under it: the head
+     and the rows are one surface, and the only line there is that right edge,
+     which runs from the top of the window to its foot. */
   width: var(--sidebar-w);
   height: var(--titlebar);
   padding: 0 16px;
   background-color: var(--sidebar);
   border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
   user-select: none;
 }
 
