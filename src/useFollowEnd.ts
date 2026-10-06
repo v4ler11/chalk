@@ -89,6 +89,9 @@ export function useFollowEnd({
       content arriving moves the view's contents under it, and the browser
       reports that as a scroll like any other. */
   const going = useRef(false);
+  /** The content's own height at the last pass, with the room kept at the view's
+      foot left out of it. What a pass follows is content, and nothing else is. */
+  const seen = useRef(-1);
 
   // The state the caller holds is the one anyone outside the view writes — a
   // send, an edit asked again — so the view reads it back as its own before the
@@ -105,14 +108,11 @@ export function useFollowEnd({
     onFollowChange(attached);
   }
 
-  /** How much of the view's own content is out of sight below it, leaving out the
-   *  air at its foot. Zero or less is the end: the last line is on screen, which
-   *  is where a reader following the view wants it — whether or not the composer
-   *  under the pane has taken that air, which is the room the pane gives up first
-   *  and is not the view's place to move for. */
-  function shortfall(el: HTMLElement) {
-    const air = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-    return el.scrollHeight - air - (el.scrollTop + el.clientHeight);
+  /** The room the view's pane keeps at its foot: the space the composer floating
+   *  over it takes, plus the air under its last line. It is left out of the height
+   *  a pass follows, since it belongs to the composer rather than to the content. */
+  function room(el: HTMLElement) {
+    return parseFloat(getComputedStyle(el).paddingBottom) || 0;
   }
 
   /** One pass: holds the view at the end. */
@@ -131,11 +131,15 @@ export function useFollowEnd({
     // may speak for the view once it has run.
     going.current = false;
     if (!following.current) return;
-    // The air given up to the composer is already the end: the last line is on
-    // screen, and taking the offset to the pixel below it would be a jump the
-    // reader never asked for — the one that reads as the feed bouncing a moment
-    // after the composer grew, or a keystroke later.
-    if (shortfall(el) <= 0) return;
+    // A pass follows content, and only content. The composer growing over the pane
+    // changes the view's box and the room kept at its foot without changing a
+    // thing in it, and a pass that took the view to the pixel below would be the
+    // jump the reader never asked for — the one that reads as the feed bouncing a
+    // moment after the composer grew. So what is compared is the height the
+    // content itself has, with that room left out of it.
+    const height = el.scrollHeight - room(el);
+    if (height === seen.current) return;
+    seen.current = height;
     el.scrollTop = el.scrollHeight;
   }
 
@@ -172,20 +176,14 @@ export function useFollowEnd({
     [],
   );
 
-  // A view whose box changes height under it moves the end of it, and a box is
-  // not content: the composer under a pane grows a line at a time, and the window
-  // is resized, and neither of those is a claim on the view. What the box takes
-  // first is the air at the view's own foot — the padding under its last line,
-  // which is what one line of a composer is worth — so the line that grows the
-  // composer from one to two moves nothing at all, and the reader typing it sees
-  // the feed stand still. Past that air the content would leave the view, and the
-  // view follows it, by the difference exactly.
+  // The view's own box changing height under it — a window resized — moves the end
+  // of the view with it, and that end is not content either: a view that is
+  // following goes back to it, in the frame the box changed rather than a pass
+  // later. The composer growing never reaches here: it is drawn over the pane and
+  // the pane keeps its room, so the box is the one thing a draft cannot move.
   //
-  // The scroll is written here rather than asked for as a pass, so that it lands
-  // in the same frame as the box change that caused it: one movement, where a
-  // pass would be a movement and then a jump. A box that *grows* needs nothing
-  // written at all, since the browser clamps an offset that has fallen past its
-  // own end while it lays the change out.
+  // A box that *grows* needs nothing written: the browser clamps an offset left
+  // past its own end as it lays the change out.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -198,8 +196,7 @@ export function useFollowEnd({
       // and not the layout's to move.
       if (!following.current) return;
       if (performance.now() < gesture.current) return;
-      const short = shortfall(el);
-      if (short > 0) el.scrollTop += short;
+      el.scrollTop = el.scrollHeight;
     });
     observer.observe(el);
     return () => observer.disconnect();

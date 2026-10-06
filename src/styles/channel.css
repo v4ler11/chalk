@@ -24,11 +24,10 @@
      panel's own colour; what keeps the first thread clear of it is the list's own
      top padding rather than the scroller's, so that a divider pinned to the top
      of what is scrolled is at the top of the pane and not under that strip. */
-  /* Room under the last thread, and room the composer may take: what the composer
-     grows by comes out of this air before anything in the feed moves, so two
-     lines' worth of it is what makes typing a second and a third line into the
-     composer something the feed never notices. */
-  padding: 0 24px 48px;
+  /* The foot of the feed: the room the composer floating over it takes (its own
+     height) and the air under the last thread. What the composer grows by comes
+     out of this room, so the feed itself never moves while a draft is typed. */
+  padding: 0 24px calc(var(--composer-h, 0px) + 24px);
   /* The centred column stays centred when the platform draws a classic
      scrollbar, which takes width from this box alone. */
   scrollbar-gutter: stable both-edges;

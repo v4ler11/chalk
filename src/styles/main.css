@@ -296,9 +296,10 @@
      dies here: nothing chains to the window, and the panel itself does not
      rubber-band. */
   overscroll-behavior: none;
-  /* The last line keeps two composer lines of air below it: that air is what the
-     composer takes when it grows, so a draft of a few lines moves nothing here. */
-  padding: 32px 24px 48px;
+  /* The composer floats over the transcript, and the transcript's foot keeps its
+     room: the bar's own height, measured into `--composer-h` by the pane, and the
+     air the last message keeps under it. */
+  padding: 32px 24px calc(var(--composer-h, 0px) + 24px);
   /* The centred column has to stay centred on the pane when the platform draws
      a classic scrollbar, which takes width from this box alone. Reserving the
      gutter at both edges keeps it symmetric — and with the overlay scrollbars
@@ -349,7 +350,9 @@
   position: absolute;
   right: 0;
   left: 0;
-  bottom: 12px;
+  /* Over the bar rather than under it: the composer floats at the pane's foot,
+     and the button belongs above it. */
+  bottom: calc(var(--composer-h, 0px) + 12px);
   margin-inline: auto;
   display: flex;
   align-items: center;

@@ -7,6 +7,7 @@ import {
 } from "react";
 import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
 import { period } from "../clock";
+import { useComposerRoom } from "../useComposerRoom";
 import { useFollowEnd } from "../useFollowEnd";
 import { ToBottom } from "./ToBottom";
 
@@ -52,8 +53,12 @@ export function Channel({
   composer,
 }: ChannelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const footer = useRef<HTMLElement>(null);
   const [follow, setFollow] = useState(true);
   const pin = useFollowEnd({ ref: scrollRef, follow, onFollowChange: setFollow });
+  // The composer floats over the feed, and the feed's foot keeps its room, so the
+  // typing that grows the composer does not move the feed an inch.
+  useComposerRoom(footer);
   /** How many rows the last pass saw, so an arriving thread is a claim on the
       view even when the reader had scrolled away to read. */
   const seen = useRef(rows.length);
@@ -133,7 +138,7 @@ export function Channel({
         {!follow && <ToBottom onClick={pin.toEnd} />}
       </div>
 
-      <footer className="composer-bar">{composer}</footer>
+      <footer className="composer-bar" ref={footer}>{composer}</footer>
     </>
   );
 }

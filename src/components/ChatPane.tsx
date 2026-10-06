@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from "react";
+import { useRef, type ReactNode, type RefObject } from "react";
 import type {
   McpCost,
   McpFailure,
@@ -10,6 +10,7 @@ import type {
   UiMessage,
 } from "../types";
 import { MessageList } from "./MessageList";
+import { useComposerRoom } from "../useComposerRoom";
 import { Composer } from "./Composer";
 import { ToolApproval } from "./ToolApproval";
 
@@ -100,6 +101,10 @@ export function ChatPane({
   onSubmit,
   onStop,
 }: Props) {
+  const footer = useRef<HTMLElement>(null);
+  // The composer floats over the transcript, and the transcript's foot keeps its
+  // room: the typing that grows the composer does not move the transcript.
+  useComposerRoom(footer);
   return (
     <>
       {/* What the thread is written on. The sheet covers the pane, the strip
@@ -121,7 +126,7 @@ export function ChatPane({
         />
       </div>
 
-      <footer className="composer-bar">
+      <footer className="composer-bar" ref={footer}>
         {/* A server's tool calls are what a turn may stop on: the calls are
             shown above the composer until the user allows them or says no. */}
         {awaiting && <ToolApproval calls={awaiting} onRun={onRun} onDecline={onDecline} />}

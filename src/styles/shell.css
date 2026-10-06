@@ -497,10 +497,11 @@
   background-color: transparent;
 }
 
-/* Both are positioned so they are painted over the sheet rather than under it,
-   which is what an absolute box would otherwise do to a static one. */
-.transcript,
-.composer-bar {
+/* The transcript is positioned so it is painted over the sheet rather than under
+   it, which is what an absolute box would otherwise do to a static one. The
+   composer bar is positioned too, by its own stylesheet: it floats at the pane's
+   foot. */
+.transcript {
   position: relative;
 }
 

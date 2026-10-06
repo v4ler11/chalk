@@ -4,11 +4,20 @@
    same measure out of the pane and their edges meet at every width — not just
    when the measure is capped rather than the pane. */
 .composer-bar {
+  /* The bar floats over the pane rather than standing under it, so that a draft
+     growing into another line changes the composer's own box and nothing else:
+     the feed or the transcript behind it is never pushed up or laid out again.
+     The pane keeps the room for it — `--composer-h`, set by `useComposerRoom` —
+     and the bar's own colour is what stops what passes under it showing through. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  flex: none;
   padding: 6px 24px 8px;
   /* The transcript reserves a scrollbar gutter at both edges; the bar reserves
      the same, so the two keep one centre and one measure. */
