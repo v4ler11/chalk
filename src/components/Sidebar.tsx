@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
 import { MOD } from "../keybinds";
-import { ChatWave, waveSeed } from "./ChatWave";
+import { ChatWave } from "./ChatWave";
+import { hashName } from "../hash";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
 import type { ChatSummary } from "../types";
 
@@ -96,7 +97,7 @@ function ChatRow({
   if (mode === "rename") {
     return (
       <div className="chat-item active">
-        <ChatWave seed={waveSeed(chat.title)} strokeWidth={1.5} />
+        <ChatWave seed={hashName(chat.title)} strokeWidth={1.5} />
         <input
           className="chat-item-input"
           autoFocus
@@ -118,7 +119,7 @@ function ChatRow({
 
   return (
     <div className={`chat-item row${lit ? " active" : ""}${asking ? " confirming" : ""}`}>
-      <ChatWave seed={waveSeed(chat.title)} strokeWidth={lit ? 1.5 : 1.25} />
+      <ChatWave seed={hashName(chat.title)} strokeWidth={lit ? 1.5 : 1.25} />
       {/* While the question is up the row keeps its wave and its place, and what
           there is to read is the question rather than the chat's name. */}
       {asking ? (

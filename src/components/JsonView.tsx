@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, History, Wrench } from "lucide-react";
 import * as api from "../api";
-import { copyText } from "../clipboard";
+import { useCopy } from "../useCopy";
 import { groupTools } from "../lazy";
 import { tokens, toolBytes } from "../tools";
 import type { NavSection } from "./SectionNav";
@@ -156,7 +156,7 @@ function highlight(
  * bottom-right corner whatever the JSON is doing.
  */
 export function JsonView({ tab, chat, costs }: Props) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
   // The request as the backend assembles it: the prompt resolved, the prompts
   // headed with the time they were sent, the lazy addendum named, and the tools
   // the round would offer. `null` until it answers, and left `null` where there
@@ -236,12 +236,6 @@ export function JsonView({ tab, chat, costs }: Props) {
     [tab, text, open, expand],
   );
 
-  async function copy() {
-    if (!(await copyText(text))) return;
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
-
   return (
     <div className="json-pane">
       <div className="json-view">
@@ -263,7 +257,7 @@ export function JsonView({ tab, chat, costs }: Props) {
           <pre className="json-pre">{body}</pre>
         )}
       </div>
-      <button className="json-copy" onClick={copy} aria-label="Copy JSON">
+      <button className="json-copy" onClick={() => copy(text)} aria-label="Copy JSON">
         {copied ? <Check className="icon" /> : <Copy className="icon" />}
         <span>{copied ? "Copied" : "Copy"}</span>
       </button>

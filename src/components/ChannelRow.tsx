@@ -1,8 +1,10 @@
 import { memo, useEffect, useState } from "react";
 import type { RunStatus } from "../types";
 import * as api from "../api";
-import { lastReply, sentAt } from "../clock";
+import { lastReply } from "../clock";
 import { ASSISTANT, ASSISTANT_TINT, Avatar } from "./Avatar";
+import { ImageStrip } from "./ImageStrip";
+import { MessageHead } from "./MessageHead";
 import { RowDelete, useDeleteQuestion } from "./RowDelete";
 
 /**
@@ -144,10 +146,7 @@ export const ChannelRowItem = memo(
         <div className="channel-body">
           {/* Who wrote it, and when, above it — the line a channel starts a
               message with. */}
-          <div className="channel-head">
-            <span className="channel-who">{author}</span>
-            <span className="channel-when">{sentAt(row.createdAt, now)}</span>
-          </div>
+          <MessageHead who={author} when={row.createdAt} now={now} />
           {asking ? (
             // While the question is up the row keeps its face and its place, and
             // what there is to read is the question rather than the message.
@@ -158,11 +157,7 @@ export const ChannelRowItem = memo(
             </button>
           )}
           {!asking && images.length > 0 && (
-            <div className="channel-images">
-              {images.map((url, i) => (
-                <img key={i} className="channel-image" src={url} alt={`Attached image ${i + 1}`} />
-              ))}
-            </div>
+            <ImageStrip images={images} wrapClass="channel-images" imageClass="channel-image" />
           )}
           {/* And under it, everyone who has said something in the thread and
               when it was last answered: the person, once they have spoken here,

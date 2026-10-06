@@ -1,3 +1,5 @@
+import { hashName } from "../hash";
+
 /**
  * One face in the channel, as Slack draws them: a circle of initials in a colour
  * that belongs to the name.
@@ -9,16 +11,6 @@
  * the way a row's wave is, so the same person wears the same circle everywhere
  * and nothing has to remember it.
  */
-
-/** FNV-1a, the hash the waves use: a name always maps to the same colour. */
-function seed(text: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
 
 /** The circles' colours: a wide spread, each dark enough for white letters. */
 const TINTS = ["#b4552a", "#3f63c9", "#2f8f5b", "#8a5cd6", "#a8813a", "#2f7f95"];
@@ -90,7 +82,7 @@ export function Avatar({ who, size = 36, colour, label }: Props) {
       style={{
         width: size,
         height: size,
-        backgroundColor: colour ?? TINTS[seed(name) % TINTS.length],
+        backgroundColor: colour ?? TINTS[hashName(name) % TINTS.length],
         fontSize: Math.max(9, Math.round(size * 0.4)),
       }}
       role={label ? "img" : undefined}

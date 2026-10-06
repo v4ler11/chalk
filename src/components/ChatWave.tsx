@@ -10,16 +10,6 @@
  * older rows at 1.25.
  */
 
-/** FNV-1a: a small, stable hash so a title always maps to the same wave. */
-export function waveSeed(text: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 const WIDTH = 15;
 const MID = 6.5;
 
