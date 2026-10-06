@@ -75,6 +75,11 @@ export function useConversation({ config, servers, failures, setError, setFollow
   const [settingsView, setSettingsView] = useState(false);
   const [jsonView, setJsonView] = useState(false);
   const [jsonTab, setJsonTab] = useState<JsonTab>("history");
+  // The pins list, and every pinned message there is. Nothing pushes it: a pin is
+  // the window's own fact, so the window is the one that asks for it — when the
+  // list is drawn, and after anything that changes what is pinned.
+  const [pinsView, setPinsView] = useState(false);
+  const [pins, setPins] = useState<ChatSummary[]>([]);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   // The prompt being rewritten in a thread's composer: where it sits, and what
   // it said. Sending the edit starts the turn over from there.
@@ -171,6 +176,21 @@ export function useConversation({ config, servers, failures, setError, setFollow
     return () => setChatsRefresher(null);
   }, [refreshChats]);
 
+  /** Reads the pins. Like the history, it is read after a change rather than
+   *  pushed: what a pin is is the window's own record of it. */
+  const refreshPins = useCallback(async () => {
+    try {
+      setPins(await api.listPins());
+    } catch (e) {
+      fail(e);
+    }
+  }, [fail]);
+  // The list on the way in: a pin made in an earlier session is one the window
+  // has not been told about, and the list is the only place it is read from.
+  useEffect(() => {
+    if (pinsView) void refreshPins();
+  }, [pinsView, refreshPins]);
+
   // The caret belongs in the composer: the window opens on the feed to write
   // into it, and a thread is opened to reach for its composer too. The same ref
   // is the field whichever composer is mounted, and while the JSON view or the
@@ -255,8 +275,15 @@ export function useConversation({ config, servers, failures, setError, setFollow
     [refreshChats],
   );
 
-  /** Opens a thread, whether or not it is already running: the run's snapshot is
-   *  read and the answer arriving comes with it. */
+  /**
+   * Opens a thread, whether or not it is already running: the run's snapshot is
+   * read and the answer arriving comes with it.
+   *
+   * Which pane the thread is opened over is not decided here. The sidebar's row
+   * says whether that pane is the channel or the pins, and a thread opened from
+   * either is the same thread over the same pane — so opening one, and coming back
+   * out of it, leaves the reader where they were rather than in the feed.
+   */
   const openThread = useCallback((chat: number) => {
     setSettingsView(false);
     setEditing(null);
@@ -266,12 +293,67 @@ export function useConversation({ config, servers, failures, setError, setFollow
     void loadRun(chat).catch((e) => actions.current.setError(String(e)));
   }, []);
 
-  /** Returns to the feed. The JSON view belongs to a thread, so it is left. */
+  /**
+   * Leaves a thread. What is left showing is the pane beneath it — the channel's
+   * feed, or the pins, whichever the sidebar's row says — and the JSON view, which
+   * belongs to a thread, is given up with it.
+   */
   const backToChannel = useCallback(() => {
     setEditing(null);
     setJsonView(false);
     setView({ kind: "channel" });
   }, []);
+
+  /**
+   * The pins list, and the way to it.
+   *
+   * It takes the pane the way the settings and the JSON view do, so the feed is
+   * still under it and a chat opened from the list comes back to a channel that
+   * never moved.
+   */
+  const showPins = useCallback((on: boolean) => {
+    setPinsView(on);
+    if (on) {
+      setSettingsView(false);
+      setJsonView(false);
+    }
+  }, []);
+
+  /** The sidebar's Channel row: the feed, with the list put away. */
+  const showChannel = useCallback(() => {
+    setPinsView(false);
+    backToChannel();
+  }, [backToChannel]);
+
+  /** Goes to a pinned thread, which is the channel's own way of opening one. */
+  const openPin = useCallback(
+    (pin: ChatSummary) => {
+      openThread(pin.id);
+    },
+    [openThread],
+  );
+
+  /**
+   * Pins a thread of the feed, or takes the pin off it.
+   *
+   * A pin is one column of one row, so what is left to do afterwards is read the
+   * feed again, where the row that was marked is marked. The pins list is read
+   * again with it: it is the same fact seen from the other side, and a pin taken
+   * off from inside that list has to leave it there and then — the list is read
+   * on the way into the pane, which is no help to a row unpinned while the pane
+   * is already showing.
+   */
+  const pin = useCallback(
+    async (chat: number, pinned: boolean) => {
+      try {
+        await api.pinChat(chat, pinned);
+        await Promise.all([refreshChats(), refreshPins()]);
+      } catch (e) {
+        fail(e);
+      }
+    },
+    [refreshChats, refreshPins, fail],
+  );
 
   /** The composer's send inside a thread. A prompt being rewritten cuts the
    *  transcript back to it first, so the turn starts over from the edit. */
@@ -357,6 +439,14 @@ export function useConversation({ config, servers, failures, setError, setFollow
   // The feed, oldest first: each thread's root message, with its run's phase.
   const rows = useMemo<ChannelRow[]>(() => buildRows(chats, runs, thread), [chats, runs, thread]);
 
+  // The same rows for the pins list, with the unpinned ones left out and the
+  // order its own: most recently pinned first, which is the order the store
+  // answers in and one the feed's own ordering would undo.
+  const pinRows = useMemo<ChannelRow[]>(
+    () => buildRows(pins, runs, thread).sort((a, b) => b.pinnedAt - a.pinnedAt),
+    [pins, runs, thread],
+  );
+
   return {
     view,
     settingsView,
@@ -367,6 +457,12 @@ export function useConversation({ config, servers, failures, setError, setFollow
     showJson,
     leaveSettings,
     closeJson,
+    pinsView,
+    pinRows,
+    showPins,
+    showChannel,
+    openPin,
+    pin,
     rows,
     messages,
     pending,

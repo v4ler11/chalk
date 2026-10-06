@@ -57,10 +57,19 @@ export function toolLabel(name?: string): string {
  * of an identifier being invoked, so the identifier is shown whole, underscores
  * and all — where the approval card reads them out in prose, which is what
  * `toolLabel` is for.
+ *
+ * A name with no double underscore in it is not a server's tool: the loader and
+ * the eight tools the app answers itself are named on their own, with no server
+ * on them, so the whole name is the tool being called and there is nothing to
+ * stand before the separator. Splitting one of those on a join it never had is
+ * what leaves a separator with an empty half after it, and the arguments reading
+ * as the half that was cut off.
  */
 export function toolParts(name?: string): { server: string; tool: string } {
-  const [server, tool] = (name ?? "").split("__");
-  return { server: server || "tool", tool: tool ?? "" };
+  const whole = name ?? "";
+  const cut = whole.indexOf("__");
+  if (cut === -1) return { server: "", tool: whole || "tool" };
+  return { server: whole.slice(0, cut), tool: whole.slice(cut + 2) };
 }
 
 /**
@@ -73,18 +82,5 @@ export function laidOut(text: string): string {
     return JSON.stringify(JSON.parse(text), null, 2);
   } catch {
     return text;
-  }
-}
-
-/**
- * The same, on one line. A model's arguments are usually one dense line already;
- * when they are not, the row they are shown in is, so the newlines are folded
- * into spaces rather than left for the layout to collapse.
- */
-export function oneLine(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text));
-  } catch {
-    return text.replace(/\s+/g, " ").trim();
   }
 }

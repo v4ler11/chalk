@@ -5,13 +5,19 @@
 import ReactDOM from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
 import { Composer } from "./components/Composer";
+import { ChannelRowItem } from "./components/ChannelRow";
 import { ChatMessage } from "./components/ChatMessage";
 import { ChatNav } from "./components/ChatNav";
 import { JsonView } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
+import { PinsView } from "./components/PinsView";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { Sidebar } from "./components/Sidebar";
+import type { ChannelRow } from "./feed";
+import { buildRows } from "./feed";
 import type {
   AppConfig,
+  ChatSummary,
   McpCost,
   McpFailure,
   McpServer,
@@ -199,12 +205,120 @@ const TOOL_TURN: UiMessage[] = [
   },
 ];
 
+/** The pinned threads the list is drawn from: one with replies, one with none, and
+ *  one pinned long enough ago that the row's line reads as a date. */
+const PINS: ChatSummary[] = [
+  {
+    id: 3,
+    title: "Which accounts paid the two electricity bills?",
+    updatedAt: Date.now() - 4 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "",
+    createdAt: Date.now() - 30 * 60_000,
+    root: "Which accounts paid the two electricity bills?",
+    replies: 3,
+    mine: 1,
+    images: 0,
+    pinnedAt: Date.now() - 3 * 60_000,
+  },
+  {
+    id: 1,
+    title: "A prompt long enough that the row under it has to say less than all of it",
+    updatedAt: Date.now() - 26 * 60 * 60_000,
+    model: "google/gemini-3.8-flash",
+    reasoning: "medium",
+    createdAt: Date.now() - 27 * 60 * 60_000,
+    root: "A prompt long enough that the row under it has to say less than all of it, so that the words of it run past what a row of the list holds and are cut off rather than wrapped down the page.",
+    replies: 0,
+    mine: 0,
+    images: 2,
+    pinnedAt: Date.now() - 25 * 60 * 60_000,
+  },
+  {
+    id: 2,
+    title: "An older thread",
+    updatedAt: Date.now() - 3 * 24 * 60 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "",
+    createdAt: Date.now() - 4 * 24 * 60 * 60_000,
+    root: "An older thread",
+    replies: 1,
+    mine: 0,
+    images: 0,
+    pinnedAt: Date.now() - 3 * 24 * 60 * 60_000,
+  },
+];
+
+/** The rows the feed block is drawn from: one pinned, one not, one that is
+ *  thinking, so both readings of the row's menu can be looked at. */
+const FEED: ChannelRow[] = [
+  {
+    chat: 3,
+    root: "Which accounts paid the two electricity bills?",
+    createdAt: Date.now() - 30 * 60_000,
+    replies: 3,
+    mine: 1,
+    images: 0,
+    model: "deepseek/deepseek-v4.1-flash",
+    pinnedAt: Date.now() - 3 * 60_000,
+    updatedAt: Date.now() - 4 * 60_000,
+    status: "idle",
+    thinking: false,
+    awaiting: 0,
+    active: false,
+  },
+  {
+    chat: 4,
+    root: "A thread nobody has pinned, with a longer prompt than the row holds.",
+    createdAt: Date.now() - 2 * 60 * 60_000,
+    replies: 0,
+    mine: 0,
+    images: 0,
+    model: "google/gemini-3.8-flash",
+    pinnedAt: 0,
+    updatedAt: Date.now() - 2 * 60 * 60_000,
+    status: "running",
+    thinking: true,
+    awaiting: 0,
+    active: false,
+  },
+  {
+    // A thread nothing has come back to yet: the case the line under it is held
+    // open for, since the row must be the same height with and without it.
+    chat: 5,
+    root: "A new thread nothing has answered.",
+    createdAt: Date.now() - 60_000,
+    replies: 0,
+    mine: 0,
+    images: 0,
+    model: "deepseek/deepseek-v4.1-flash",
+    pinnedAt: 0,
+    updatedAt: Date.now() - 60_000,
+    status: "idle",
+    thinking: false,
+    awaiting: 0,
+    active: false,
+  },
+];
+
+/** The pinned threads the pins pane is drawn from, as the pane draws them: the
+ *  channel's own rows, most recently pinned first. */
+const PIN_ROWS: ChannelRow[] = buildRows(PINS, new Map(), null).sort(
+  (a, b) => b.pinnedAt - a.pinnedAt,
+);
+
 function Harness() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState<string | null>("An earlier prompt being rewritten");
   const [reasoning, setReasoning] = useState<ReasoningLevel>("");
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [events, setEvents] = useState<string[]>([]);
+  // The feed's rows as the block below draws them, which is what lets a pin be
+  // pressed here: the row it is pressed on is the row that changes.
+  const [feed, setFeed] = useState<ChannelRow[]>(FEED);
+  // Which of the sidebar's two rows is the one showing, so the column and the
+  // list it opens can both be looked at.
+  const [pinsOpen, setPinsOpen] = useState(false);
   const [config, setConfig] = useState<AppConfig>({
     name: "Valerii",
     provider: "openrouter",
@@ -232,7 +346,10 @@ function Harness() {
   };
 
   return (
-    <div className="app">
+    // The window's own box, with the watcher's one change: the app clips its
+    // overflow because a window does not scroll, and a scratch page whose blocks
+    // are taller than the viewport has to.
+    <div className="app" style={{ overflowY: "auto" }}>
       <div className="shell">
                 <main className="main">
           <ChatNav
@@ -240,7 +357,6 @@ function Harness() {
             onBack={() => setEvents((e) => [...e, "back"])}
             jsonView={false}
             onJsonView={() => {}}
-            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
           />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
@@ -279,6 +395,58 @@ function Harness() {
             />
           </div>
           <ScrollHarness />
+          {/* The feed's own rows, one of them pinned and one of them being
+              answered: the row's menu has two readings and the pinned block is a
+              state of the row, so both are drawn here where they can be driven. */}
+          <div className="channel-list" style={{ width: 720, padding: 12 }}>
+            {feed.map((row) => (
+              <ChannelRowItem
+                key={row.chat}
+                row={row}
+                author="valerii"
+                onOpen={(chat) => setEvents((e) => [...e, `open ${chat}`])}
+                onDelete={(chat) => setEvents((e) => [...e, `delete ${chat}`])}
+                onPin={(chat, pinned) => {
+                  setEvents((e) => [...e, `${pinned ? "pin" : "unpin"} ${chat}`]);
+                  setFeed((rows) =>
+                    rows.map((row) =>
+                      row.chat === chat ? { ...row, pinnedAt: pinned ? Date.now() : 0 } : row,
+                    ),
+                  );
+                }}
+              />
+            ))}
+          </div>
+          {/* The window's own column, and the list one of its rows opens: the
+              components the app draws, with fixtures standing in for the
+              backend, so the two can be looked at and driven here. */}
+          <div style={{ display: "flex", flex: "none", height: 340, minHeight: 0 }}>
+            <Sidebar
+              view={pinsOpen ? "pins" : "channel"}
+              onChannel={() => setPinsOpen(false)}
+              onPins={() => setPinsOpen(true)}
+              onSettings={() => setEvents((e) => [...e, "settings"])}
+            />
+            <main className="main">
+              <div className="pins-scroll">
+                <PinsView
+                  rows={PIN_ROWS}
+                  author="valerii"
+                  onOpen={(chat) => setEvents((e) => [...e, `open pin ${chat}`])}
+                  onDelete={(chat) => setEvents((e) => [...e, `delete ${chat}`])}
+                  onPin={(chat, pinned) => setEvents((e) => [...e, `${pinned ? "pin" : "unpin"} ${chat}`])}
+                />
+              </div>
+            </main>
+          </div>
+          {/* And with nothing pinned: what the list says before there is any. */}
+          <div style={{ display: "flex", flex: "none", height: 220, minHeight: 0 }}>
+            <main className="main">
+              <div className="pins-scroll">
+                <PinsView rows={[]} author="valerii" onOpen={() => {}} onDelete={() => {}} onPin={() => {}} />
+              </div>
+            </main>
+          </div>
           {/* The plain-JSON view over the same turn: the system prompt in front,
               then every message with its calls, results and timings. */}
           <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>

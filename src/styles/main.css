@@ -53,8 +53,8 @@
 
 /* A pane's own bar: the strip that drags the window wherever the window's
    controls are not, and whose rule is what separates the bar from the pane below
-   it. Its controls begin clear of the rail's own: 16 of padding, the three lights
-   at 52, and the 12 the rail puts between them. */
+   it. Nothing is reserved at its left: the window's controls are on the sidebar's
+   head now, and this bar begins where that column ends. */
 .chat-nav {
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@
   gap: 6px;
   flex: none;
   height: var(--titlebar);
-  padding: 0 24px 0 80px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   background-color: var(--bg);
   user-select: none;
@@ -296,7 +296,10 @@
      dies here: nothing chains to the window, and the panel itself does not
      rubber-band. */
   overscroll-behavior: none;
-  padding: 32px 24px;
+  /* The composer floats over the transcript, and the transcript's foot keeps its
+     room: the bar's own height, measured into `--composer-h` by the pane, and the
+     air the last message keeps under it. */
+  padding: 32px 24px calc(var(--composer-h, 0px) + 24px);
   /* The centred column has to stay centred on the pane when the platform draws
      a classic scrollbar, which takes width from this box alone. Reserving the
      gutter at both edges keeps it symmetric — and with the overlay scrollbars
@@ -347,7 +350,9 @@
   position: absolute;
   right: 0;
   left: 0;
-  bottom: 12px;
+  /* Over the bar rather than under it: the composer floats at the pane's foot,
+     and the button belongs above it. */
+  bottom: calc(var(--composer-h, 0px) + 12px);
   margin-inline: auto;
   display: flex;
   align-items: center;
@@ -412,6 +417,15 @@
   flex: 1;
   height: 1px;
   background-color: var(--border);
+}
+
+/* The replies begin under the rule at the ordinary distance between one message
+   and the next. A round that only asked for tools is held against what it
+   follows, since its calls are the rest of the same stretch of work — but the
+   rule is the seam the replies begin under rather than a round, so the first of
+   them keeps the gap and the count above it does not sit on the calls. */
+.reply-rule + .msg {
+  margin-top: 28px;
 }
 
 /* Every message is one row: the face of whoever wrote it at the left, their name
@@ -789,12 +803,11 @@
   margin: 0;
 }
 
-/* The row: how long the server took, what was called, and the arguments as they
-   were sent — one line, cut off rather than wrapped, with the whole of it in the
-   card below. It is a record of an identifier being invoked, so it is set as
-   code. Under the pointer, or with the caret in it, the line takes the
-   transcript's own tint and its text comes up to the reading colour: it is then
-   plainly the thing to press. */
+/* The row: how long the server took, and what was called — one line, with the
+   arguments and the result in the card below it. It is a record of an identifier
+   being invoked, so it is set as code. Under the pointer, or with the caret in
+   it, the line takes the transcript's own tint and its text comes up to the
+   reading colour: it is then plainly the thing to press. */
 .tool-call-row {
   display: flex;
   align-items: baseline;
@@ -844,26 +857,15 @@
   color: var(--text-muted);
 }
 
-.tool-call .tool-call-args {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border-radius: 0;
-  background-color: transparent;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-/* The chevron onto the card: out of the way until the row is under the pointer
-   or has the caret, since an idle transcript is a record rather than a list of
-   controls — and turned down while the card is open, as a chevron onto
-   something always is. */
+/* The chevron onto the card: at the row's own end, since it is what the whole
+   row does rather than something the name ends with, and out of the way until
+   the row is under the pointer or has the caret, since an idle transcript is a
+   record rather than a list of controls — and turned down while the card is
+   open, as a chevron onto something always is. */
 .tool-call-chevron {
   flex: none;
   align-self: center;
+  margin-left: auto;
   width: 13px;
   height: 13px;
   opacity: 0;

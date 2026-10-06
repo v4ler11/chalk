@@ -21,6 +21,11 @@
     --reasoning: #6f9dff;
     --reasoning-bg: #1d2b4a;
     --reasoning-divider: #34507f;
+    /* The row under the pointer at night. A cool grey rather than one of the
+       scheme's own warm ones, so a row that lifts reads as lifted. */
+    --row-hover: #222529;
+    --pin-bg: #302e26;
+    --pin: #d4a44a;
     --json-key: #7fb0ff;
     --json-string: #7ddc9a;
     --json-number: #f0c674;

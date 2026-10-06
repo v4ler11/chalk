@@ -10,7 +10,9 @@ import { Composer } from "./components/Composer";
 import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
 import { SectionNav } from "./components/SectionNav";
 import { ModeBar } from "./components/ModeBar";
+import { PinsView } from "./components/PinsView";
 import { SettingsView } from "./components/SettingsView";
+import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import type { Partial, UiMessage } from "./types";
 import "./App.css";
@@ -48,11 +50,15 @@ function App() {
   // The feed stays mounted while a thread or the settings are showing, hidden
   // rather than unmounted, so its scroll and its half-typed draft survive the
   // trip. `visibility`, not `display: none`, is what keeps its scroll position.
-  const channelVisible = !conversation.settingsView && view.kind === "channel";
-  // The thread's pane is the one that slides, and it is the visible pane whenever
-  // a thread is the view and neither the JSON view nor the settings has the
-  // panel.
+  const channelVisible =
+    !conversation.settingsView && !conversation.pinsView && view.kind === "channel";
+  // The pane the sidebar's row chose is the one under everything else: the feed,
+  // or the pins. A thread is drawn over it, and the settings or the JSON view over
+  // that — so what the sidebar says stays true while a thread is open, which is
+  // what makes coming back out of one land where the reader left from.
   const threadVisible = threadOpen && !conversation.settingsView && !conversation.jsonView;
+  const pinsVisible =
+    conversation.pinsView && !threadVisible && !conversation.settingsView;
   // Both composers are mounted at once, and the shared ref must land on the one
   // on screen: the channel's takes this spare while it is hidden.
   const channelComposerRef = useRef<HTMLTextAreaElement>(null);
@@ -139,15 +145,15 @@ function App() {
   ]);
 
   // The panel's own bar, built for the pane it stands on: a thread's bar carries
-  // the way back and offers the JSON view, and a channel's carries neither, so
-  // nothing appears on one bar because of what another pane is doing.
+  // the way back and the dots that offer the switches a thread has, and a
+  // channel's carries neither, so nothing appears on one bar because of what
+  // another pane is doing.
   const nav = (thread: boolean) => (
     <ChatNav
       thread={thread}
       onBack={conversation.backToChannel}
       jsonView={conversation.jsonView}
       onJsonView={conversation.showJson}
-      onOpenSettings={conversation.toggleSettings}
     />
   );
 
@@ -157,6 +163,20 @@ function App() {
         {/* The rail is the window's own corner now: the controls and the drag
             region, and nothing that belongs to a pane. */}
         <TitleBar />
+
+        {/* What there is to look at, one row each: the channel the threads rest
+            in and the pins gathered out of all of them, with the settings at the
+            foot of the column. It is the window's own rather than any pane's, so
+            it is the same in every view — and it is narrow, because a view is a
+            word. */}
+        <Sidebar
+          view={
+            conversation.settingsView ? "settings" : conversation.pinsView ? "pins" : "channel"
+          }
+          onChannel={conversation.showChannel}
+          onPins={() => conversation.showPins(true)}
+          onSettings={conversation.toggleSettings}
+        />
 
         <main className="main">
           {/* The panes share one box so the feed can stay mounted under a thread
@@ -172,6 +192,7 @@ function App() {
                 error={error}
                 onOpen={conversation.openThread}
                 onDelete={conversation.deleteChat}
+                onPin={conversation.pin}
                 composer={
                   <Composer
                     textareaRef={channelVisible ? composerRef : channelComposerRef}
@@ -200,6 +221,30 @@ function App() {
                 }
               />
             </div>
+
+            {/* The pane the sidebar's other row chose: the pinned threads, in the
+                channel's own rows. It takes the pane the way the channel does —
+                the same strip at the top, then the list — since it is a tab and
+                not a mode standing in for the chat: nothing here names it and
+                nothing here is a way out of it, because the sidebar's row is
+                both. It is drawn *under* a thread rather than over one — a thread
+                opened from this list is a thread over the pins, and coming back
+                out of it lands here — so it stays mounted while the thread is up,
+                with its scroll where the reader left it. */}
+            {conversation.pinsView ? (
+              <div className={`pane${pinsVisible ? "" : " off"}`} inert={!pinsVisible}>
+                {nav(false)}
+                <div className="pins-scroll">
+                  <PinsView
+                    rows={conversation.pinRows}
+                    author={conversation.author}
+                    onOpen={conversation.openThread}
+                    onDelete={conversation.deleteChat}
+                    onPin={conversation.pin}
+                  />
+                </div>
+              </div>
+            ) : null}
 
             {/* The thread's pane stays in the page while a mode stands in front
                 of it. The settings and the JSON view are panels over the chat
@@ -247,13 +292,18 @@ function App() {
               </div>
             )}
 
-            {/* Settings and the JSON view take the pane, one at a time, and both
-                are the same shape: a bar naming the mode and holding the way out,
-                then a vertical list of sections down the left and the pane they
-                open on the right. */}
+            {/* The settings take the pane the way the pins do — the pane's own
+                strip, then the sections down the left and the page they open on
+                the right — and, like the JSON view, they wear the bar that names
+                the mode under that strip: the column's own row opens them, but a
+                pane that has taken the window over also says so and holds the
+                way out of itself. The strip above that bar carries nothing: the
+                way back into the feed belongs to a thread's bar, and the way out
+                of a mode is the bar's own ESC, so a mode's strip is the drag
+                region and its rule alone. */}
             {conversation.settingsView ? (
               <div className="pane">
-                {nav(threadOpen)}
+                {nav(false)}
                 <ModeBar title="Settings" onClose={conversation.leaveSettings} />
                 {config ? (
                   <SettingsView config={config} onSaved={setConfig} />
@@ -267,7 +317,7 @@ function App() {
               </div>
             ) : threadOpen && conversation.jsonView ? (
               <div className="pane">
-                {nav(threadOpen)}
+                {nav(false)}
                 <ModeBar title="JSON" onClose={conversation.closeJson} />
                 <div className="settings-body">
                   <SectionNav

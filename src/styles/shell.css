@@ -23,18 +23,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  /* Only as wide as its controls, and wearing no colour of its own: the pane's
-     bar is what shows behind it, so the band across the top is one surface from
-     the controls to the far edge, and a pane that slides takes its own corner
-     with it. Its rule is the beginning of the line the nav draws across the rest
-     of the window. The sidebar used to be this column's body; the channel is the
-     window now, so this corner is all of the chrome there is. */
-  width: var(--rail-collapsed);
+  /* As wide as the column it stands on, and wearing that column's own colour: the
+     chrome is the sidebar's head rather than a corner of the pane's, and its
+     right edge is the border the sidebar carries on down — so the two read as one
+     surface from the lights to the far edge, and the pane's bar begins where the
+     column ends. Nothing rules the rail off from the column under it: the head
+     and the rows are one surface, and the only line there is that right edge,
+     which runs from the top of the window to its foot. */
+  width: var(--sidebar-w);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: transparent;
-  border-right: 1px solid transparent;
-  border-bottom: 1px solid var(--border);
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
   user-select: none;
 }
 
@@ -444,11 +444,19 @@
    transition it goes the instant the pane is off, rather than fading while the
    other one slides across. The reveal rules are the row's and the transcript's,
    which are imported after this file, so the weight is stated rather than
-   matched; a `display` here would move the row's own layout. */
+   matched; a `display` here would move the row's own layout.
+   
+   The row's own menu is in this list because its reveal is a `visibility` as well
+   as an opacity: a row left asking a question reveals its menu through the
+   `confirming` class, and a `visibility: visible` written on a descendant is also
+   what an off pane cannot take back — the menu would otherwise be drawn over the
+   thread that stands in front of the pane it belongs to. */
+.pane.off .row-menu,
 .pane.off .row-actions,
 .pane.off .msg-actions,
 .pane.off .key-hint {
   opacity: 0 !important;
+  visibility: hidden !important;
   transition: none;
 }
 
@@ -480,13 +488,40 @@
    from the right edge, moving left, and leaves the same way, so going in and
    coming back are one movement read forwards and backwards.
 
+   The strip the composer floats on is in the same movement: it is the sheet's
+   colour at the bar's own height, and without it the one part of the pane that
+   did not move would be the part under the composer.
+
    The bar is not part of that movement. Its own surface is the sheet behind it —
    the sheet covers the pane's whole height — so what passes under the controls is
    the background, and the controls themselves stay where they are. */
 .transcript,
-.transcript-sheet {
+.transcript-sheet,
+.composer-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
+}
+
+/* The strip the composer floats on, and the reason the space under the composer
+   travels with the thread. The bar cannot draw it: the bar clips what it holds,
+   and a surface inside it would be wiped by that clip rather than carried out of
+   the bar's own box. So it is drawn here, the sheet's colour at the bar's own
+   height — the measurement the pane already reserves for the bar — and painted
+   after the transcript, so the messages passing under the bar are hidden by it,
+   and before the bar, so the composer's card is not. */
+.composer-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--composer-h, 0px);
+  background-color: var(--sidebar);
+}
+
+/* A thread's bar wears no colour of its own: the sheet is what is behind it, and
+   what the bar itself drew would be the one part of the pane that never moved. */
+.pane.thread > .composer-bar {
+  background-color: transparent;
 }
 
 /* The bar over the sheet wears no colour of its own: the sheet is what is seen
@@ -498,15 +533,17 @@
   background-color: transparent;
 }
 
-/* Both are positioned so they are painted over the sheet rather than under it,
-   which is what an absolute box would otherwise do to a static one. */
-.transcript,
-.composer-bar {
+/* The transcript is positioned so it is painted over the sheet rather than under
+   it, which is what an absolute box would otherwise do to a static one. The
+   composer bar is positioned too, by its own stylesheet: it floats at the pane's
+   foot. */
+.transcript {
   position: relative;
 }
 
 .pane.thread.off .transcript,
-.pane.thread.off .transcript-sheet {
+.pane.thread.off .transcript-sheet,
+.pane.thread.off .composer-sheet {
   transform: translateX(100%);
 }
 

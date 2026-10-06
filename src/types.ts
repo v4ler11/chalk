@@ -340,6 +340,12 @@ export interface ChatSummary {
    * A row that has any asks for them, by id, when it is drawn.
    */
   images: number;
+  /**
+   * Unix time in ms the thread was pinned, or zero while it is not. A thread is
+   * pinned or it is not, and the moment is what the pins list orders by — the
+   * list being the same rows as the feed, with this one not zero.
+   */
+  pinnedAt: number;
 }
 
 /** Flatten a message's content to display text. */

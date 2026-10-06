@@ -24,7 +24,10 @@
      panel's own colour; what keeps the first thread clear of it is the list's own
      top padding rather than the scroller's, so that a divider pinned to the top
      of what is scrolled is at the top of the pane and not under that strip. */
-  padding: 0 24px 24px;
+  /* The foot of the feed: the room the composer floating over it takes (its own
+     height) and the air under the last thread. What the composer grows by comes
+     out of this room, so the feed itself never moves while a draft is typed. */
+  padding: 0 24px calc(var(--composer-h, 0px) + 24px);
   /* The centred column stays centred when the platform draws a classic
      scrollbar, which takes width from this box alone. */
   scrollbar-gutter: stable both-edges;
@@ -123,12 +126,125 @@
   transition: background-color 120ms ease;
 }
 
+/* What a row offers while the pointer is in it, at its own top-right corner: pin
+   the thread, or delete it. The corner is empty — the face and the words are at
+   the row's left — and the menu is taken out of the flow, so the feed is the same
+   height whether or not it is drawn. */
+.row-menu {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background-color: var(--bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+/* Drawn under the pointer, or while something in it has the caret — and for as
+   long as the question is up, so that the answer to it is still there to give
+   once the pointer has moved. */
+.channel-row:hover .row-menu,
+.row-menu:focus-within,
+.channel-row.confirming .row-menu {
+  opacity: 1;
+  visibility: visible;
+}
+
+.row-menu-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.row-menu-action:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* The pin that is already on the thread: the colour says which way the press
+   goes, so the two readings of one button are told apart before it is pressed. */
+.row-menu-action.on {
+  color: var(--pin);
+}
+
+.row-menu-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The question the bin asks, in the menu's own place: two answers rather than an
+   icon of the thing about to be removed. */
+.row-menu-word {
+  padding: 5px 9px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.row-menu-word:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.row-menu-word.danger {
+  color: var(--danger);
+}
+
+.row-menu-word.danger:hover {
+  background-color: var(--danger-bg);
+}
+
+/* The pin, on the line the name is on rather than on one of its own: a row's
+   height is settled when it is written, and a mark added later must not move
+   what is under it. */
+.pin-mark {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--pin);
+  transform: translateY(1px);
+}
+
 .channel-row.active {
   background-color: var(--sidebar-active);
 }
 
 .channel-row:hover {
-  background-color: var(--sidebar-hover);
+  background-color: var(--row-hover);
+}
+
+/* A pinned thread: the block a channel gives one — a ground of its own and a rule
+   down its left edge. It is written after the two rules above on purpose: a pin is
+   a state of the row rather than a thing the pointer does to it, so hovering a
+   pinned row, or opening it, leaves its ground where it is. The padding the rule
+   takes is given back, so the face, the name and the words stay on the column
+   every other row is on. */
+.channel-row.pinned {
+  padding-left: 11px;
+  border-left: 3px solid var(--pin);
+  border-radius: 0 10px 10px 0;
+  background-color: var(--pin-bg);
 }
 
 /* The face at the row's left sits against the line its name sits on rather than
@@ -186,10 +302,40 @@
   overflow-wrap: anywhere;
 }
 
-/* While the question is up the row's words step back behind it, dimmed rather
-   than hidden, as a history row's do. */
-.channel-row.confirming .channel-root {
+/* The message's own box, and the question stacked in it: what the row's height is
+   made of is the message, and the question is put in the message's own cell, so
+   asking a row leaves the box exactly the height it had. The box is not
+   positioned on purpose: the row's click target is the button's `::after`,
+   stretched over the whole row from the nearest positioned box above it, and a
+   positioned box here would shrink a click on the row's face, its status line or
+   its empty corner into a click on the message alone. */
+.channel-message {
+  display: grid;
+}
+
+.channel-message > * {
+  grid-area: 1 / 1;
+}
+
+/* The question the row asks in its own words, in the message's box: the same face
+   and the same measure as the message, since it stands where the message stands,
+   and one line inside a box that may be three. */
+.channel-ask {
+  font-family: var(--font-message);
+  font-size: 15.5px;
+  line-height: 1.45;
   color: var(--text-secondary);
+}
+
+/* While the question is up the message steps out of sight — the box it fills
+   stays exactly as it was, so the row does not move — and it stops taking clicks,
+   so the question's own row is not a way into the thread. */
+.channel-row.confirming .channel-root {
+  visibility: hidden;
+}
+
+.channel-row.confirming .channel-open {
+  pointer-events: none;
 }
 
 /* The pictures the prompt was posted with, under the words it was posted as: a
@@ -215,12 +361,27 @@
   object-fit: cover;
 }
 
-/* What the run is doing, and — once it is done — who answered it and when: the
-   model's circle, the count of what it said, and the moment it last did. */
+/* A box whose picture has not been read yet: it is the size and the place the
+   picture will be, and nothing is drawn in it rather than something that is not
+   the picture. */
+.channel-image.held {
+  visibility: hidden;
+}
+
+/* The line under the prompt: what the run is doing, and — once it is done — who
+   answered it, how much was said, and the moment it last was. It holds its height
+   whether or not it has anything to say: a row is created with what it was
+   created with, and a thread whose first answer lands must not grow under the
+   reader and push every row below it down. Its tone classes are namespaced
+   (`tone-thinking` and the rest) because a bare `thinking` or `failed` on a feed
+   row is a name the transcript's own blocks answer to as well: a rule written for
+   one of those, with a margin of its own, would reach in here and move the line
+   the moment a run began thinking. */
 .channel-status {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 20px;
   font-family: var(--font-body);
   font-size: 12.5px;
   color: var(--text-muted);
@@ -231,7 +392,7 @@
    A thread that needs the user wears the app's blue instead: that is the one
    state that is the user's move, and the count is not one. A failure wears the
    error red. */
-.channel-status.replies {
+.channel-status.tone-replies {
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -251,11 +412,11 @@
   font-weight: 400;
 }
 
-.channel-status.needs {
+.channel-status.tone-needs {
   color: var(--reasoning);
 }
 
-.channel-status.failed {
+.channel-status.tone-failed {
   color: var(--danger);
 }
 

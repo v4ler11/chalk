@@ -283,6 +283,40 @@ fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<C
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
 }
 
+/// The pinned threads, most recently pinned first: what the sidebar's Pins row
+/// draws. A thread rather than a message of one, since a row of the channel is
+/// the thread — so what comes back is a chat's own summary, with the moment it
+/// was pinned in it.
+#[tauri::command]
+fn list_pins(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
+    history(&app, "could not list the pins", history_store(&state).and_then(|store| store.pins()))
+}
+
+/// Pins a thread, or takes the pin off it.
+///
+/// The row is written column by column rather than whole, so a pin taken while a
+/// thread is answering is not undone by the next thing its run writes.
+#[tauri::command]
+fn pin_chat(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    pinned: bool,
+) -> Result<(), String> {
+    let at = if pinned {
+        chrono::Utc::now().timestamp_millis()
+    } else {
+        0
+    };
+    history(
+        &app,
+        "could not pin the thread",
+        history_store(&state).and_then(|store| store.set_pinned(chat, at)),
+    )?;
+    log(&app, "info", format!("chat {chat} {}", if pinned { "pinned" } else { "unpinned" }));
+    Ok(())
+}
+
 /// The pictures a thread was opened with, for the row in the feed that stands
 /// for it. Asked for by rows that have any — the list says how many — since
 /// what comes back is the attachments themselves, a megabyte each.
@@ -952,6 +986,7 @@ pub fn run() {
             list_chats,
             root_images,
             delete_chat,
+            list_pins,
             runs::run_start,
             runs::run_stop,
             runs::run_allow,
@@ -959,6 +994,7 @@ pub fn run() {
             runs::run_state,
             runs::runs_state,
             runs::chat_set,
+            pin_chat,
             request_preview,
             mcp_servers,
             mcp_save_servers,

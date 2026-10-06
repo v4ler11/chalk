@@ -24,6 +24,9 @@ export type ChannelRow = {
   images: number;
   /** The model this thread is with: who answered it, as its circle is drawn. */
   model: string;
+  /** Unix time in ms the thread was pinned, or zero while it is not: what marks
+   *  the row, and what the pins list orders by. */
+  pinnedAt: number;
   /** Unix time in ms of the thread's last message, which is when it was last
    *  answered — what the row says under the count of what was said. */
   updatedAt: number;
@@ -97,6 +100,7 @@ export function buildRows(
       createdAt: chat.createdAt,
       images: chat.images,
       model: chat.model,
+      pinnedAt: chat.pinnedAt,
       updatedAt: chat.updatedAt,
       active: thread === chat.id,
       ...phase(runs.get(chat.id), chat),
