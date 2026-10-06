@@ -27,19 +27,14 @@
 }
 
 .mcp-new {
-  display: flex;
-  align-items: center;
   gap: 6px;
   margin-bottom: 6px;
   padding: 6px 8px;
   border: 1px dashed var(--border);
   border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
   font-family: inherit;
   font-size: 13px;
   text-align: left;
-  cursor: pointer;
 }
 
 .mcp-new:hover {
@@ -144,23 +139,6 @@ button.mcp-row-name::after {
   font-size: 13px;
 }
 
-/* The type is chosen from a list rather than typed, so it wears the fields'
-   shape without their freedom. */
-.mcp-detail select {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 15px;
-}
-
-.mcp-detail select:focus {
-  border-color: var(--text-muted);
-}
-
 /* The switch: an empty square when it is off, and a filled square with a tick on
    it when it is on. The box is the app's own rather than the platform's, because
    the platform draws that one in its own colours while every other control here
@@ -233,31 +211,6 @@ button.mcp-row-name::after {
   min-width: 0;
 }
 
-.mcp-kv-remove {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 34px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.mcp-kv-remove:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.mcp-kv-remove svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* The label and the way to add a row, on one line: a list of headers costs its
    rows and not a row of its own. */
 .mcp-kv-head {
@@ -268,17 +221,12 @@ button.mcp-row-name::after {
 }
 
 .mcp-kv-add {
-  display: flex;
-  align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
 }
 
 .mcp-kv-add:hover {
@@ -318,33 +266,10 @@ button.mcp-row-name::after {
   cursor: default;
 }
 
-.mcp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* The one filled button in the pane: what writes `mcp.json`. */
-.mcp-actions .mcp-primary {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background-color: var(--accent);
-  color: var(--accent-contrast);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
+/* Save waits on the write, so it is dimmed while one is in flight. */
 .mcp-actions .mcp-primary:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.mcp-saved {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 
 /* What a verify or test answered: the server, the revision it agreed to, and

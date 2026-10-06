@@ -104,17 +104,6 @@
   overscroll-behavior: none;
 }
 
-/* Before the settings file has been read there is no form to draw, only the
-   two things the window can still offer. */
-.settings-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
-  min-height: 0;
-  padding: 16px;
-}
-
 .notice {
   margin: 0;
   padding: 8px 12px;
@@ -125,13 +114,16 @@
   font-size: 13px;
 }
 
-.settings-actions {
+.settings-actions,
+.mcp-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.settings-saved {
+/* The receipt a save shows beside its button: the settings form's, and the MCP
+   pane's, since both say the same thing the same way. */
+.saved {
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -145,7 +137,8 @@
   gap: 16px;
 }
 
-.settings label {
+.settings label,
+.field {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -230,7 +223,10 @@
   min-width: 0;
 }
 
-.settings-model-remove {
+/* The muted X that drops a row, beside a model in the form and beside a header
+   in the MCP pane. */
+.settings-model-remove,
+.mcp-kv-remove {
   flex: none;
   display: flex;
   align-items: center;
@@ -245,7 +241,8 @@
   cursor: pointer;
 }
 
-.settings-model-remove:hover:not(:disabled) {
+.settings-model-remove:hover:not(:disabled),
+.mcp-kv-remove:hover {
   background-color: var(--sidebar);
   color: var(--text-primary);
 }
@@ -256,24 +253,31 @@
   cursor: default;
 }
 
-.settings-model-remove svg {
+.settings-model-remove svg,
+.mcp-kv-remove svg {
   width: 14px;
   height: 14px;
 }
 
-.settings-model-add {
-  align-self: flex-start;
+/* The add button of a list, wherever it sits: the dashed pill under the models
+   and under the servers, and the small `+` beside a header list's label. The
+   page's own class gives it its place and its shape. */
+.add-button {
   display: flex;
   align-items: center;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.settings-model-add {
+  align-self: flex-start;
   gap: 6px;
   padding: 6px 10px;
   border: 1px dashed var(--border);
   border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
   font-family: inherit;
   font-size: 13px;
-  cursor: pointer;
 }
 
 .settings-model-add:hover {
@@ -305,9 +309,11 @@
   line-height: 1.4;
 }
 
-/* The panel's one filled button. Scoped to the actions so the list's own
-   buttons — add and remove — are not painted like it. */
-.settings-actions button {
+/* The one filled button of a settings page: the form's Save, and the MCP
+   pane's. Scoped to the actions so the lists' own buttons, the add and remove
+   ones, are not painted like it. */
+.settings-actions button,
+.mcp-actions .mcp-primary {
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
