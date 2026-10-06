@@ -20,6 +20,9 @@ export type ChannelRow = {
   createdAt: number;
   /** How many messages the thread holds after its opening one. */
   replies: number;
+  /** How many of those the user wrote, the prompt that opened the thread not
+   *  among them: it is what says whether they are a participant in it. */
+  mine: number;
   /** How many pictures the prompt was posted with, which is what the row asks
    *  for them by: none is a row that has nothing to draw. */
   images: number;
@@ -172,14 +175,18 @@ export const ChannelRowItem = memo(
               ))}
             </div>
           )}
-          {/* And under it, everyone the thread is made of and when it was last
-              answered: the person who posted it, the assistant that answered,
-              the count of what was said, and the moment it last was. */}
+          {/* And under it, everyone who has said something in the thread and
+              when it was last answered: the person, once they have spoken here,
+              the assistant that answered, the count of what was said, and the
+              moment it last was. */}
           {status.text !== "" && !asking && (
             <div className={`channel-status ${status.tone}`}>
               {answered && (
                 <span className="channel-participants">
-                  <Avatar who={author} size={18} label={author} />
+                  {/* The prompt that opened the thread is the thread, not a reply
+                      to it, so posting it does not make the person a participant
+                      — answering it does. */}
+                  {row.mine > 0 && <Avatar who={author} size={18} label={author} />}
                   <Avatar
                     who={ASSISTANT}
                     colour={ASSISTANT_TINT}
@@ -208,6 +215,7 @@ export const ChannelRowItem = memo(
     before.row.root === after.row.root &&
     before.row.createdAt === after.row.createdAt &&
     before.row.replies === after.row.replies &&
+    before.row.mine === after.row.mine &&
     before.row.images === after.row.images &&
     before.row.model === after.row.model &&
     before.row.updatedAt === after.row.updatedAt &&

@@ -247,6 +247,12 @@ export interface RunSummary {
    * still for the whole of a run and moves when the answer lands.
    */
   replies: number;
+  /**
+   * How many of those the user has said themselves, the prompt that opened the
+   * thread not among them: that prompt is the thread rather than a reply to it,
+   * so a person counts as a participant only once they have answered it.
+   */
+  mine: number;
   /** How many tool calls are waiting on the user. */
   awaiting: number;
 }
@@ -272,6 +278,8 @@ export interface RunSnapshot {
   /** How many messages the thread has said since its prompt: the user's own and
    *  the model's answers, with the tools' results left out. */
   replies: number;
+  /** How many of those are the user's own, the opening prompt not among them. */
+  mine: number;
   /** The transcript: the run's own while it is live, the row's otherwise. */
   messages: UiMessage[];
   /** The answer arriving, or `null` when the run has none in flight. */
@@ -320,6 +328,12 @@ export interface ChatSummary {
   /** How many messages the chat holds after its opening one, the tools' results
    *  among them left out: the user's own and the model's answers. */
   replies: number;
+  /**
+   * How many of those the user wrote. The prompt that opened the thread is the
+   * thread rather than a reply to it, so it is not counted here — which is what
+   * says whether they are a participant in it or only the one who started it.
+   */
+  mine: number;
   /**
    * How many pictures the prompt was posted with. A count rather than the
    * pictures: an attachment is a data URL, and the list is drawn on every post.

@@ -30,6 +30,9 @@ export interface FeedRow {
   root: string;
   createdAt: number;
   replies: number;
+  /** How many of those the user wrote, the prompt that opened the thread not
+   *  among them: it says whether they are a participant in it. */
+  mine: number;
   /** How many pictures the prompt was posted with, which is what tells the row
    *  whether it has any to draw — the pictures themselves are read by the row. */
   images: number;
@@ -435,6 +438,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
         root: chat.root,
         createdAt: chat.createdAt,
         replies,
+        mine: chat.mine,
         images: chat.images,
         model: chat.model,
         updatedAt: chat.updatedAt,

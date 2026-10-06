@@ -189,10 +189,10 @@
   font-weight: 500;
 }
 
-/* Everyone a thread is made of, before the count of what they said: the person
-   who posted it and the assistant that answered, in the order they spoke. Side
-   by side rather than overlapped, since the circles have no ring to tell them
-   apart and the row's own background changes under the pointer. */
+/* Everyone who has said something in a thread, before the count of what they
+   said: the person's own circle once they have spoken in it, and the assistant's
+   mark. Side by side rather than overlapped, since the circles have no ring to
+   tell them apart and the row's own background changes under the pointer. */
 .channel-participants {
   display: flex;
   align-items: center;

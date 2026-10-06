@@ -113,6 +113,11 @@ pub struct ChatSummary {
     /// out the tools' results in between, which are what was done rather than
     /// anything said. Zero while nothing has come back.
     pub replies: i64,
+    /// How many messages the user has written since the prompt that opened the
+    /// thread: that prompt is the thread rather than a reply to it, so it is not
+    /// counted, and this is what says whether they are a participant in their
+    /// own thread or only the one who started it.
+    pub mine: i64,
     /// How many pictures the prompt was posted with. A count rather than the
     /// pictures themselves: an attachment is a data URL of a megabyte or more,
     /// and a list read on every post is no place to carry one. A row that has
@@ -167,6 +172,9 @@ FROM json_each(messages) WHERE json_extract(value, '$.role') = 'user' LIMIT 1";
 /// left out. A turn that called three tools and then answered has said two
 /// things, not five.
 ///
+/// How many of them are the user's own is derived the same way, and for the same
+/// reason: the prompt that opened the thread is the thread, not a reply to it.
+///
 /// The pictures the prompt carried are counted here too, and not carried: the
 /// count is what tells a row whether it has any to ask for.
 ///
@@ -183,7 +191,9 @@ fn summary_columns() -> String {
          (SELECT COALESCE(SUM(CASE parts.type \
                                 WHEN 'object' THEN json_extract(parts.value, '$.type') = 'image_url' \
                                 ELSE 0 END), 0) \
-          FROM json_each(({ROOT_CONTENT})) AS parts)"
+          FROM json_each(({ROOT_CONTENT})) AS parts), \
+         MAX((SELECT COUNT(*) FROM json_each(messages) \
+              WHERE json_extract(value, '$.role') = 'user') - 1, 0)"
     )
 }
 
@@ -199,6 +209,7 @@ fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatSummary> {
         root: row.get(6)?,
         replies: row.get(7)?,
         images: row.get(8)?,
+        mine: row.get(9)?,
     })
 }
 

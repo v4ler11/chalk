@@ -206,6 +206,9 @@ fn a_reply_is_something_said() {
         { "role": "assistant", "content": "two" },
     ]);
     assert_eq!(spoken(messages.as_array().unwrap()), 3);
+    // And none of them are the user's own: they wrote once, which opened the
+    // thread rather than answering it.
+    assert_eq!(mine(messages.as_array().unwrap()), 0);
 }
 
 /// A chat is set to things through its row, and a chat with a run is read

@@ -95,6 +95,9 @@ pub(crate) struct Summary {
     /// How many messages the chat holds after its opening one: what is committed,
     /// so it stays still for the whole of a run and moves when the answer lands.
     pub replies: usize,
+    /// How many of those are the user's own: what they have said since the
+    /// prompt that opened the thread, which is not counted as a reply to it.
+    pub mine: usize,
     pub awaiting: usize,
 }
 
@@ -113,6 +116,9 @@ pub(crate) struct Snapshot {
     pub servers: Option<Vec<String>>,
     pub loaded: Vec<String>,
     pub replies: usize,
+    /// How many of the replies are the user's own, the thread's opening prompt
+    /// not among them: a person is a participant once they have answered it.
+    pub mine: usize,
     /// The transcript: the run's own while it is live, the row's otherwise, in
     /// the shape the window stores and draws.
     pub messages: Vec<Value>,
@@ -305,6 +311,7 @@ impl Run {
                     .map(|partial| partial.thinking)
                     .unwrap_or(true),
             replies: spoken(&state.messages).saturating_sub(1),
+            mine: mine(&state.messages),
             awaiting: state.awaiting.len(),
         }
     }
@@ -320,6 +327,7 @@ impl Run {
             servers: state.servers.clone(),
             loaded: state.loaded.clone(),
             replies: spoken(&state.messages).saturating_sub(1),
+            mine: mine(&state.messages),
             messages: state.messages.clone(),
             partial: state.partial.clone(),
             awaiting: state.awaiting.clone(),
@@ -696,6 +704,18 @@ fn spoken(messages: &[Value]) -> usize {
             )
         })
         .count()
+}
+
+/// How many messages the user has written since the prompt that opened the
+/// thread. The prompt itself is the thread rather than something said in it —
+/// it is not a reply to anything — so it is not counted, and a person is a
+/// participant in their own thread only once they have answered it.
+fn mine(messages: &[Value]) -> usize {
+    messages
+        .iter()
+        .filter(|message| message.get("role").and_then(Value::as_str) == Some("user"))
+        .count()
+        .saturating_sub(1)
 }
 
 /// The calls a transcript ends on unanswered, which are the ones a chat opened

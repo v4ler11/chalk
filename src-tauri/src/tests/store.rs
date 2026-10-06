@@ -129,6 +129,9 @@ fn a_row_crosses_to_the_frontend_as_it_is_read() {
             "createdAt": 42,
             "root": "",
             "replies": 0,
+            // Nothing has been said at all, so nothing has been said by the
+            // user either — and the prompt is not a thing said in a thread.
+            "mine": 0,
             "images": 0,
         })
     );
@@ -286,6 +289,55 @@ fn a_prompt_of_words_alone_has_no_pictures_to_read() {
     assert_eq!(chat.images, 0);
     assert!(store.root_images(chat.id).unwrap().is_empty());
     assert!(store.root_images(chat.id + 1).unwrap().is_empty());
+}
+
+/// A person is a participant in their own thread once they have said something
+/// in it. The prompt that opened it is the thread rather than a reply to it, so
+/// it is not counted among their own replies — and a thread they have only
+/// opened is one the assistant alone has answered.
+#[test]
+fn the_opening_prompt_is_not_one_of_the_users_replies() {
+    let store = Store::in_memory().unwrap();
+    let asked = store
+        .save(
+            None,
+            "what accounts do I have?",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "what accounts do I have?" },
+                { "role": "assistant", "content": "three" },
+            ]),
+            42,
+        )
+        .unwrap();
+    let followed = store
+        .save(
+            None,
+            "and the balances?",
+            "m",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "what accounts do I have?" },
+                { "role": "assistant", "content": "three" },
+                { "role": "user", "content": "and the balances?" },
+                { "role": "assistant", "content": "here" },
+            ]),
+            43,
+        )
+        .unwrap();
+
+    assert_eq!(asked.replies, 1);
+    assert_eq!(asked.mine, 0);
+    assert_eq!(followed.replies, 3);
+    assert_eq!(followed.mine, 1);
+    // And the list, which derives both in its own query, agrees with both.
+    let rows = store.list().unwrap();
+    let listed = |title: &str| rows.iter().find(|row| row.title == title).unwrap();
+    assert_eq!(listed("what accounts do I have?").mine, 0);
+    assert_eq!(listed("and the balances?").mine, 1);
 }
 
 /// A database written before there were models to hold, or a reasoning level

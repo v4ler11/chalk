@@ -35,6 +35,7 @@ const CHATS: ChatSummary[] = [
     createdAt: Date.now() - 60_000,
     root: "First chat",
     replies: 3,
+    mine: 1,
     images: 0,
   },
   {
@@ -46,6 +47,7 @@ const CHATS: ChatSummary[] = [
     createdAt: Date.now() - 20_000,
     root: "Second chat",
     replies: 1,
+    mine: 0,
     images: 0,
   },
 ];
