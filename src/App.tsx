@@ -145,15 +145,15 @@ function App() {
   ]);
 
   // The panel's own bar, built for the pane it stands on: a thread's bar carries
-  // the way back and offers the JSON view, and a channel's carries neither, so
-  // nothing appears on one bar because of what another pane is doing.
+  // the way back and the dots that offer the switches a thread has, and a
+  // channel's carries neither, so nothing appears on one bar because of what
+  // another pane is doing.
   const nav = (thread: boolean) => (
     <ChatNav
       thread={thread}
       onBack={conversation.backToChannel}
       jsonView={conversation.jsonView}
       onJsonView={conversation.showJson}
-      onOpenSettings={conversation.toggleSettings}
     />
   );
 
@@ -165,13 +165,17 @@ function App() {
         <TitleBar />
 
         {/* What there is to look at, one row each: the channel the threads rest
-            in, and the pins gathered out of all of them. The column is the
-            window's own rather than any pane's, so it is the same in both views
-            — and it is narrow, because a view is a word. */}
+            in and the pins gathered out of all of them, with the settings at the
+            foot of the column. It is the window's own rather than any pane's, so
+            it is the same in every view — and it is narrow, because a view is a
+            word. */}
         <Sidebar
-          pinsOpen={conversation.pinsView}
+          view={
+            conversation.settingsView ? "settings" : conversation.pinsView ? "pins" : "channel"
+          }
           onChannel={conversation.showChannel}
           onPins={() => conversation.showPins(true)}
+          onSettings={conversation.toggleSettings}
         />
 
         <main className="main">
@@ -288,14 +292,14 @@ function App() {
               </div>
             )}
 
-            {/* Settings and the JSON view take the pane, one at a time, and both
-                are the same shape: a bar naming the mode and holding the way out,
-                then a vertical list of sections down the left and the pane they
-                open on the right. */}
+            {/* The settings take the pane the way the pins do — the pane's own
+                strip, then the sections down the left and the page they open on
+                the right — since the column's own row names them and holds the
+                way out of them. The JSON view is a thread's, with no row in the
+                column to stand for it, so it is the one that wears a bar. */}
             {conversation.settingsView ? (
               <div className="pane">
                 {nav(threadOpen)}
-                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
                 {config ? (
                   <SettingsView config={config} onSaved={setConfig} />
                 ) : (

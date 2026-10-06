@@ -357,7 +357,6 @@ function Harness() {
             onBack={() => setEvents((e) => [...e, "back"])}
             jsonView={false}
             onJsonView={() => {}}
-            onOpenSettings={() => setEvents((e) => [...e, "settings"])}
           />
           <div className="messages" style={{ padding: 24 }}>
             <ChatMessage
@@ -423,9 +422,10 @@ function Harness() {
               backend, so the two can be looked at and driven here. */}
           <div style={{ display: "flex", flex: "none", height: 340, minHeight: 0 }}>
             <Sidebar
-              pinsOpen={pinsOpen}
+              view={pinsOpen ? "pins" : "channel"}
               onChannel={() => setPinsOpen(false)}
               onPins={() => setPinsOpen(true)}
+              onSettings={() => setEvents((e) => [...e, "settings"])}
             />
             <main className="main">
               <div className="pins-scroll">

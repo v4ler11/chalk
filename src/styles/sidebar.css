@@ -5,6 +5,8 @@
    the column are one surface — and it is there in both views, since a thread is
    opened *in* the channel rather than instead of it. */
 .sidebar {
+  display: flex;
+  flex-direction: column;
   flex: none;
   width: var(--sidebar-w);
   height: 100%;
@@ -14,8 +16,8 @@
   user-select: none;
 }
 
-/* The views, one to a row. Nothing scrolls: two rows fit, and a column with a
-   scrollbar in it for two rows would be a column wearing a mistake. */
+/* The views, one to a row. Nothing scrolls: three rows fit, and a column with a
+   scrollbar in it for three rows would be a column wearing a mistake. */
 .sidebar-list {
   display: flex;
   flex-direction: column;
@@ -55,4 +57,18 @@
 .nav-row.active {
   background-color: var(--sidebar-active);
   color: var(--text-primary);
+}
+
+/* The settings at the column's foot, hard against the window's bottom edge:
+   what the window can show is one list, and this is the row of it that is not a
+   place the chat is in. */
+.sidebar-foot {
+  margin-top: auto;
+}
+
+/* Its tip lifts above the row, as the composer's do: this is the last row of the
+   window, and a tip under it would be the one nobody could read. */
+.sidebar-foot .key-hint {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
