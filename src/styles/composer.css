@@ -192,7 +192,9 @@
   background-color: transparent;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: calc(15px + var(--composer-grow));
+  /* The draft is the chat's own words on their way in, so it is set at the
+     chat's own size rather than at a size of the composer's own. */
+  font-size: var(--chat-text);
   line-height: 1.5;
 }
 

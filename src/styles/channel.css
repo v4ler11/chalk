@@ -295,7 +295,7 @@
   -webkit-line-clamp: 3;
   overflow: hidden;
   font-family: var(--font-message);
-  font-size: 15.5px;
+  font-size: var(--chat-text);
   line-height: 1.45;
   color: var(--text-primary);
   white-space: pre-wrap;
@@ -322,7 +322,7 @@
    and one line inside a box that may be three. */
 .channel-ask {
   font-family: var(--font-message);
-  font-size: 15.5px;
+  font-size: var(--chat-text);
   line-height: 1.45;
   color: var(--text-secondary);
 }

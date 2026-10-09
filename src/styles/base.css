@@ -62,8 +62,15 @@
      own bar beside it: the lights and the controls in them are 30px at the
      tallest, so this is that and the air around it. */
   --titlebar: 38px;
+  /* What the chat's own words are set in, wherever they are written: a prompt in
+     the feed, the question a row asks in its place, a message in the transcript,
+     and the draft in the composer, which is those words on their way in. The
+     chat's face is the serif, and this is its one size — a point more than the
+     design's 15.5px. */
+  --chat-text: calc(15.5px + 1pt);
   /* How much the composer grows past its design size: nothing at the 820px
-     minimum window, 2px of extra type by 1600px. */
+     minimum window, 2px of extra padding and controls by 1600px. The draft's
+     type is the chat's own size at every width and so does not grow with it. */
   --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
 
   font-family: var(--font-body);

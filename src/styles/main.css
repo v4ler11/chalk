@@ -469,7 +469,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-message);
-  font-size: 15.5px;
+  font-size: var(--chat-text);
   line-height: 1.5;
   color: var(--text-primary);
 }
