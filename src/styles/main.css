@@ -516,15 +516,27 @@
    than over it — `static`, since the pill's own recipe is a floating menu drawn
    over whatever it belongs to, which is what the feed's rows want and what the
    transcript cannot have: a prompt is written under this line, and a pill out of
-   the flow is drawn over the first words of it. Hidden rather than absent, so its
-   buttons take no click and no turn of the tab order until the message is under
-   the pointer, and the line is the same height either way. */
+   the flow is drawn over the first words of it. The line is the same height
+   whether or not it is drawn. */
 .msg.user .row-menu {
   position: static;
   margin-left: auto;
   opacity: 0;
+  /* Nothing to offer while the thread is answering, so nothing of it takes a
+     click or a turn of the tab order: asking again and rewriting both cut the
+     transcript back to this prompt, and neither can be asked for mid-answer. */
   visibility: hidden;
   transition: opacity 120ms ease;
+}
+
+/* A prompt that can act offers its pill to the caret as well as to the pointer,
+   so its buttons take a turn of the tab order — which is what makes the
+   `:focus-within` clause below more than a second way in — while the pill's own
+   box stays click-through, so the words between its buttons are still the
+   message's. `acting` is that difference. */
+.msg.user.acting .row-menu {
+  visibility: visible;
+  pointer-events: none;
 }
 
 /* The same two ways in as the channel's rows: the pointer in the message, or the
@@ -532,7 +544,14 @@
 .msg.user.acting .bubble:hover .row-menu,
 .msg.user.acting .row-menu:focus-within {
   opacity: 1;
-  visibility: visible;
+}
+
+/* And the buttons take their clicks back once it is drawn, or while the caret is
+   inside one of them — the pill's own box stays click-through, so the words
+   between the buttons are still the message's. */
+.msg.user.acting .bubble:hover .row-menu .btn,
+.msg.user.acting .row-menu:focus-within .btn {
+  pointer-events: auto;
 }
 
 /* What a message offers — copy it, ask again, rewrite it — hanging under the
@@ -544,7 +563,8 @@
    which for an answer is the prompt of the next turn: invisible buttons over rows
    that cannot then be pressed. Holding the space also keeps the transcript the
    same height whether or not a pointer is in it — only the drawing of the row
-   changes, and only for a message that can act. */
+   changes, and that only while the answer it belongs to is under the pointer or
+   holds the row's own focus. */
 .msg-actions {
   display: flex;
   justify-content: flex-start;
@@ -617,9 +637,10 @@
 
 /* The block the actions hang under keeps no bottom margin, so the row sits just
    below the text and not a paragraph's gap below it. An answer's row is in the
-   flow, so the last block is the child before it; a prompt's pill is out of the
-   flow, so there the last block is the plain last child — and while an answer is
-   still live and has no actions drawn yet, it is the last child too. */
+   flow, so the last block is the child before it; a prompt's pill is no child of
+   the bubble at all — it stands in the head row, which is drawn above the words
+   — so there the last block is the plain last child, and while an answer is still
+   live and has no actions drawn yet, it is the last child too. */
 .bubble > :nth-last-child(2):has(+ .msg-actions),
 .bubble > :last-child:not(.msg-actions) {
   margin-bottom: 0;

@@ -124,6 +124,21 @@ function slug(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * What a test answered, and the address it was asked with. The address rides
+ * with the answer because an answer is about it: a form that has moved to
+ * another address — the field cleared, or typed into something else — is
+ * holding an answer that is not about the server it now describes, and the two
+ * are read together wherever the answer is shown.
+ */
+interface TestResult {
+  /** The address the test was asked with: the URL or command as the box drew
+   *  it, trimmed, rather than the field as it was typed. */
+  address: string;
+  report?: McpReport;
+  error?: string;
+}
+
 /** Why the list cannot be written, or `""` when it can. */
 function problem(list: Draft[]): string {
   const seen = new Set<string>();
@@ -217,10 +232,18 @@ export function McpSettings() {
   // Set by a save and cleared by its own timer: a receipt for what just
   // happened, not a state the page is in.
   const { saved, flash } = useSaved();
+  // Whether the file is being written: a save and a removal both land here, and
+  // the form's own button is held for as long as that lasts.
   const [busy, setBusy] = useState(false);
-  // What the last test answered. Selecting another server leaves it behind
-  // rather than showing one server's tools under another's name.
-  const [result, setResult] = useState<{ report?: McpReport; error?: string } | null>(null);
+  // Whether the open server is being asked what it offers. The test keeps a flag
+  // of its own rather than sharing the page's busy: a save or a removal asks no
+  // server, and the one line that announces a question is drawn from this.
+  const [testing, setTesting] = useState(false);
+  // What the last test answered, and the address it was asked with. Selecting
+  // another server leaves it behind rather than showing one server's tools under
+  // another's name; the address travels inside it so that a form which has moved
+  // to another address does not wear it either.
+  const [result, setResult] = useState<TestResult | null>(null);
 
   useEffect(() => {
     api
@@ -269,22 +292,24 @@ export function McpSettings() {
   /** Switches the open server's transport. The two variants share no field, so
       the new one starts empty rather than wearing the old one's leftovers; the
       one already chosen is not switched to, since that would be the same thing
-      as clearing it. */
+      as clearing it — and the click leaves nothing behind there either, since
+      nothing about the server has changed, so an answer already in the box
+      still stands. */
   function setType(type: Draft["type"]) {
-    setDraft((d) => {
-      if (!d || d.type === type) return d;
-      const base: DraftBase = {
-        id: d.id,
-        name: d.name,
-        enabled: d.enabled,
-        lazy: d.lazy,
-        description: d.description,
-        autoRun: d.autoRun,
-      };
-      return type === "http"
+    if (!draft || draft.type === type) return;
+    const base: DraftBase = {
+      id: draft.id,
+      name: draft.name,
+      enabled: draft.enabled,
+      lazy: draft.lazy,
+      description: draft.description,
+      autoRun: draft.autoRun,
+    };
+    setDraft(
+      type === "http"
         ? { ...base, type: "http", url: "", headers: [] }
-        : { ...base, type: "stdio", command: "", args: "", env: [] };
-    });
+        : { ...base, type: "stdio", command: "", args: "", env: [] },
+    );
     setResult(null);
   }
 
@@ -358,16 +383,20 @@ export function McpSettings() {
     }
   }
 
-  /** Asks the open server what it offers, as it is on screen — unsaved. */
-  async function test() {
+  /** Asks the open server what it offers, as it is on screen — unsaved. The
+      address is the one the box that asks read off the draft, and it is kept
+      with the answer: what the test answered is about that address, so the box
+      draws its state and its tools from the answer only while the form is still
+      there. */
+  async function test(address: string) {
     if (!draft) return;
-    setBusy(true);
+    setTesting(true);
     try {
-      setResult({ report: await api.mcpTest(toServer(draft)) });
+      setResult({ address, report: await api.mcpTest(toServer(draft)) });
     } catch (e) {
-      setResult({ error: String(e) });
+      setResult({ address, error: String(e) });
     } finally {
-      setBusy(false);
+      setTesting(false);
     }
   }
 
@@ -521,7 +550,7 @@ export function McpSettings() {
                 </div>
               )}
 
-              <ConnectionTest draft={draft} busy={busy} result={result} onTest={test} />
+              <ConnectionTest draft={draft} testing={testing} result={result} onTest={test} />
             </section>
 
             <div className="mcp-rule" />
@@ -705,19 +734,30 @@ function TransportCard({
  */
 function ConnectionTest({
   draft,
-  busy,
+  testing,
   result,
   onTest,
 }: {
   draft: Draft;
-  busy: boolean;
-  result: { report?: McpReport; error?: string } | null;
-  onTest: () => void;
+  /** Whether this server is the one being asked right now: the test's own flag,
+      not the page's busy, since a save or a removal asks no server. */
+  testing: boolean;
+  result: TestResult | null;
+  /** Asks the server, told the address it is asking about: the answer is kept
+   *  against it, which is what lets the state below and the tools under it be
+   *  drawn from one answer. */
+  onTest: (address: string) => void;
 }) {
   // What there is to reach: the URL of an HTTP server, the command of one run
   // here. With neither, there is nothing to try.
   const address = draft.type === "http" ? draft.url.trim() : draft.command.trim();
-  const report = result?.report;
+  // The answer in hand, if it is about the address in hand: one asked with
+  // another address describes a server the form no longer holds — the field
+  // cleared, or typed into something else — so it belongs to neither the state
+  // below nor the tools under it. Both are drawn from this one answer, which is
+  // what keeps the two halves saying the same thing about the same server.
+  const answered = result && result.address === address ? result : null;
+  const report = answered?.report;
 
   let state = "";
   let title: string;
@@ -728,13 +768,13 @@ function ConnectionTest({
       draft.type === "http"
         ? "Add a server URL to test the connection."
         : "Add a command to test the connection.";
-  } else if (busy) {
+  } else if (testing) {
     title = "Asking the server…";
     sub = "Waiting for it to answer.";
-  } else if (result?.error) {
+  } else if (answered?.error) {
     state = " bad";
     title = "The server did not answer";
-    sub = result.error;
+    sub = answered.error;
   } else if (report) {
     state = " ok";
     const tools = report.tools.length;
@@ -757,7 +797,11 @@ function ConnectionTest({
             <span className="mcp-test-sub">{sub}</span>
           </div>
         </div>
-        <button className="btn btn--secondary" disabled={address === "" || busy} onClick={onTest}>
+        <button
+          className="btn btn--secondary"
+          disabled={address === "" || testing}
+          onClick={() => onTest(address)}
+        >
           Test connection
         </button>
       </div>

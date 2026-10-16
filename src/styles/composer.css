@@ -155,7 +155,8 @@
 /* The field itself: the whole box it is written in — a field left to itself is
    twenty columns wide, whichever box it is put in — two lines at rest, never a
    resize handle, and no scroll of its own: it is as tall as what is written in
-   it, set from the render, and the box around it is what scrolls. */
+   it, re-measured when the words or its width change, and the box around it is
+   what scrolls. */
 .composer textarea {
   display: block;
   width: 100%;
@@ -214,7 +215,7 @@
   justify-content: space-between;
   width: 100%;
   max-width: var(--content-w);
-  height: calc(26px + var(--composer-grow) * 2);
+  height: var(--send-btn);
 }
 
 .composer-tools {

@@ -555,12 +555,20 @@ fn mark_cacheable(messages: &mut [Message]) {
 /// window holds, which is what keeps a prompt the user's own text — what an edit
 /// hands back, and what the store keeps — while what the model reads is the
 /// whole of what it is being told.
-pub(crate) fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
+pub(crate) fn assembled(
+    config: &AppConfig,
+    model: &str,
+    lazy: &[mcp::Lazy],
+    messages: &mut Vec<Message>,
+) {
     stamp_prompts(messages);
     // Only OpenRouter is asked to reuse a prefix this way: the mark means
     // nothing to a gateway that does not know it, and a custom endpoint's own
-    // API is not this app's to decorate.
-    if is_openrouter(config) {
+    // API is not this app's to decorate. Which gateway this is comes from where
+    // the model is going rather than from the app's own provider — a model
+    // routed elsewhere by its id is elsewhere — so the breakpoint is decided by
+    // the same derivation the request's own header is.
+    if settings::is_openrouter_url(&settings::destination(config, model).url) {
         mark_cacheable(messages);
     }
     with_system_prompt(&config.system_prompt, lazy, messages);
@@ -699,13 +707,6 @@ fn offered(tools: Vec<mcp::ToolOffer>) -> Vec<Tool> {
     tools.iter().map(mcp::ToolOffer::as_tool).collect()
 }
 
-/// Whether requests go to OpenRouter, which is the one gateway this app knows
-/// things about: the response cache it asks for below, and the word it reads
-/// back off the response.
-fn is_openrouter(config: &AppConfig) -> bool {
-    config.provider.trim() == settings::OPENROUTER
-}
-
 /// Asks OpenRouter to answer a repeated request from its own cache.
 ///
 /// The header is what turns response caching on; a request identical to an
@@ -806,10 +807,16 @@ pub(crate) async fn one_round(
     run: &runs::Run,
 ) -> Round {
     let client = app.state::<AppState>().client.clone();
-    // Where this model is asked depends on the model itself: a gateway named by
-    // its id's first segment is asked of that gateway, with that gateway's key,
-    // and everything else is asked of the app's own provider as before.
-    let (gateway, base, key) = settings::gateway_for(&config, &model);
+    // Where this model is asked, and as what: a gateway named by its id's first
+    // segment is asked of that gateway, with that gateway's key and under the
+    // model's own name, and everything else is asked of the app's own provider
+    // as before.
+    let settings::Destination {
+        gateway,
+        url: base,
+        key,
+        model: asked,
+    } = settings::destination(&config, &model);
     let url = format!("{}/chat/completions", base.trim_end_matches('/'));
     // OpenRouter is the one gateway that is told about its own cache and about
     // the conversation it is meant to pin, and which gateway this is comes from
@@ -828,7 +835,7 @@ pub(crate) async fn one_round(
                 .join(", ")
         })
         .unwrap_or_else(|| "none".to_owned());
-    let mut post = completion(model, messages, reasoning, tools);
+    let mut post = completion(asked, messages, reasoning, tools);
     // A conversation is pinned to one upstream for as long as it keeps asking:
     // OpenRouter's sticky routing is what keeps a provider's prompt cache warm
     // between one prompt and the next, and it is the conversation's own key that

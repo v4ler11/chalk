@@ -48,9 +48,10 @@
   --row-hover: #24241f;
   --pin-bg: #302e26;
   --pin: #d4a44a;
-  /* What has just been written, at night: the same green the JSON view's
-     strings are read in, on a ground dark enough to be a row rather than a
-     surface of its own. */
+  /* What has just been written, at night: a green of its own rather than the
+     JSON view's string ink, as the light scheme's is — the palette leaves the
+     ink and the brand for it — on a ground dark enough to be a row rather than
+     a surface of its own. */
   --ok: #4ade80;
   --ok-bg: #12251a;
   --json-key: #7fb0ff;

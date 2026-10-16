@@ -412,7 +412,7 @@ const APP_CONFIG: AppConfig = {
  *  be drawn from. */
 const APP_CHATS: ChatSummary[] = [
   {
-    id: 1,
+    id: 6,
     title: "What did I spend on electricity?",
     updatedAt: Date.now() - 4 * 60_000,
     model: "deepseek/deepseek-v4.1-flash",
@@ -425,7 +425,7 @@ const APP_CHATS: ChatSummary[] = [
     pinnedAt: Date.now() - 2 * 60_000,
   },
   {
-    id: 2,
+    id: 7,
     title: "A thread with nothing pinned about it",
     updatedAt: Date.now() - 26 * 60 * 60_000,
     model: "deepseek/deepseek-v4.1-flash",
@@ -439,15 +439,33 @@ const APP_CHATS: ChatSummary[] = [
   },
 ];
 
-/** One thread as the run holds it: a prompt and its answer, with nothing
- *  arriving. The driver starts the stream.
+/** One thread as the run holds it: its prompt and, where the row says the thread
+ *  has been answered, the answer — with nothing arriving. The driver starts the
+ *  stream.
  *
- *  The answer carries the usage a provider reports with it — the tokens and the
- *  price — on the threads that have been answered, which is where the app reads
- *  a chat's spend from; a thread with no answer yet has none, the way a
- *  transcript written before the app kept usage has none. */
+ *  The count a run reports is the messages the thread has said since its prompt,
+ *  which is what the transcript below comes to: a row that says nothing has
+ *  answered it carries the prompt alone, so what is counted and what is held
+ *  cannot disagree. The answer carries the usage a provider reports with it — the
+ *  tokens and the price — which is where the app reads a chat's spend from, and a
+ *  thread with no answer has none, the way a transcript written before the app
+ *  kept usage has none. */
 function appSnapshot(chat: number): RunSnapshot {
   const row = APP_CHATS.find((one) => one.id === chat) ?? APP_CHATS[0];
+  const messages: UiMessage[] = [
+    { role: "user", content: row.root, sentAt: row.createdAt },
+    ...(row.replies > 0
+      ? [
+          {
+            role: "assistant" as const,
+            content: "An answer.",
+            waitMs: 1200,
+            thinkingMs: 400,
+            usage: ANSWERED,
+          },
+        ]
+      : []),
+  ];
   return {
     chat: row.id,
     status: "idle",
@@ -456,18 +474,9 @@ function appSnapshot(chat: number): RunSnapshot {
     reasoning: row.reasoning,
     servers: null,
     loaded: [],
-    replies: row.replies,
+    replies: messages.length - 1,
     mine: row.mine,
-    messages: [
-      { role: "user", content: row.root, sentAt: row.createdAt },
-      {
-        role: "assistant",
-        content: "An answer.",
-        waitMs: 1200,
-        thinkingMs: 400,
-        ...(row.replies > 0 ? { usage: ANSWERED } : {}),
-      },
-    ],
+    messages,
     partial: null,
     awaiting: [],
     error: null,
@@ -492,7 +501,8 @@ const ARRIVING: Usage = {
 
 /**
  * The window's backend, at the boundary the app talks to: the commands the
- * window reads on the way in, and the two events a run reports itself with.
+ * window reads on the way in and the ones it writes the store with, and the two
+ * events a run reports itself with.
  *
  * The MCP page's own calls are among them, since they are the same window's. What
  * is left unanswered is anything a scratch page has no business faking — a send,
@@ -508,7 +518,11 @@ const ARRIVING: Usage = {
 function installBackend() {
   const state = {
     servers: MCP_SERVERS,
-    runs: new Map<number, RunSnapshot>([[1, appSnapshot(1)], [2, appSnapshot(2)]]),
+    // The store's history, which the reads below answer from and a pin and a
+    // delete write to: a press has to leave the next read saying something else,
+    // or the row and the pane it feeds would stand still.
+    chats: APP_CHATS,
+    runs: new Map<number, RunSnapshot>([[6, appSnapshot(6)], [7, appSnapshot(7)]]),
   };
   const listeners = new Map<string, number>();
   const callbacks = new Map<number, (event: unknown) => void>();
@@ -555,9 +569,24 @@ function installBackend() {
         case "save_config":
           return args?.config;
         case "list_chats":
-          return APP_CHATS;
+          return state.chats;
         case "list_pins":
-          return APP_CHATS.filter((row) => row.pinnedAt > 0);
+          return state.chats.filter((row) => row.pinnedAt > 0);
+        // The store's two writes, each read back from the reads above: a pin is
+        // a column of one row, and a delete is one row fewer — and a thread that
+        // is gone is not one a run should still be reported for, so its run goes
+        // with it.
+        case "pin_chat":
+          state.chats = state.chats.map((row) =>
+            row.id === chat ? { ...row, pinnedAt: args?.pinned ? Date.now() : 0 } : row,
+          );
+          return null;
+        case "delete_chat": {
+          const id = args?.id as number;
+          state.chats = state.chats.filter((row) => row.id !== id);
+          state.runs.delete(id);
+          return null;
+        }
         case "runs_state":
           return summaries();
         case "run_state":

@@ -111,9 +111,10 @@
      type is the chat's own size at every width and so does not grow with it. */
   --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
   /* The circle that sends the draft, grown with the bar: the size a control of
-     the bar's smallest kind is. It is written once here because two things are
-     measured by it — the button itself, and the floor the draft's row keeps, a
-     one-line draft being exactly the button's height. */
+     the bar's smallest kind is. It is written once here because three things are
+     measured by it — the button itself, the floor the draft's row keeps, a
+     one-line draft being exactly the button's height, and the row of controls
+     under the card, which keeps the height the send's own row has. */
   --send-btn: calc(26px + var(--composer-grow) * 2);
 
   font-family: var(--font-body);

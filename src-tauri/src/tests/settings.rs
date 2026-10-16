@@ -264,22 +264,88 @@ fn a_model_is_asked_of_the_gateway_its_id_names() {
         }],
         ..AppConfig::from(&defaults())
     };
-    let (name, url, key) = gateway_for(&config, "anthropic/claude-sonnet-4.5");
-    assert_eq!(name, "anthropic");
-    assert_eq!(url, "https://api.anthropic.com/v1");
-    assert_eq!(key, "sk-ant-1");
+    let spot = destination(&config, "anthropic/claude-sonnet-4.5");
+    assert_eq!(spot.gateway, "anthropic");
+    assert_eq!(spot.url, "https://api.anthropic.com/v1");
+    assert_eq!(spot.key, "sk-ant-1");
+    // The app's id for it leads with the gateway's name, which the gateway has
+    // never heard of: it is asked for the model's own name.
+    assert_eq!(spot.model, "claude-sonnet-4.5");
 }
 
 /// A prefix that names no configured gateway is not a gateway: OpenRouter's
 /// own vendor-prefixed ids look exactly like one, and they belong to the
-/// app's own provider.
+/// app's own provider. The name the app knows a URL for makes no difference —
+/// routing is by what the file configures, not by what the app could resolve —
+/// so `deepseek/…` with no gateway goes to the app's own provider like any
+/// other prefix, and so does an id with no prefix at all. The key is the app's
+/// own, which is what the fixture holds rather than the empty key the defaults
+/// have: a fall-through that quietly kept the default's `""` would pass either
+/// way, so the key is made non-empty.
 #[test]
 fn a_prefix_that_names_no_gateway_goes_to_the_apps_own_provider() {
-    let config = AppConfig::from(&defaults());
-    let (name, url, key) = gateway_for(&config, "anthropic/claude-sonnet-4.5");
-    assert_eq!(name, OPENROUTER);
-    assert_eq!(url, OPENROUTER_URL);
-    assert_eq!(key, "");
+    let config = AppConfig {
+        api_key: "sk-own".into(),
+        ..AppConfig::from(&defaults())
+    };
+    for model in [
+        "anthropic/claude-sonnet-4.5",
+        "deepseek/deepseek-v4.1-flash",
+        "no-prefix-model",
+    ] {
+        let spot = destination(&config, model);
+        assert_eq!(spot.gateway, OPENROUTER);
+        assert_eq!(spot.url, OPENROUTER_URL);
+        assert_eq!(spot.key, "sk-own");
+        // Its id is the model's name there — `deepseek/deepseek-v4.1-flash` is
+        // OpenRouter's spelling, vendor prefix and all.
+        assert_eq!(spot.model, model);
+    }
+}
+
+/// A gateway the app has no URL for and that wrote none is not sent to: there
+/// is nowhere of its own to send to, so the request falls to the app's own
+/// provider — under the app's own key, because the key goes where the request
+/// goes. Sending the gateway's key to a provider that never asked for it is the
+/// whole of what that rule prevents, and the name comes back as the app's own
+/// provider too, so a log line never names a gateway the request did not reach.
+#[test]
+fn a_gateway_with_no_destination_is_the_apps_own_provider() {
+    let config = AppConfig {
+        api_key: "sk-own".into(),
+        gateways: vec![AppGateway {
+            id: "anthropic".into(),
+            endpoint: String::new(),
+            api_key: "sk-ant-1".into(),
+        }],
+        ..AppConfig::from(&defaults())
+    };
+    let spot = destination(&config, "anthropic/claude-sonnet-4.5");
+    assert_eq!(spot.gateway, OPENROUTER);
+    assert_eq!(spot.url, OPENROUTER_URL);
+    assert_eq!(spot.key, "sk-own");
+    assert_eq!(spot.model, "anthropic/claude-sonnet-4.5");
+}
+
+/// A gateway's name is one segment, since that is all a model's id can lead
+/// with: a name written with a slash in it can never be the first segment, and
+/// is never matched — the model goes to the app's own provider like any other.
+#[test]
+fn a_gateway_name_with_a_slash_never_matches() {
+    let config = AppConfig {
+        api_key: "sk-own".into(),
+        gateways: vec![AppGateway {
+            id: "acme/anthropic".into(),
+            endpoint: "https://api.anthropic.com/v1".into(),
+            api_key: "sk-ant-1".into(),
+        }],
+        ..AppConfig::from(&defaults())
+    };
+    let spot = destination(&config, "acme/anthropic/claude-sonnet-4.5");
+    assert_eq!(spot.gateway, OPENROUTER);
+    assert_eq!(spot.url, OPENROUTER_URL);
+    assert_eq!(spot.key, "sk-own");
+    assert_eq!(spot.model, "acme/anthropic/claude-sonnet-4.5");
 }
 
 /// A gateway whose name the app knows needs no endpoint written down: the
@@ -294,9 +360,10 @@ fn a_gateway_the_app_knows_needs_no_endpoint() {
         }],
         ..AppConfig::from(&defaults())
     };
-    let (_, url, key) = gateway_for(&config, "deepseek/deepseek-chat");
-    assert_eq!(url, "https://api.deepseek.com/v1");
-    assert_eq!(key, "sk-ds-1");
+    let spot = destination(&config, "deepseek/deepseek-chat");
+    assert_eq!(spot.url, "https://api.deepseek.com/v1");
+    assert_eq!(spot.key, "sk-ds-1");
+    assert_eq!(spot.model, "deepseek-chat");
 }
 
 /// The names that are enough on their own: each service's OpenAI-compatible
@@ -339,6 +406,26 @@ fn gateways_survive_a_round_trip() {
     std::fs::write(&old, "provider: openrouter\napi_key: sk-1\nmodels: []\n").unwrap();
     assert!(read(&old).unwrap().gateways.is_empty());
     let _ = std::fs::remove_file(&old);
+}
+
+/// A gateway that needs no key — a local Ollama, say — is written with just its
+/// name, and the file still parses: every field a gateway can do without is
+/// defaulted, since the file is hand-edited and one missing key must not fail
+/// the whole file's read and keep the app from starting.
+#[test]
+fn a_gateway_without_a_key_reads_with_an_empty_one() {
+    let path = temp("gateway-no-key");
+    std::fs::write(
+        &path,
+        "provider: openrouter\napi_key: sk-1\nmodels: [x]\ngateways:\n  - id: ollama\n",
+    )
+    .unwrap();
+    let settings = read(&path).unwrap();
+    assert_eq!(settings.gateways.len(), 1);
+    assert_eq!(settings.gateways[0].id, "ollama");
+    assert_eq!(settings.gateways[0].api_key, "");
+    assert_eq!(settings.gateways[0].endpoint, "");
+    let _ = std::fs::remove_file(&path);
 }
 
 /// OpenRouter's URL is OpenRouter however it is spelled, and no other URL is.

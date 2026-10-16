@@ -9,6 +9,10 @@
   overflow-y: auto;
   overscroll-behavior: none;
   padding: 20px 24px 48px;
+  /* The feed keeps this for the very list drawn here: the centred column stays
+     centred when the platform draws a classic scrollbar, which takes width from
+     this box alone. */
+  scrollbar-gutter: stable both-edges;
   /* The feed centres its list; so does this, around the same list. */
   display: flex;
   flex-direction: column;

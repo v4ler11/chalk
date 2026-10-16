@@ -611,3 +611,59 @@ fn pinned_threads_are_listed_most_recently_pinned_first() {
     store.delete(older.id).unwrap();
     assert!(store.set_pinned(older.id, 5).is_err());
 }
+
+/// A pin is taken while a thread may be answering, and answering writes the
+/// whole row — as does the answer after it, and the one after that. So the pin
+/// is written on its own, and the row's own write must name the columns it owns
+/// and leave the pin's alone: a save that wrote a zero into it, the way a row
+/// is born, would unpin every thread that was ever answered, and the pins list
+/// would empty itself an answer at a time.
+#[test]
+fn a_thread_answered_again_keeps_the_pin_it_was_given() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "pinned",
+            "test/model",
+            "low",
+            None,
+            &json!([{ "role": "user", "content": "what we pinned" }]),
+            10,
+        )
+        .unwrap();
+    // A moment from the clock rather than a fixture number: it has to survive a
+    // write that is told a moment of its own, and neither the moment of the pin
+    // nor the moment of the write may stand in for the other.
+    let pinned_at = chrono::Utc::now().timestamp_millis();
+    store.set_pinned(chat.id, pinned_at).unwrap();
+
+    let answered = json!([
+        { "role": "user", "content": "what we pinned" },
+        { "role": "assistant", "content": "an answer" },
+    ]);
+    let written = store
+        .save(
+            Some(chat.id),
+            "pinned",
+            "test/model",
+            "high",
+            None,
+            &answered,
+            20,
+        )
+        .unwrap();
+
+    // The save did what a save does: the transcript it was handed, the level it
+    // was asked for, the moment it was written.
+    assert_eq!(written.reasoning, "high");
+    assert_eq!(written.updated_at, 20);
+    assert_eq!(store.load(chat.id).unwrap().unwrap().messages, answered);
+    // And the pin is where it was left, both in the row the write answers with
+    // and in the list the sidebar draws.
+    assert_eq!(written.pinned_at, pinned_at);
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].id, chat.id);
+    assert_eq!(pins[0].pinned_at, pinned_at);
+}

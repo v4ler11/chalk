@@ -86,8 +86,8 @@ pub fn tools() -> Vec<mcp::ToolOffer> {
         offer(
             "models_list",
             "List the models",
-            "List the models this app offers, in the order the picker shows them — the \
-             first being what a new chat starts from.",
+            "List the models this app offers, in the order the picker shows them, and \
+             the model a new chat starts from.",
             object(json!({}), &[]),
         ),
         offer(
@@ -307,7 +307,11 @@ fn model_added(models: &mut Vec<String>, starts: &str, args: &Value) -> Result<S
     Ok(format!("{added}\n{}", models_answer(models, starts)))
 }
 
-/// Removes one model by its id. The last one stays: a chat needs a model to ask.
+/// Removes one model by its id, answering with what it took away. The list as
+/// it now stands, and the default that removal leaves, are the caller's to
+/// append: the default has to be resolved against the list that is left rather
+/// than the one it found, so the one resolution serves the answer and the file
+/// both. The last model stays: a chat needs a model to ask.
 ///
 /// Which mistake the caller made is worked out before it is answered: a model
 /// that is not there is said so even when the list holds only one, since that is
@@ -330,10 +334,24 @@ fn model_removed(models: &mut Vec<String>, starts: &str, args: &Value) -> Result
         ));
     }
     models.remove(place);
-    Ok(format!(
-        "\"{model}\" was removed.\n{}",
-        models_answer(models, starts)
-    ))
+    Ok(format!("\"{model}\" was removed."))
+}
+
+/// The default a removal leaves, resolved against the list that remains: one
+/// that named the model that went falls to the head of what is left, since that
+/// is where every reader of the old default would land anyway, and one that
+/// named a model still there goes on naming it.
+///
+/// Split from [`settings::default_model`] because that one reads a config, and
+/// the resolution here happens between the removal and the write, where no
+/// config exists yet: the answer and the file are both built from what this
+/// returns, so they cannot name different models.
+fn default_after_removal(models: &[String], starts: &str, gone: &str) -> String {
+    if starts == gone {
+        models.first().cloned().unwrap_or_default()
+    } else {
+        starts.to_string()
+    }
 }
 
 fn add_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Result<String, String> {
@@ -350,14 +368,12 @@ fn remove_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Resul
     let mut models = config.models.clone();
     let starts = settings::default_model(&config);
     let said = model_removed(&mut models, starts, args)?;
-    // A default that named the model that just went is the head of the list
-    // now, which is what every reader would resolve it to anyway: written down
-    // rather than left dangling, so the file says what the app does.
-    let default_model = if starts == gone {
-        models.first().cloned().unwrap_or_default()
-    } else {
-        config.default_model.clone()
-    };
+    // The model is gone before the default is resolved, so the answer and the
+    // file are built from the list it left and the default that list gives: a
+    // default that named the model that went cannot be written down, or said
+    // back, as the model a new chat starts from.
+    let default_model = default_after_removal(&models, starts, &gone);
+    let answer = models_answer(&models, &default_model);
     apply_config(
         app,
         state,
@@ -367,7 +383,7 @@ fn remove_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Resul
             ..config
         },
     )?;
-    Ok(said)
+    Ok(format!("{said}\n{answer}"))
 }
 
 // ------------------------------------------------------------------ servers

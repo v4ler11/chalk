@@ -14,7 +14,9 @@
  *   composer      the bar the prompt is typed in, and the approval card
  *   side-windows  the settings' own chrome, and the log window
  *   mcp-settings  the MCP page
- *   dark          the OS dark scheme's overrides, which touch nothing else
+ *   dark          the dark scheme's tokens, and the two log rules beside them,
+ *                 selected by the attribute the theme module paints on <html>
+ *                 rather than by the OS's own query
  */
 @import "./styles/base.css";
 @import "./styles/components.css";

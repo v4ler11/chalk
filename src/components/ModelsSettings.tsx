@@ -115,9 +115,13 @@ function leadsWith(id: string): string {
 
 /** Why an id cannot be added, or `""` when it can. */
 function problem(id: string, models: string[]): string {
-  // An empty name is not a fault, only a field nothing has been typed in yet:
-  // the matter is the Add button's own, which stays shut while it is empty.
-  if (id.slice(id.indexOf("/") + 1).trim() === "") return "";
+  // A field nothing has been typed in is not a fault, only a field — that is
+  // the Add button's own matter, and it stays shut while the field is empty —
+  // but what is typed has to name a model: the name after the gateway's slash is
+  // the one a request carries, so `openai/` would be sent as a model called
+  // nothing, and nothing in the picker or a chat would say why it failed.
+  if (id === "") return "";
+  if (id.slice(id.indexOf("/") + 1).trim() === "") return "A model needs a name after its gateway's slash.";
   if (/\s/.test(id)) return "A model id has no spaces.";
   if (models.includes(id)) return "That model is already in the list.";
   return "";
@@ -167,17 +171,23 @@ export function ModelsSettings({
   const models = config.models;
   const gateways = config.gateways;
   /**
-   * The app's own provider, read as the gateway it is: the one every model that
-   * names no gateway of its own is asked of.
+   * The app's own provider, which is what the tab with no gateway of its own
+   * stands for: it labels that tab, and it is the name the field above the list
+   * is labelled and given its example by, since the model added there is asked
+   * of it. It is taken as the config carries it, because the config only carries
+   * the two names — the backend reads whatever a file wrote as `openrouter` or
+   * `custom` before the window is handed it — and that is the same name the
+   * backend falls back to for a model that names no gateway.
    */
-  const own = config.provider === "custom" ? "custom" : config.provider;
+  const own = config.provider;
 
   const tabs = [OWN, ...gateways.map((g) => g.id)];
   const [chosen, setChosen] = useState<string>(OWN);
   const [justAdded, setJustAdded] = useState("");
-  // A tab whose last model went away is not a tab, so it falls back to the app's
-  // own provider — which is always there, since a model cannot name a gateway
-  // that does not exist.
+  // The tabs are the gateways the config holds, drawn whether or not they carry
+  // a model of their own, so it is a gateway leaving the config that takes a tab
+  // away rather than its last model going. What was open then falls back to the
+  // app's own provider, which is the one tab that is always on the page.
   const open = chosen === NEW || tabs.includes(chosen) ? chosen : OWN;
 
   const fallback = settingsModel(config);
@@ -227,7 +237,7 @@ export function ModelsSettings({
   }
 
   return (
-    <div className="settings models">
+    <div className="settings">
       <div className="models-head">
         <h2 className="models-title">Models</h2>
         <p className="models-subtitle">
@@ -300,11 +310,17 @@ export function ModelsSettings({
                   onChange={(apiKey) => changeGateway(gateway.id, { apiKey })}
                 />
               </Field>
-              {/* Where the name is one the app does not hold a URL for, the
-                  endpoint is the page's business: nothing else knows it. A name
-                  it does hold — OpenRouter's, OpenAI's, Google's and the rest —
-                  needs no line here at all, since the name is the URL. */}
-              {!KNOWN.includes(gateway.id) && (
+              {/* Where a request to this gateway goes: drawn where the name is
+                  one the app holds no URL for — nothing else knows it — and
+                  where a name it does hold has an endpoint written for it, since
+                  the app falls back to the name only where nothing is written:
+                  an address written for `openai` to point it at a proxy is the
+                  address its requests go to. The API Key above saves the gateway
+                  with that address intact, so a field left undrawn here would be
+                  the page honouring a value it never shows. Emptying it is how a
+                  known name is put back on the URL the app holds for it, since
+                  there is then nothing written for the name to lose to. */}
+              {(!KNOWN.includes(gateway.id) || gateway.endpoint.trim() !== "") && (
                 <Field label="Endpoint">
                   <input
                     type="text"
@@ -454,9 +470,14 @@ function AddModel({
   const [written, setWritten] = useState("");
   const typed = written.trim();
   const prefix = tab === OWN ? "" : tab + "/";
-  // What is typed is the model's own name unless it already carries a gateway's:
-  // the field is asked for an id, and an id it is given either way.
-  const id = typed === "" || prefix === "" || typed.includes("/") ? typed : prefix + typed;
+  // What is typed is the model's own name unless it already carries the name of
+  // a gateway the app has — only that segment is one a request reads as the way
+  // to reach the model, and only then is the field given an id whole. A model
+  // whose own name holds a slash carries no gateway: `Qwen/Qwen2.5-7B-Instruct`
+  // and `library/llama3.2` are ordinary names for a server of the reader's own,
+  // so they take the tab's prefix like the short case.
+  const carried = gateways.some((g) => g.id === leadsWith(typed));
+  const id = typed === "" || prefix === "" || carried ? typed : prefix + typed;
   const clash = tab === OWN ? ownProblem(id, gateways) : "";
   const why = clash || problem(id, models);
   const ready = typed !== "" && why === "";
@@ -497,7 +518,9 @@ function AddModel({
  * The provider is chosen rather than written: pressing one of the two pills
  * shows its fields, so what a reader is asked for is what the thing they chose
  * needs — a URL for an endpoint of their own, nothing for OpenRouter, whose
- * address the app knows. The models the provider serves are the ones whose ids
+ * address the app knows — and the button waits for the fields it asks for, since
+ * an arrangement written without its address is one nothing can be asked of. The
+ * models the provider serves are the ones whose ids
  * name no gateway, which is the app's own tab, so pressing the button lands
  * there. The line above the button says what pressing it would write before it
  * is pressed.
@@ -539,7 +562,21 @@ function NewProvider({
     id !== "custom" && id === provider
       ? `${gatewayName(id)} is already set up: its key and its models are on its own tab.`
       : "";
-  const why = begun || (first === "" ? "" : ownProblem(first, gateways) || problem(first, models));
+  // Where the arrangement chosen is an endpoint of the reader's own, the address
+  // is the arrangement: the backend stores what it is given and builds every
+  // request from it, so a provider added with the field empty — or with a word
+  // that is not an address — is every message failing against a relative URL,
+  // with nothing on the page to say why. Hence a URL rather than merely
+  // something typed. The Models tab's own field takes anything it is handed,
+  // since reaching a file that was edited by hand is what it is there for.
+  const unaddressed =
+    id === "custom" && !/^https?:\/\//.test(where.trim())
+      ? "The endpoint is a URL: it begins with https:// or http://."
+      : "";
+  const why =
+    begun ||
+    unaddressed ||
+    (first === "" ? "" : ownProblem(first, gateways) || problem(first, models));
   const ready = first !== "" && why === "";
   const add = () => onAdd(id, where.trim(), key, first);
 

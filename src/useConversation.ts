@@ -424,6 +424,14 @@ export function useConversation({ config, servers, failures, setError, setFollow
         await api.deleteChat(id);
         forget(id);
         setChats((all) => all.filter((chat) => chat.id !== id));
+        // The pins list is the same rows seen from the other side, and it keeps
+        // the deleted thread for as long as it stayed pinned. Nothing re-reads
+        // the pins when a chat goes — the read on the way into the pane is no
+        // help here, since the list is on screen — so the row would survive with
+        // the chat: opening it shows an empty transcript, and its Unpin then
+        // fails on a chat the store no longer has. Drop it from both, the way
+        // `pin` reads both.
+        setPins((all) => all.filter((entry) => entry.id !== id));
         // A deleted thread is not one to keep showing.
         setView((current) => (current.kind === "thread" && current.chat === id ? { kind: "channel" } : current));
       } catch (e) {

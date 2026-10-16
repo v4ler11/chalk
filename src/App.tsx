@@ -57,8 +57,16 @@ function App() {
   // that — so what the sidebar says stays true while a thread is open, which is
   // what makes coming back out of one land where the reader left from.
   const threadVisible = threadOpen && !conversation.settingsView && !conversation.jsonView;
+  // The pins go quiet under the JSON view as well as under a thread or the
+  // settings: the JSON view hides the thread's pane, so `threadVisible` alone
+  // would leave the pins standing in the tab order and the accessibility tree
+  // behind it. Neither mode touches `pinsView`, so the row the reader pressed is
+  // still the one recorded, and leaving the view lands back on the pins.
   const pinsVisible =
-    conversation.pinsView && !threadVisible && !conversation.settingsView;
+    conversation.pinsView &&
+    !threadVisible &&
+    !conversation.settingsView &&
+    !conversation.jsonView;
   // Both composers are mounted at once, and the shared ref must land on the one
   // on screen: the channel's takes this spare while it is hidden.
   const channelComposerRef = useRef<HTMLTextAreaElement>(null);
@@ -310,7 +318,12 @@ function App() {
               <div className="pane">
                 {nav(false, { title: "Settings", onClose: conversation.leaveSettings })}
                 {config ? (
-                  <SettingsView config={config} save={api.saveConfig} onSaved={setConfig} />
+                  <SettingsView
+                    config={config}
+                    save={api.saveConfig}
+                    onSaved={setConfig}
+                    onFailure={fail}
+                  />
                 ) : (
                   <div className="settings-body">
                     <p className="json-note" style={{ padding: 24 }}>

@@ -60,7 +60,11 @@ export function ToolCall({ name, args, result }: Props) {
         <span className="tool-call-id">
           {server !== "" && (
             <>
-              <span className="tool-call-server">{server}</span>
+              {/* The server's name and the tool's are two spans because the
+                  separator stands between them, and neither half takes a rule of
+                  its own: the row's own colour is the whole line's, so the two
+                  read as one name around the dot. */}
+              <span>{server}</span>
               <span className="tool-call-sep">·</span>
             </>
           )}

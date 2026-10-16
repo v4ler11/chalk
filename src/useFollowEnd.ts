@@ -92,6 +92,11 @@ export function useFollowEnd({
   /** The content's own height at the last pass, with the room kept at the view's
       foot left out of it. What a pass follows is content, and nothing else is. */
   const seen = useRef(-1);
+  /** The room kept at the view's foot at the last pass. A pass reads the two
+      apart, since they are moved by different things: the content growing under
+      the view is what a pass follows, and the room moving under it — the composer
+      growing over the pane — is what a pass leaves alone. */
+  const kept = useRef(-1);
 
   // The state the caller holds is the one anyone outside the view writes — a
   // send, an edit asked again — so the view reads it back as its own before the
@@ -131,15 +136,27 @@ export function useFollowEnd({
     // may speak for the view once it has run.
     going.current = false;
     if (!following.current) return;
-    // A pass follows content, and only content. The composer growing over the pane
-    // changes the view's box and the room kept at its foot without changing a
-    // thing in it, and a pass that took the view to the pixel below would be the
-    // jump the reader never asked for — the one that reads as the feed bouncing a
-    // moment after the composer grew. So what is compared is the height the
-    // content itself has, with that room left out of it.
-    const height = el.scrollHeight - room(el);
-    if (height === seen.current) return;
+    // A pass is for one of two things: content that grew, which it follows to the
+    // end, or the end asked for again with nothing grown — a wheel whose move has
+    // landed, a follow the caller has taken up from outside. It is not for the
+    // composer, which grows over the pane and takes room at the view's foot
+    // without changing a thing in it: taking the view to the pixel below for that
+    // is the jump the reader never asked for, the one that reads as the feed
+    // bouncing a moment after the composer grew. The two are told apart by reading
+    // the two facts apart — the height the content itself has, with that room left
+    // out of it, and the room itself. The room alone moving is the composer's
+    // doing, and the pass moves nothing. The content growing is followed. And
+    // neither moving is the pass that owes the reader the end, which none of the
+    // other rules would give it: a view sits within the move slack of its end with
+    // the follow still on, so nothing but this pass puts it back until the next
+    // thing grows.
+    const space = room(el);
+    const height = el.scrollHeight - space;
+    const moved = space !== kept.current;
+    const grew = height !== seen.current;
+    kept.current = space;
     seen.current = height;
+    if (moved && !grew) return;
     el.scrollTop = el.scrollHeight;
   }
 

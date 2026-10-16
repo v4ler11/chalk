@@ -30,12 +30,20 @@ pub const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1";
 /// picker's models can each name the gateway that serves them.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Gateway {
-    /// The gateway's own name, and the prefix its models' ids carry.
+    /// The gateway's own name, and the prefix its models' ids carry. It is one
+    /// `/`-separated segment — a model's id is read by its first segment alone
+    /// — so a name with a slash in it can never match, and is not something a
+    /// model's id can lead with.
     pub id: String,
     /// Where it is, when the name is not one the app knows. Written out to the
     /// file as it was written in: empty for a name that resolves here.
     #[serde(default)]
     pub endpoint: String,
+    /// The key its requests go with — the gateway's, not the app's, which is
+    /// the whole reason for naming one. Defaulted like the endpoint, because
+    /// the file is hand-edited and a gateway that needs no key — a local Ollama,
+    /// say — should not fail the whole file's parse by leaving one out.
+    #[serde(default)]
     pub api_key: String,
 }
 
@@ -360,8 +368,10 @@ pub fn defaults() -> Settings {
 /// The named one is taken only while the list still holds it, so a default left
 /// behind by a removal falls to the list itself rather than being asked of a
 /// provider that does not serve it. A list with nothing in it — which only a
-/// file edited by hand can be — is no model at all, and the empty string is what
-/// every reader of this already does with that.
+/// save from the window can hand this, since a hand-edited file's empty or
+/// all-blank list is filled with the defaults when it is read — is no model at
+/// all, and the empty string is what every reader of this already does with
+/// that.
 pub fn default_model(config: &AppConfig) -> &str {
     let named = config.default_model.trim();
     if !named.is_empty() {
@@ -389,52 +399,84 @@ pub fn endpoint<'a>(provider: &str, endpoint: &'a str) -> &'a str {
     }
 }
 
-/// Where a gateway's requests go: the endpoint it wrote out, the one the app
-/// knows its name for, or — for a name it has never heard of, and that wrote no
-/// endpoint — the app's own provider, which is the one place left to send to
-/// rather than an empty URL.
-fn gateway_url(config: &AppConfig, gateway: &AppGateway) -> String {
+/// Where a gateway's requests go, when the app has a place of its own for them:
+/// the endpoint it wrote out, or the one the app knows its name for. `None` is
+/// a gateway the app has no URL for — an unknown name that wrote none — and
+/// there is nowhere of its own to send to; the caller has to fall back, and
+/// must take the app's own key with it, because the key belongs to wherever the
+/// request actually goes.
+fn gateway_url(gateway: &AppGateway) -> Option<String> {
     let written = gateway.endpoint.trim();
     if !written.is_empty() {
-        return written.to_string();
+        return Some(written.to_string());
     }
-    match known(gateway.id.trim()) {
-        Some(url) => url.to_string(),
-        None => endpoint(&config.provider, &config.endpoint).to_string(),
-    }
+    known(gateway.id.trim()).map(str::to_string)
 }
 
-/// The gateway a model is asked of: the one its id's first segment names, or the
-/// app's own provider when that segment names no gateway it has.
+/// Where a model is asked, and what it is asked as: the whole of what a request
+/// needs to reach the right place under the right credentials, for a model the
+/// other end knows by name.
 ///
-/// A model's id leads with the gateway that serves it — `anthropic/claude-…` is
-/// Anthropic's model as whoever routes it spells it — so the first segment is
-/// read as a gateway's name. A segment that names no gateway the app has is not
-/// a gateway: OpenRouter's own vendor-prefixed ids look the same, and they are
-/// the app's own provider's to route, as is a model with no prefix at all.
+/// The four facts are one answer and are decided together, which is the point of
+/// the type: a model asked of a gateway of its own goes to that gateway's URL,
+/// with that gateway's key, under **the model's own name** — the app's id for it
+/// leads with the gateway's name, which the gateway has never heard of (`gpt-5`,
+/// not `openai/gpt-5`) — while a model the app's own provider serves keeps its
+/// id whole, because there the id *is* the model's name: `deepseek/deepseek-v4.1-flash`
+/// is OpenRouter's spelling of DeepSeek's model, vendor prefix and all.
+pub struct Destination {
+    /// The gateway's own name, or the app's own provider where that is where the
+    /// request goes.
+    pub gateway: String,
+    /// The URL its `/chat/completions` hangs off.
+    pub url: String,
+    /// The key the request is sent with: the gateway's own, or the app's own
+    /// where the app's own provider is where it goes.
+    pub key: String,
+    /// The model as the other end calls it.
+    pub model: String,
+}
+
+/// Where a model is asked: the gateway its id's first segment names, when that
+/// gateway has a place of its own to send to, or the app's own provider
+/// otherwise.
 ///
-/// What comes back is the name, the URL its `/chat/completions` hangs off, and
-/// the key the request is sent with — the whole of what a request needs to go to
-/// the right place under the right credentials.
-pub fn gateway_for<'a>(config: &'a AppConfig, model: &str) -> (String, String, &'a str) {
+/// A model's id leads with the gateway that serves it — `openai/gpt-5` is
+/// OpenAI's model as this app spells it — so the first segment is read as a
+/// gateway's name, and what remains is the model's own name. A segment that
+/// names no gateway the app has is not a gateway: OpenRouter's own
+/// vendor-prefixed ids look the same, and they are the app's own provider's to
+/// route, as is a model with no prefix at all. A gateway whose name the app has
+/// no URL for and that wrote none is the same case: there is nowhere of its own
+/// to send to, so the request goes where the app's own provider is, under that
+/// name, with its key, and with the id whole — the app's own provider is where
+/// the id was addressed, so nothing about it is this app's to trim.
+pub fn destination(config: &AppConfig, model: &str) -> Destination {
     let segment = model
         .split_once('/')
         .map(|(segment, _)| segment)
         .filter(|segment| !segment.is_empty());
     if let Some(segment) = segment {
         if let Some(gateway) = config.gateways.iter().find(|g| g.id.trim() == segment) {
-            return (
-                gateway.id.clone(),
-                gateway_url(config, gateway),
-                gateway.api_key.as_str(),
-            );
+            if let Some(url) = gateway_url(gateway) {
+                return Destination {
+                    gateway: gateway.id.clone(),
+                    url,
+                    key: gateway.api_key.clone(),
+                    // Everything after the name that led it: a server's own model
+                    // names hold slashes often enough (`Qwen/Qwen2.5-7B-Instruct`)
+                    // that only the first segment is the gateway's.
+                    model: model.split_once('/').map(|(_, own)| own).unwrap_or(model).to_string(),
+                };
+            }
         }
     }
-    (
-        config.provider.clone(),
-        endpoint(&config.provider, &config.endpoint).to_string(),
-        config.api_key.as_str(),
-    )
+    Destination {
+        gateway: config.provider.clone(),
+        url: endpoint(&config.provider, &config.endpoint).to_string(),
+        key: config.api_key.clone(),
+        model: model.to_string(),
+    }
 }
 
 /// Whether a URL is OpenRouter's — the one gateway whose response cache this app

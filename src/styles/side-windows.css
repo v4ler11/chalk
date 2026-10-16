@@ -517,8 +517,8 @@
   min-width: 0;
 }
 
-/* The log window is the log: the panel takes it whole rather than sitting in a
-   capped card the way it did inside the settings window. */
+/* The log's own box: the lines in a column, inside the frame and the ground a
+   card has, scrolling within a cap of its own. */
 .logs {
   display: flex;
   flex-direction: column;

@@ -83,8 +83,8 @@ fn a_model_is_added_once_and_where_it_was_asked_for() {
 }
 
 /// What a new chat starts from is a model rather than a place: a model added
-/// above the default — or the default moved down the list by hand — leaves the
-/// default where it was, and the answer says which model that is.
+/// above the default leaves the default where it was, and the answer says which
+/// model that is.
 #[test]
 fn a_new_chat_starts_from_the_named_model_rather_than_the_head() {
     let mut models = vec!["a/one".to_string(), "b/two".to_string()];
@@ -117,6 +117,20 @@ fn the_last_model_is_not_removed() {
     let refused = model_removed(&mut models, "b/two", &args(json!({ "model": "a/one" }))).unwrap_err();
     assert!(refused.contains("is not one of the models"), "{refused}");
     assert!(refused.contains("b/two"), "{refused}");
+}
+
+/// Removing the model a default named moves the default to the head of what is
+/// left, and removing any other leaves it naming what it named — the decision
+/// `remove_model` makes between the removal and the write, which is why it is a
+/// function of its own rather than three lines inside a call that needs an app.
+#[test]
+fn a_default_falls_to_the_head_only_when_the_removed_model_was_its_own() {
+    // The default named the model that went, so it lands on the new head.
+    let left = vec!["b/two".to_string(), "c/three".to_string()];
+    assert_eq!(default_after_removal(&left, "a/one", "a/one"), "b/two");
+
+    // It named a model still there, so nothing moves.
+    assert_eq!(default_after_removal(&left, "c/three", "a/one"), "c/three");
 }
 
 /// A server is declared whole, with the defaults the file's own keys have,

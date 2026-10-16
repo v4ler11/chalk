@@ -288,7 +288,7 @@ export const ChatMessage = memo(function ChatMessage({
             It is hidden rather than absent, so the buttons are not there to be
             clicked until the message is under the pointer, and the transcript is
             the same height either way. */}
-        {message.role !== "user" &&
+        {message.role === "assistant" &&
           // An answer's own two options: the message, and what the response used
           // — which is a tip rather than a click, the icon being what there is to
           // hover. An answer that only called tools offers nothing: there is no

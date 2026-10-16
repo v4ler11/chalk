@@ -30,10 +30,13 @@ export interface AppConfig {
    * The other services a model may be asked of, beside the app's own provider.
    *
    * A model whose id starts with a gateway's name is sent to that gateway, with
-   * that gateway's key: `anthropic/claude-sonnet-4.5` goes to Anthropic when
-   * Anthropic is configured here, and to the app's own provider when it is not
-   * — which is how an Anthropic model served by OpenRouter stays on OpenRouter,
-   * its id naming the model rather than the way to reach it.
+   * that gateway's key, and under the model's own name — the part after that
+   * word, since the gateway knows nothing of this app's spelling of it:
+   * `anthropic/claude-sonnet-4.5` is asked of Anthropic as
+   * `claude-sonnet-4.5` when Anthropic is configured here, and goes to the
+   * app's own provider, id whole, when it is not — which is how an Anthropic
+   * model served by OpenRouter stays on OpenRouter, its id naming the model
+   * rather than the way to reach it.
    */
   gateways: Gateway[];
   /**

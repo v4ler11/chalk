@@ -27,9 +27,9 @@ export function Field({
 }
 
 /**
- * The button that starts a new row of a list: the dashed pill under the models
- * and under the servers. The page's own class gives it its place; the caption
- * is left off where the button is only the icon.
+ * The button that starts a new row of a list: the dashed pill under the servers.
+ * The page's own class gives it its place; the caption is left off where the
+ * button is only the icon.
  */
 export function AddButton({
   className,
@@ -127,9 +127,11 @@ const VISIBLE = 5;
  * it an asterisk (`-webkit-text-security` offers disc, circle and square only) —
  * so the mask is simply what the field holds while it is away from the caret.
  *
- * It is a control of the library rather than of a page because two pages hold
- * the same key: the General page, where requests are pointed, and the Models
- * page, where the models it pays for are listed.
+ * It is a control of the library rather than of a page because the Models page
+ * holds it in three places — the key of the gateway in view, the key of the
+ * app's own provider, and the key a provider is added with — and each hides it
+ * the same way. The General page holds no key now: every key is written where
+ * its models are listed.
  */
 export function SecretInput({
   value,

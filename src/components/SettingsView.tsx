@@ -11,6 +11,13 @@ interface Props {
   save: (config: AppConfig) => Promise<AppConfig>;
   /** Takes up what was just written, so the window stops asking with the old one. */
   onSaved: (config: AppConfig) => void;
+  /**
+   * Where a write that fails is said when there is no page left to say it on:
+   * the way out writes what the reader left behind, and the pane that would have
+   * carried the notice is the one being taken down. Every other failure is said
+   * in the page itself, which is still there to hold it.
+   */
+  onFailure?: (e: unknown) => void;
   /** Opens the log window, which the harness draws nothing for. */
   onOpenLogs?: () => void;
   /** The section a page opens on, where it is not the first. */
@@ -43,6 +50,7 @@ export function SettingsView({
   config,
   save,
   onSaved,
+  onFailure,
   onOpenLogs = api.openLogs,
   initialTab,
 }: Props) {
@@ -112,11 +120,20 @@ export function SettingsView({
       // has stopped editing them just as surely as one who clicked away. It goes
       // through the queue like every other write, so a draft already on its way
       // to the file cannot be overtaken by this one.
+      //
+      // A failure here has no page left to hold a notice, so it is handed to the
+      // window rather than dropped: the reader made an edit, the file did not
+      // take it, and the one place that can still say so is the pane the settings
+      // were left for.
       const { draft: last, behind: pending } = leaving.current;
       if (!pending) return;
-      queue.current = queue.current.then(() => save(last).then(onSaved).catch(() => {}));
+      queue.current = queue.current.then(() =>
+        save(last).then(onSaved).catch((e) => onFailure?.(e)),
+      );
     },
-    [],
+    // A cleanup is not a render: it reads what it needs from `leaving`, and the
+    // two callbacks are the parent's own, stable across the page's life.
+    [save, onSaved, onFailure],
   );
 
   return (

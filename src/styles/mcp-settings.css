@@ -156,10 +156,10 @@ button.mcp-row-name::after {
   flex: 1 1 100%;
 }
 
-/* The open server: its sections, then the button that writes it. The column
-   scrolls, and the button is kept at its foot — `margin-top: auto` puts it there
-   whenever the form is shorter than the column — so it is found in the same
-   place whichever fields the transport above it brought. */
+/* The open server: its sections, in a column that scrolls itself. The button
+   that writes the server is not kept at this column's foot — it rides the
+   form's head line instead, which `.mcp-footer` says what keeps it there — so
+   the column holds the fields alone, with their own scrolling. */
 .mcp-detail {
   display: flex;
   flex-direction: column;

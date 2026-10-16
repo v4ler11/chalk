@@ -283,7 +283,7 @@ fn only_openrouter_is_told_where_the_prefix_ends() {
     };
 
     let mut marked = asked();
-    assembled(&openrouter, &[], &mut marked);
+    assembled(&openrouter, "a/model", &[], &mut marked);
     let wire = serde_json::to_value(&marked).unwrap();
     // The last prompt, as one block that ends the prefix — the header still
     // on it, since that is what the model reads.
@@ -312,11 +312,43 @@ fn only_openrouter_is_told_where_the_prefix_ends() {
 
     // A gateway that is not OpenRouter is never told anything of the sort.
     let mut plain = asked();
-    assembled(&custom, &[], &mut plain);
+    assembled(&custom, "a/model", &[], &mut plain);
     assert!(!serde_json::to_value(&plain)
         .unwrap()
         .to_string()
         .contains("cache_control"));
+
+    // Where the model is going is what decides, not the app's own provider: a
+    // model whose id names a configured gateway is asked of that gateway, so an
+    // OpenRouter provider's breakpoint is not written onto it — and the
+    // converse, a custom provider pointed at OpenRouter's own endpoint, is
+    // asking OpenRouter and is told where its prefix ends like any other.
+    let routed = AppConfig {
+        gateways: vec![settings::AppGateway {
+            id: "groq".into(),
+            endpoint: "https://api.groq.com/openai/v1".into(),
+            api_key: "sk-groq".into(),
+        }],
+        ..openrouter.clone()
+    };
+    let mut elsewhere = asked();
+    assembled(&routed, "groq/llama-3.3-70b", &[], &mut elsewhere);
+    assert!(!serde_json::to_value(&elsewhere)
+        .unwrap()
+        .to_string()
+        .contains("cache_control"));
+
+    let pointed = AppConfig {
+        endpoint: settings::OPENROUTER_URL.into(),
+        ..custom.clone()
+    };
+    let mut through = asked();
+    assembled(&pointed, "a/model", &[], &mut through);
+    let wire = serde_json::to_value(&through).unwrap();
+    assert_eq!(
+        wire[3]["content"][0]["cache_control"],
+        json!({ "type": "ephemeral" })
+    );
 
     // A prompt that carries images ends its prefix with its own header —
     // the text the client wrote — rather than with the picture.
@@ -329,7 +361,7 @@ fn only_openrouter_is_told_where_the_prefix_ends() {
         }))
         .unwrap(),
     ];
-    assembled(&openrouter, &[], &mut images);
+    assembled(&openrouter, "a/model", &[], &mut images);
     let wire = serde_json::to_value(&images).unwrap();
     assert_eq!(
         wire[2]["content"][0]["cache_control"],
@@ -347,7 +379,7 @@ fn only_openrouter_is_told_where_the_prefix_ends() {
         }))
         .unwrap(),
     ];
-    assembled(&openrouter, &[], &mut older);
+    assembled(&openrouter, "a/model", &[], &mut older);
     let wire = serde_json::to_value(&older).unwrap();
     assert_eq!(
         wire[1]["content"][0]["cache_control"],
@@ -691,18 +723,20 @@ fn a_live_conversation_is_served_from_the_prompt_cache() {
     config.system_prompt = config.system_prompt.replace("@{{TODAY}}", "");
 
     let turn = |messages: &[Message]| {
-        // Where the model is asked is resolved exactly as the app resolves it:
-        // the live test goes to the same gateway, with the same key.
-        let (_, base, key) = settings::gateway_for(&config, &model);
+        // Where the model is asked, and as what, is resolved exactly as the app
+        // resolves it: the live test goes to the same gateway, with the same key,
+        // asking for the model by the same name.
+        let spot = settings::destination(&config, &model);
+        let base = &spot.url;
         let url = format!("{}/chat/completions", base.trim_end_matches('/'));
         let mut asked = messages.to_vec();
-        assembled(&config, &[], &mut asked);
-        let mut post = completion(model.clone(), asked, "none".into(), None);
+        assembled(&config, &model, &[], &mut asked);
+        let mut post = completion(spot.model.clone(), asked, "none".into(), None);
         if settings::is_openrouter_url(&base) {
             post.session_id = session_name(&post.messages);
         }
         tauri::async_runtime::block_on(async {
-            let resp = with_cache(client.post(&url).bearer_auth(key), &base)
+            let resp = with_cache(client.post(&url).bearer_auth(&spot.key), base)
                 .json(&post)
                 .send()
                 .await
@@ -767,10 +801,11 @@ fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
     let model = settings.models.first().cloned().expect("a model");
     // Where the model is asked is resolved as the app resolves it, and the
     // resolved URL is what says whether OpenRouter is being asked at all.
-    let (_, base, key) = settings::gateway_for(&config, &model);
+    let spot = settings::destination(&config, &model);
+    let base = &spot.url;
     // Nothing to ask a gateway that is not OpenRouter: the header is not
     // its own, and the verdict is not one it reports.
-    if !settings::is_openrouter_url(&base) {
+    if !settings::is_openrouter_url(base) {
         eprintln!("the model is not asked of OpenRouter; nothing asked");
         return;
     }
@@ -779,7 +814,7 @@ fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
         "content": "Say hello in one word."
     }))
     .unwrap()];
-    let post = completion(model, asked, "none".into(), None);
+    let post = completion(spot.model.clone(), asked, "none".into(), None);
     let url = format!("{}/chat/completions", base.trim_end_matches('/'));
 
     let statuses = tauri::async_runtime::block_on(async {
@@ -789,8 +824,8 @@ fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
         // two misses.
         for _ in 0..2 {
             let resp = with_cache(
-                reqwest::Client::new().post(&url).bearer_auth(key),
-                &base,
+                reqwest::Client::new().post(&url).bearer_auth(&spot.key),
+                base,
             )
             .json(&post)
             .send()

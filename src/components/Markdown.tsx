@@ -24,8 +24,11 @@ function startOf(node: Element | undefined): number {
  * the app's own — the calls a turn made, the servers, the models. They are drawn
  * differently: a list of prose carries a mark, and the app's carry none, since a
  * row already says what it is. The sheet cannot tell them apart from the markup
- * alone, so the renderer says which is which: everything it renders is `prose`,
- * and `main.css` draws the marks for those lists and no others.
+ * alone, so the renderer says which is which: it marks every list it draws
+ * `prose`, and `main.css` draws the marks for those lists and no others. The
+ * mark is added to the list's classes rather than set in their place — the
+ * parser's own are not this renderer's to drop, and a GFM task list's
+ * `contains-task-list` among them says something only it knows.
  */
 function ProseList({
   node: _node,
@@ -33,7 +36,7 @@ function ProseList({
   ...rest
 }: ComponentPropsWithoutRef<"ul"> & ExtraProps) {
   return (
-    <ul {...rest} className="prose">
+    <ul {...rest} className={rest.className ? `prose ${rest.className}` : "prose"}>
       {children}
     </ul>
   );
@@ -58,7 +61,7 @@ function OrderedList({
   return (
     <ol
       {...rest}
-      className="prose"
+      className={rest.className ? `prose ${rest.className}` : "prose"}
       style={{ ...style, counterReset: `item ${startOf(node) - 1}` }}
     >
       {children}

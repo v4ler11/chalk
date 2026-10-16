@@ -111,28 +111,43 @@
 /* What a row offers while the pointer is in it, at its own top-right corner: pin
    the thread, or delete it. The corner is empty — the face and the words are at
    the row's left — and the menu is taken out of the flow, so the feed is the same
-   height whether or not it is drawn. It names the row it hangs in rather than
-   wearing `.row-menu` alone, since this sheet is imported by the row itself and
-   so is in the bundle *before* the library's `.menu`, whose fixed placement is
-   what a menu standing in a row has to overrule. */
+   height whether or not it is drawn. It is faded rather than hidden: a hidden
+   subtree takes no tab stop, and with neither pin nor delete bound to a key this
+   corner is the only way to a thread's two actions, so the keyboard has to be
+   able to reach it while it is still invisible. It takes no clicks until it is
+   drawn, so the row stays clickable through it. It names the row it hangs in
+   rather than wearing `.row-menu` alone, since this sheet is imported by the row
+   itself and so is in the bundle *before* the library's `.menu`, whose fixed
+   placement is what a menu standing in a row has to overrule. */
 .channel-row .row-menu {
   position: absolute;
   top: 6px;
   right: 10px;
   z-index: 1;
   opacity: 0;
-  visibility: hidden;
+  pointer-events: none;
   transition: opacity 120ms ease;
 }
 
-/* Drawn under the pointer, or while something in it has the caret — and for as
-   long as the question is up, so that the answer to it is still there to give
-   once the pointer has moved. */
+/* Drawn under the pointer, or while something in it has the caret — the
+   keyboard's own way in, the caret being the one mark the faded pill leaves —
+   and for as long as the question is up, so that the answer to it is still there
+   to give once the pointer has moved. */
 .channel-row:hover .row-menu,
 .row-menu:focus-within,
 .channel-row.confirming .row-menu {
   opacity: 1;
-  visibility: visible;
+}
+
+/* The buttons take the clicks back while the menu is drawn, rather than the menu
+   itself: the corner sits inside the row's stretched target, and it is the
+   buttons that are the pill — the two pixels between them belong to the thread.
+   The last clause is the question's own two answers, which wear no
+   `.row-menu-action` of their own. */
+.channel-row:hover .row-menu .btn,
+.row-menu:focus-within .btn,
+.channel-row.confirming .row-menu .btn {
+  pointer-events: auto;
 }
 
 /* The pin that is already on the thread: the colour says which way the press
@@ -256,14 +271,17 @@
 }
 
 /* While the question is up the message steps out of sight — the box it fills
-   stays exactly as it was, so the row does not move — and it stops taking clicks,
-   so the question's own row is not a way into the thread. */
-.channel-row.confirming .channel-root {
-  visibility: hidden;
-}
-
+   stays exactly as it was, so the row does not move — and it stops taking
+   clicks, so the question's own row is not a way into the thread. The hiding is
+   done on the button that carries the message rather than on the message: the
+   button is a way into the thread on its own, and the keyboard walks it whether
+   or not anything is drawn, so a merely clickless button would still open the
+   very row the question is about, invisibly and with nothing marking the caret
+   on it. Visibility takes the tab stop out while the box keeps the height it
+   held — and the message inside it is hidden with it, so it wants no rule of its
+   own. */
 .channel-row.confirming .channel-open {
-  pointer-events: none;
+  visibility: hidden;
 }
 
 /* The pictures the prompt was posted with, under the words it was posted as: a

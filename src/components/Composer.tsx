@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type RefObject,
+} from "react";
 import { ArrowUp, Brain, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
 import { MOD, mod } from "../keybinds";
 import { newAttachment, processImage, type Attachment } from "../images";
@@ -172,13 +180,47 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingText]);
 
-  // The card is one line tall until the draft needs more; CSS caps the growth.
-  useLayoutEffect(() => {
+  // The draft is as tall as its words need at the width the field has, re-taken
+  // when either changes. The words are `value`; the width is the field's own
+  // content box, and both the window's measure and the shortcut giving way to
+  // Stop move it — the button takes its room out of the field's right padding,
+  // so the same words wrap into more lines once the button is wider. A height
+  // left from the wider draft is shorter than the re-wrapped one while the box
+  // is still under its own cap, and the box then has nothing to scroll: the
+  // field clips the lines past its end, out of reach until the next keystroke.
+  // The height written is the field's own scroll height, taken from the box that
+  // carries it, and this is its one copy — both fits below read it.
+  const fitDraft = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  }, [textareaRef]);
+
+  useLayoutEffect(() => {
+    fitDraft();
+  }, [value, fitDraft]);
+
+  // The field's width, followed for the fit above. What is compared is the
+  // content box, not the border box: the border box is the card's own measure
+  // and does not move when the button takes room from the words' side, so only
+  // the content width says whether the same words still wrap the same way. A
+  // width already fitted is ignored, since the height the fit writes comes back
+  // as a size of its own and following it would be the loop. It is disconnected
+  // with the field rather than with a render: a window narrowed between two
+  // keystrokes re-wraps the draft in the frame it narrows.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    let width = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === width) return;
+      width = entry.contentRect.width;
+      fitDraft();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [textareaRef, fitDraft]);
 
   /**
    * Attaches each image at once, from the file's own object URL, and prepares it
