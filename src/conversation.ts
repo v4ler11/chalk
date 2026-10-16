@@ -11,10 +11,26 @@
 import type { AppConfig, ChatSummary } from "./types";
 
 /**
+ * The model a new chat starts from, read off the settings alone: the one named
+ * as the default, or the head of the list.
+ *
+ * The named one counts only while the list still holds it, so a default left
+ * behind by a removal — or a file written before the default was a key — falls
+ * to the list itself rather than being asked of a provider that does not serve
+ * it. This is the same rule the backend resolves a run with, `default_model` in
+ * `settings.rs`, and the two read the same two fields in the same order.
+ */
+export function settingsModel(config: AppConfig | null): string {
+  const named = config?.defaultModel?.trim() ?? "";
+  if (named !== "" && config?.models.includes(named)) return named;
+  return config?.models.find((model) => model.trim() !== "") ?? "";
+}
+
+/**
  * The model a chat starts from: the one the most recently made chat was holding,
- * and the head of the settings' list once the history has nothing to say — which
- * is also what a row written before chats had models falls back to.
+ * and what the settings start new chats from once the history has nothing to say
+ * — which is also what a row written before chats had models falls back to.
  */
 export function defaultModel(chats: ChatSummary[], config: AppConfig | null): string {
-  return chats[0]?.model || config?.models[0] || "";
+  return chats[0]?.model || settingsModel(config) || "";
 }

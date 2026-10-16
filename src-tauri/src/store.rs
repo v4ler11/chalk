@@ -86,6 +86,13 @@ UPDATE chats SET root = COALESCE(
 WHERE root = '';
 ";
 
+/// The schema, at `user_version` 6: when a thread was pinned, which is what the
+/// pins list is drawn from and what the feed marks a row with.
+///
+/// A thread rather than a message of one: the row in the channel *is* the thread,
+/// so that is what there is to pin.
+const V6: &str = "ALTER TABLE chats ADD COLUMN pinned_at INTEGER NOT NULL DEFAULT 0;";
+
 /// One row of the history list: what a list shows, without the transcript.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -123,6 +130,10 @@ pub struct ChatSummary {
     /// and a list read on every post is no place to carry one. A row that has
     /// any asks for them by id, when it is drawn.
     pub images: i64,
+    /// Unix time in milliseconds the thread was pinned, or zero while it is not:
+    /// a thread is pinned or it is not, and the moment is what the pins list
+    /// orders by.
+    pub pinned_at: i64,
 }
 
 /// A chat and its transcript.
@@ -206,7 +217,8 @@ fn summary_columns() -> String {
                                 ELSE 0 END), 0) \
           FROM json_each(({ROOT_CONTENT})) AS parts), \
          MAX((SELECT COUNT(*) FROM json_each(messages) \
-              WHERE json_extract(value, '$.role') = 'user') - 1, 0)"
+              WHERE json_extract(value, '$.role') = 'user') - 1, 0), \
+         pinned_at"
     )
 }
 
@@ -223,6 +235,7 @@ fn summary_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ChatSummary> {
         replies: row.get(7)?,
         images: row.get(8)?,
         mine: row.get(9)?,
+        pinned_at: row.get(10)?,
     })
 }
 
@@ -341,6 +354,10 @@ impl Store {
             let _ = conn.execute_batch(V5_BACKFILL);
             conn.pragma_update(None, "user_version", 5).map_err(err)?;
         }
+        if version < 6 {
+            conn.execute_batch(V6).map_err(err)?;
+            conn.pragma_update(None, "user_version", 6).map_err(err)?;
+        }
         Ok(())
     }
 
@@ -382,6 +399,44 @@ impl Store {
         // which holds no picture to draw.
         let parsed: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
         Ok(prompt_images(&parsed))
+    }
+
+    /// The threads that are pinned, most recently pinned first.
+    ///
+    /// A thread is pinned, and a thread is a row: so the list is the same query
+    /// any other list of chats is drawn from, with one more thing in it — which
+    /// is also why a pin travels with a chat's own summary rather than being a
+    /// kind of row of its own.
+    pub fn pins(&self) -> Result<Vec<ChatSummary>, String> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare(&format!(
+                "SELECT {} FROM chats WHERE pinned_at > 0 ORDER BY pinned_at DESC, id DESC",
+                summary_columns()
+            ))
+            .map_err(err)?;
+        let rows = stmt.query_map([], summary_row).map_err(err)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(err)
+    }
+
+    /// Pins a thread, or takes the pin off it.
+    ///
+    /// The column alone is written, rather than the row whole: a run writes the
+    /// row on every commit, naming the columns it owns, so a pin taken while a
+    /// thread is answering survives that write instead of being undone by it.
+    /// Nothing else about the chat moves — the moment it was last answered above
+    /// all, which is what the feed says under it.
+    pub fn set_pinned(&self, id: i64, at: i64) -> Result<(), String> {
+        let conn = self.conn.lock();
+        let changed = conn
+            .execute("UPDATE chats SET pinned_at = ?2 WHERE id = ?1", params![id, at])
+            .map_err(err)?;
+        // The row was deleted in another window: an update that hits nothing must
+        // not report success.
+        if changed == 0 {
+            return Err(format!("chat {id} is gone"));
+        }
+        Ok(())
     }
 
     /// One chat with its transcript, or `None` if the row is gone.

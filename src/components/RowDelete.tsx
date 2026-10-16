@@ -59,15 +59,15 @@ export function RowDelete({
     <div className="row-actions">
       {asking ? (
         <>
-          <button className="row-action confirm" onClick={onDelete}>
+          <button className="row-action btn btn--quiet btn--mini btn--danger" onClick={onDelete}>
             Delete
           </button>
-          <button className="row-action" onClick={giveUp}>
+          <button className="row-action btn btn--quiet btn--mini" onClick={giveUp}>
             Cancel
           </button>
         </>
       ) : (
-        <button className="row-action" aria-label={label} onClick={ask}>
+        <button className="row-action btn btn--quiet btn--mini" aria-label={label} onClick={ask}>
           <Trash2 />
         </button>
       )}

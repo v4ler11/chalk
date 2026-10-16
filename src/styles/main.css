@@ -1,46 +1,3 @@
-/* ---------------------------------------------------------------- json view */
-
-/* The bar a taken-over pane draws under the chat panel's own nav: what the pane
-   is on the left, the way out on the right. Its rule is what separates it from
-   the sections and the pane below. */
-.mode-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex: none;
-  min-height: 42px;
-  padding: 5px 24px;
-  border-bottom: 1px solid var(--border);
-  background-color: var(--bg);
-  user-select: none;
-}
-
-.mode-title {
-  color: var(--text-secondary);
-  font-size: 13.5px;
-  font-weight: 500;
-}
-
-/* The way out, named for the key that does the same: a light red outline and no
-   fill, so it says what it does without shouting it. */
-.json-esc {
-  padding: 4px 9px;
-  border: 1px solid var(--danger-border);
-  border-radius: 7px;
-  background-color: transparent;
-  color: var(--danger);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.4px;
-  cursor: pointer;
-}
-
-.json-esc:hover {
-  border-color: var(--danger);
-}
-
 /* --------------------------------------------------------------------- main */
 
 .main {
@@ -53,8 +10,8 @@
 
 /* A pane's own bar: the strip that drags the window wherever the window's
    controls are not, and whose rule is what separates the bar from the pane below
-   it. Its controls begin clear of the rail's own: 16 of padding, the three lights
-   at 52, and the 12 the rail puts between them. */
+   it. Nothing is reserved at its left: the window's controls are on the sidebar's
+   head now, and this bar begins where that column ends. */
 .chat-nav {
   display: flex;
   align-items: center;
@@ -62,10 +19,22 @@
   gap: 6px;
   flex: none;
   height: var(--titlebar);
-  padding: 0 24px 0 80px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   background-color: var(--bg);
   user-select: none;
+}
+
+/* What a pane that has taken the window over is called: at the strip's own left,
+   in the display face the window's own name is set in, with the way out kept at
+   the far end. One strip and one rule, the way a thread's pane has — the mode
+   and the pane it stands in are the same surface. */
+.pane-title {
+  margin-right: auto;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* The way back to the feed sits at the bar's left, with the three-dots kept at
@@ -167,28 +136,6 @@
   position: absolute;
   right: 20px;
   bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background-color: var(--sidebar);
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.json-copy:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-.json-copy .icon {
-  width: 14px;
-  height: 14px;
 }
 
 /* The tools, grouped by the server that offers them: a collapsible section each,
@@ -234,8 +181,6 @@
 
 .tool-group-chevron {
   flex: none;
-  width: 14px;
-  height: 14px;
   color: var(--text-muted);
   transition: transform 120ms ease;
   transform: rotate(-90deg);
@@ -296,7 +241,16 @@
      dies here: nothing chains to the window, and the panel itself does not
      rubber-band. */
   overscroll-behavior: none;
-  padding: 32px 24px;
+  /* The composer floats over the transcript, and the transcript's foot keeps its
+     room: the bar's own height, measured into `--composer-h` by the pane, and the
+     air the last message keeps under it. That room is a margin under this box
+     rather than padding inside it: padding is part of the scrollport, so the
+     platform's scrollbar would be drawn down the full height of the pane and the
+     bar would cover its last stretch — the thumb disappearing behind the panel
+     exactly when it is read. As a margin the scrollport ends where the bar
+     begins, and the bar has nothing to hide. */
+  padding: 32px 24px 24px;
+  margin-bottom: var(--composer-h, 0px);
   /* The centred column has to stay centred on the pane when the platform draws
      a classic scrollbar, which takes width from this box alone. Reserving the
      gutter at both edges keeps it symmetric — and with the overlay scrollbars
@@ -340,29 +294,23 @@
 }
 
 /* Centred on the pane and at the foot of the transcript, so it lands over the
-   composer's own centre and directly above it. It is centred with `auto`
-   margins rather than a translate, so the hover lift and the entry animation
-   keep the shorthand to themselves. */
+   composer's own centre and directly above it. It is centred with `auto` margins
+   rather than a translate, so the entry animation keeps the shorthand to
+   itself. */
 .to-bottom {
   position: absolute;
   right: 0;
   left: 0;
-  bottom: 12px;
+  /* Over the bar rather than under it: the composer floats at the pane's foot,
+     and the button belongs above it. */
+  bottom: calc(var(--composer-h, 0px) + 12px);
   margin-inline: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background-color: var(--bg);
-  color: var(--text-secondary);
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  /* It arrives with the scroll it announces, rather than blinking into place. */
+  /* It floats over the pane, so it carries the app's one shadow, as the menus
+     do. */
+  box-shadow: var(--shadow-menu);
+  /* It arrives with the scroll it announces, rather than blinking into place,
+     and it lifts a little under the pointer, since it is a thing floating over
+     the transcript rather than a control sitting on it. */
   animation: to-bottom-in 160ms ease-out;
   transition:
     color 150ms ease,
@@ -370,18 +318,8 @@
     transform 150ms ease;
 }
 
-.to-bottom svg {
-  display: block;
-}
-
 .to-bottom:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
   transform: translateY(-1px);
-}
-
-.to-bottom:active {
-  transform: translateY(0);
 }
 
 @keyframes to-bottom-in {
@@ -412,6 +350,15 @@
   flex: 1;
   height: 1px;
   background-color: var(--border);
+}
+
+/* The replies begin under the rule at the ordinary distance between one message
+   and the next. A round that only asked for tools is held against what it
+   follows, since its calls are the rest of the same stretch of work — but the
+   rule is the seam the replies begin under rather than a round, so the first of
+   them keeps the gap and the count above it does not sit on the calls. */
+.reply-rule + .msg {
+  margin-top: 28px;
 }
 
 /* Every message is one row: the face of whoever wrote it at the left, their name
@@ -455,7 +402,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--font-message);
-  font-size: 15.5px;
+  font-size: var(--chat-text);
   line-height: 1.5;
   color: var(--text-primary);
 }
@@ -518,20 +465,11 @@
 }
 
 /* The control that opens a folded prompt, and closes it again: the app's small
-   voice, on the same edge as the text it is under. */
+   voice, on the same edge as the text it is under. It is a hint to the reader
+   rather than a control in a bar, so it keeps the supporting ink. */
 .msg-more {
   align-self: flex-start;
-  padding: 0;
-  border: none;
-  background-color: transparent;
   color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.msg-more:hover {
-  color: var(--text-primary);
 }
 
 /* The images a prompt was sent with, above the rule that ends it — square, and
@@ -551,16 +489,82 @@
   object-fit: cover;
 }
 
+/* A prompt's own first line: the head — who wrote it, and when — and the three
+   things the prompt offers at the line's right-hand end, where the corner is
+   empty. The line is as tall as what stands on the line, so nothing here is a
+   number that has to be kept in step with the pill: the head's own words are
+   centred against the box beside them, and the words of the prompt start under
+   the line rather than under the pill.
+   
+   The pill stands in the flow rather than out of it — hidden rather than absent,
+   so the line is that height whether the pointer is in the message or not — which
+   is what keeps it off the words: hung from the message's own top, it was drawn
+   over the first line of the prompt. */
+.msg-head-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.msg-head-row .msg-head {
+  flex: 1;
+  min-width: 0;
+}
+
+/* What a prompt offers, at its own line's right-hand end: the same three the pill
+   of the channel's rows holds, and the same pill. It stands in the line rather
+   than over it — `static`, since the pill's own recipe is a floating menu drawn
+   over whatever it belongs to, which is what the feed's rows want and what the
+   transcript cannot have: a prompt is written under this line, and a pill out of
+   the flow is drawn over the first words of it. The line is the same height
+   whether or not it is drawn. */
+.msg.user .row-menu {
+  position: static;
+  margin-left: auto;
+  opacity: 0;
+  /* Nothing to offer while the thread is answering, so nothing of it takes a
+     click or a turn of the tab order: asking again and rewriting both cut the
+     transcript back to this prompt, and neither can be asked for mid-answer. */
+  visibility: hidden;
+  transition: opacity 120ms ease;
+}
+
+/* A prompt that can act offers its pill to the caret as well as to the pointer,
+   so its buttons take a turn of the tab order — which is what makes the
+   `:focus-within` clause below more than a second way in — while the pill's own
+   box stays click-through, so the words between its buttons are still the
+   message's. `acting` is that difference. */
+.msg.user.acting .row-menu {
+  visibility: visible;
+  pointer-events: none;
+}
+
+/* The same two ways in as the channel's rows: the pointer in the message, or the
+   caret inside the pill itself. */
+.msg.user.acting .bubble:hover .row-menu,
+.msg.user.acting .row-menu:focus-within {
+  opacity: 1;
+}
+
+/* And the buttons take their clicks back once it is drawn, or while the caret is
+   inside one of them — the pill's own box stays click-through, so the words
+   between the buttons are still the message's. */
+.msg.user.acting .bubble:hover .row-menu .btn,
+.msg.user.acting .row-menu:focus-within .btn {
+  pointer-events: auto;
+}
+
 /* What a message offers — copy it, ask again, rewrite it — hanging under the
-   message's own left-hand edge, under the start of the text it acts on, for a
-   prompt and for an answer alike.
+   message's own left-hand edge, under the start of the text it acts on. This is
+   an answer's row: a prompt's three stand in its pill, above.
    
    The row holds its own place in the flow rather than floating in the gap under
    the message. A row taken out of the flow is drawn over whatever comes next,
-   which for a prompt is the first calls of the turn it asked for: invisible
-   buttons over rows that cannot then be pressed. Holding the space also keeps
-   the transcript the same height whether or not a pointer is in it — only the
-   drawing of the row changes, and only for a message that can act. */
+   which for an answer is the prompt of the next turn: invisible buttons over rows
+   that cannot then be pressed. Holding the space also keeps the transcript the
+   same height whether or not a pointer is in it — only the drawing of the row
+   changes, and that only while the answer it belongs to is under the pointer or
+   holds the row's own focus. */
 .msg-actions {
   display: flex;
   justify-content: flex-start;
@@ -574,35 +578,34 @@
 }
 
 /* Hidden rather than absent: a row that is not offered takes no click and no
-   place in the tab order, and one that is, is drawn under the pointer. */
-.msg.acting .bubble:hover .msg-actions,
-.msg.acting .msg-actions:focus-within {
+   place in the tab order, and one that is, is drawn under the pointer.
+   
+   An answer's row is offered whenever the answer is there: a run in flight is
+   another message's business, and copying an answer is reading rather than
+   acting — the transcript stays readable while the model writes. A prompt's pill
+   is the other way round, since asking again and rewriting cut the transcript
+   back to that prompt and start over, and `acting` is that difference: a prompt
+   has it while its thread is idle, an answer never needs it. */
+.msg.assistant .bubble:hover .msg-actions,
+.msg.assistant .msg-actions:focus-within {
   visibility: visible;
   opacity: 1;
 }
 
-.msg-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background-color: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
+/* The row's own two, smaller than the app's smallest button kind: they are a
+   quiet offer under a message rather than a control in a bar, so the box comes
+   down and the mark with it. The row itself keeps the height it reserves — that
+   is what holds the transcript still under the pointer, and what stands in for
+   the gap under the message. */
+.msg-actions .btn--icon-sm {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
 }
 
-.msg-action:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.msg-action svg {
-  width: 14px;
-  height: 14px;
+.msg-actions .btn--icon-sm svg.lucide {
+  width: 13px;
+  height: 13px;
 }
 
 /* A message action's tip hangs over the message rather than under the row, at
@@ -633,10 +636,11 @@
 }
 
 /* The block the actions hang under keeps no bottom margin, so the row sits just
-   below the text and not a paragraph's gap below it. It is not `:last-child`:
-   what a message offers is positioned out of the flow but is still a child, so
-   the last block is named as the child before it — and as the plain last child
-   while an answer is still live, when there are no actions yet. */
+   below the text and not a paragraph's gap below it. An answer's row is in the
+   flow, so the last block is the child before it; a prompt's pill is no child of
+   the bubble at all — it stands in the head row, which is drawn above the words
+   — so there the last block is the plain last child, and while an answer is still
+   live and has no actions drawn yet, it is the last child too. */
 .bubble > :nth-last-child(2):has(+ .msg-actions),
 .bubble > :last-child:not(.msg-actions) {
   margin-bottom: 0;
@@ -671,14 +675,64 @@
   font-size: 17px;
 }
 
-.msg ul,
-.msg ol {
+/* Prose lists are drawn rather than left to the platform's own markers. A
+   `::marker` belongs to the list item's renderer and stands outside its text, so
+   a selection that is cleared is not reliably repainted there: the highlight
+   comes off the words and stays on the bullets. The mark is therefore a box of
+   ours, in the item it belongs to — a selection takes it and gives it up with the
+   rest of the item — and the marker box is never generated.
+
+   What is drawn is the markdown's own lists and not every list in a message: the
+   app's lists — a turn's calls, the servers, the models — hold no marks and are
+   laid out by their own rules, so the lists the renderer makes are marked with
+   `prose` and these rules are written for those. The class is put there by the
+   renderer, which is the only thing that knows which lists are prose. */
+.msg ul.prose,
+.msg ol.prose {
   margin: 8px 0;
   padding-left: 20px;
+  list-style: none;
 }
 
-.msg li {
+.msg .prose > li {
+  position: relative;
   margin: 2px 0;
+}
+
+/* The mark hangs in the gutter the list keeps: its right edge stands just before
+   the item's text, and a box with only `right` placed grows to the left, so a
+   number takes the room it needs without moving the text beside it. */
+.msg .prose > li::before {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 7px;
+}
+
+/* An item that is a paragraph of its own — a loose list, which markdown writes
+   as one — keeps no margin above its first line, so the mark beside it stands on
+   that line rather than above it. */
+.msg .prose > li > p:first-child {
+  margin-top: 0;
+}
+
+.msg .prose > li > p:last-child {
+  margin-bottom: 0;
+}
+
+.msg ul.prose > li::before {
+  content: "•";
+}
+
+/* The numbers are counted by the sheet rather than by the platform's marker, and
+   counted again in each list: `counter-reset` is written on the list itself, from
+   the `start` it carries, so where an ordered list begins is the markup's to say. */
+.msg ol.prose > li {
+  counter-increment: item;
+}
+
+.msg ol.prose > li::before {
+  content: counter(item) ".";
 }
 
 .msg a {
@@ -733,8 +787,6 @@
 .thinking .chevron {
   flex: none;
   align-self: center;
-  width: 13px;
-  height: 13px;
   transition: transform 150ms ease;
 }
 
@@ -789,12 +841,11 @@
   margin: 0;
 }
 
-/* The row: how long the server took, what was called, and the arguments as they
-   were sent — one line, cut off rather than wrapped, with the whole of it in the
-   card below. It is a record of an identifier being invoked, so it is set as
-   code. Under the pointer, or with the caret in it, the line takes the
-   transcript's own tint and its text comes up to the reading colour: it is then
-   plainly the thing to press. */
+/* The row: how long the server took, and what was called — one line, with the
+   arguments and the result in the card below it. It is a record of an identifier
+   being invoked, so it is set as code. Under the pointer, or with the caret in
+   it, the line takes the transcript's own tint and its text comes up to the
+   reading colour: it is then plainly the thing to press. */
 .tool-call-row {
   display: flex;
   align-items: baseline;
@@ -844,28 +895,15 @@
   color: var(--text-muted);
 }
 
-.tool-call .tool-call-args {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border-radius: 0;
-  background-color: transparent;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-/* The chevron onto the card: out of the way until the row is under the pointer
-   or has the caret, since an idle transcript is a record rather than a list of
-   controls — and turned down while the card is open, as a chevron onto
-   something always is. */
+/* The chevron onto the card: at the row's own end, since it is what the whole
+   row does rather than something the name ends with, and out of the way until
+   the row is under the pointer or has the caret, since an idle transcript is a
+   record rather than a list of controls — and turned down while the card is
+   open, as a chevron onto something always is. */
 .tool-call-chevron {
   flex: none;
   align-self: center;
-  width: 13px;
-  height: 13px;
+  margin-left: auto;
   opacity: 0;
   transition: opacity 120ms ease, transform 120ms ease;
 }
@@ -897,23 +935,6 @@
   padding: 8px 12px;
 }
 
-.tool-call-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-size: 12px;
-}
-
-.tool-call-chip svg {
-  width: 12px;
-  height: 12px;
-}
-
 .tool-call-head .tool-call-tool {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -935,13 +956,16 @@
 
 /* The JSON as it was sent and answered: wrapped rather than scrolled sideways,
    a long string usually being the whole of what is being read. A tall result
-   scrolls inside the card rather than pushing the conversation off the screen. */
+   scrolls inside the card rather than pushing the conversation off the screen,
+   and reaching either end of it is a hard stop, as it is in the transcript the
+   card stands in. */
 .tool-call .tool-call-json {
   margin: 8px 0 0;
   padding: 0;
   border-radius: 0;
   max-height: 220px;
   overflow: auto;
+  overscroll-behavior: none;
   background-color: transparent;
   font-family: var(--font-mono);
   font-size: 12px;
@@ -999,30 +1023,6 @@
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
-}
-
-/* The icon alone, with no border until the pointer is on it: the head is a quiet
-   bar, and this is the one thing in it that does anything. What it does is said
-   by the tooltip and read out by its label, and what it did is the tick. */
-.code-copy {
-  display: flex;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.code-copy:hover {
-  border-color: var(--border);
-  background-color: var(--bg);
-  color: var(--text-primary);
-}
-
-.code-copy .icon {
-  width: 14px;
-  height: 14px;
 }
 
 /* The size is the card's, not the message's inline code's. A `code` inside a

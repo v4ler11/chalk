@@ -32,11 +32,11 @@ export function SectionNav({ label, sections, active, onSelect, footer }: Props)
       {sections.map(({ id, label: text, icon: Icon }) => (
         <button
           key={id}
-          className={`settings-tab${id === active ? " active" : ""}`}
+          className={`nav-row${id === active ? " active" : ""}`}
           aria-current={id === active ? "page" : undefined}
           onClick={() => onSelect(id)}
         >
-          <Icon className="settings-tab-icon" />
+          <Icon />
           <span>{text}</span>
         </button>
       ))}

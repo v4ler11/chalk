@@ -89,6 +89,14 @@ export function useFollowEnd({
       content arriving moves the view's contents under it, and the browser
       reports that as a scroll like any other. */
   const going = useRef(false);
+  /** The content's own height at the last pass, with the room kept at the view's
+      foot left out of it. What a pass follows is content, and nothing else is. */
+  const seen = useRef(-1);
+  /** The room kept at the view's foot at the last pass. A pass reads the two
+      apart, since they are moved by different things: the content growing under
+      the view is what a pass follows, and the room moving under it — the composer
+      growing over the pane — is what a pass leaves alone. */
+  const kept = useRef(-1);
 
   // The state the caller holds is the one anyone outside the view writes — a
   // send, an edit asked again — so the view reads it back as its own before the
@@ -105,6 +113,13 @@ export function useFollowEnd({
     onFollowChange(attached);
   }
 
+  /** The room the view's pane keeps at its foot: the space the composer floating
+   *  over it takes, plus the air under its last line. It is left out of the height
+   *  a pass follows, since it belongs to the composer rather than to the content. */
+  function room(el: HTMLElement) {
+    return parseFloat(getComputedStyle(el).paddingBottom) || 0;
+  }
+
   /** One pass: holds the view at the end. */
   function settle() {
     const el = ref.current;
@@ -117,11 +132,32 @@ export function useFollowEnd({
       pass(gesture.current - performance.now());
       return;
     }
-    if (!following.current) return;
-    el.scrollTop = el.scrollHeight;
-    // The view is at the end again, so the position may speak for the view once
-    // more.
+    // The pass answers a claim whether or not it moves anything, so the position
+    // may speak for the view once it has run.
     going.current = false;
+    if (!following.current) return;
+    // A pass is for one of two things: content that grew, which it follows to the
+    // end, or the end asked for again with nothing grown — a wheel whose move has
+    // landed, a follow the caller has taken up from outside. It is not for the
+    // composer, which grows over the pane and takes room at the view's foot
+    // without changing a thing in it: taking the view to the pixel below for that
+    // is the jump the reader never asked for, the one that reads as the feed
+    // bouncing a moment after the composer grew. The two are told apart by reading
+    // the two facts apart — the height the content itself has, with that room left
+    // out of it, and the room itself. The room alone moving is the composer's
+    // doing, and the pass moves nothing. The content growing is followed. And
+    // neither moving is the pass that owes the reader the end, which none of the
+    // other rules would give it: a view sits within the move slack of its end with
+    // the follow still on, so nothing but this pass puts it back until the next
+    // thing grows.
+    const space = room(el);
+    const height = el.scrollHeight - space;
+    const moved = space !== kept.current;
+    const grew = height !== seen.current;
+    kept.current = space;
+    seen.current = height;
+    if (moved && !grew) return;
+    el.scrollTop = el.scrollHeight;
   }
 
   /** Runs a pass, coalescing everything that asks for one inside its pace. */
@@ -157,17 +193,27 @@ export function useFollowEnd({
     [],
   );
 
-  // A view whose box changes height under it — a window resize, or the composer
-  // growing — moves the end of it, which a pass has to follow even though
-  // nothing grew.
+  // The view's own box changing height under it — a window resized — moves the end
+  // of the view with it, and that end is not content either: a view that is
+  // following goes back to it, in the frame the box changed rather than a pass
+  // later. The composer growing never reaches here: it is drawn over the pane and
+  // the pane keeps its room, so the box is the one thing a draft cannot move.
+  //
+  // A box that *grows* needs nothing written: the browser clamps an offset left
+  // past its own end as it lays the change out.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     let height = el.clientHeight;
     const observer = new ResizeObserver(() => {
-      if (el.clientHeight === height) return;
-      height = el.clientHeight;
-      pass();
+      const now = el.clientHeight;
+      if (now === height) return;
+      height = now;
+      // A view the reader has taken, and a wheel still landing, are the reader's
+      // and not the layout's to move.
+      if (!following.current) return;
+      if (performance.now() < gesture.current) return;
+      el.scrollTop = el.scrollHeight;
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -195,6 +241,16 @@ export function useFollowEnd({
    * outside the slack — so it is read from the direction: growth leaves the
    * offset alone, the pin raises it, and only the reader lowers it. The slack
    * keeps a move too small to see from ending anything.
+   *
+   * The end is the end whoever took the view there, with one exception: content
+   * that *shrinks* under the view clamps an offset left past its own end up to the
+   * new one, and that leaves the view sitting at the end without the reader having
+   * asked for it. A stream ends in two reports and the answer is only drawn as a
+   * message in the second, so between them the transcript is shorter than it was
+   * and can be shorter than the view — a reader who had scrolled away would be
+   * following again, and the answer would land by pulling them down to it. A move
+   * upwards is therefore never an arrival at the end, whether it came from the
+   * reader's hand or from the layout's.
    */
   function onScroll() {
     const el = ref.current;
@@ -204,8 +260,13 @@ export function useFollowEnd({
     const previous = lastTop.current;
     lastTop.current = top;
     if (going.current) return;
+    if (top < previous) {
+      // Away from the end, and far enough for it to be read as a move: the reader
+      // is leaving the end, and the follow goes with them.
+      if (gap > MOVE_SLACK) report(false);
+      return;
+    }
     if (gap <= MOVE_SLACK) report(true);
-    else if (top < previous) report(false);
   }
 
   /** The ↓ button: the end, now, with any landing wheel dropped. */

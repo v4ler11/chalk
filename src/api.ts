@@ -32,6 +32,22 @@ export const rootImages = (chat: number) => invoke<string[]>("root_images", { ch
 export const deleteChat = (id: number) => invoke<void>("delete_chat", { id });
 
 /**
+ * Pins a thread, or takes the pin off it.
+ *
+ * A pin is a mark on a thread's own row rather than a row of its own, so the row
+ * is not written whole: the pin's column alone is, which is why a pin taken while
+ * a thread is answering survives whatever its run writes next.
+ */
+export const pinChat = (chat: number, pinned: boolean) => invoke<void>("pin_chat", { chat, pinned });
+
+/**
+ * The pinned threads, most recently pinned first. A thread is pinned, and a
+ * thread is a chat's row, so what comes back is the same summary any other list
+ * is drawn from — the pin being one more thing a row says, not a kind of row.
+ */
+export const listPins = () => invoke<ChatSummary[]>("list_pins");
+
+/**
  * Sends a prompt into a chat, starting its turn in the backend.
  *
  * With no chat named, one is made from the prompt: that is what posting to the

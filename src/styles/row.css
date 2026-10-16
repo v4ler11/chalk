@@ -16,12 +16,10 @@
   font-weight: 400;
 }
 
-.row.confirming .row-action {
+/* The answers read in the primary ink while they are the row's business; the one
+   that removes it keeps the library's danger ink, so it is left out. */
+.row.confirming .row-action:not(.btn--danger) {
   color: var(--text-primary);
-}
-
-.row.confirming .row-action.confirm {
-  color: var(--danger);
 }
 
 /* Held in the row whether or not it is drawn, so a row does not twitch as the
@@ -49,34 +47,4 @@
 .row-actions:focus-within .row-action,
 .row.confirming .row-action {
   pointer-events: auto;
-}
-
-.row-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 20px;
-  min-width: 20px;
-  padding: 0 4px;
-  border: none;
-  border-radius: 6px;
-  background-color: transparent;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.row-action:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.row-action.confirm {
-  color: var(--danger);
-}
-
-.row-action svg {
-  width: 13px;
-  height: 13px;
 }

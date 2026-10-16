@@ -1,42 +1,75 @@
 /* -------------------------------------------------------------- dark scheme */
 
-/* The design defines a single light theme; these are the same tokens inverted
-   for the OS dark scheme the app already honoured. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a18;
-    --sidebar: #141412;
-    --sidebar-hover: #1b1b18;
-    --sidebar-active: #24241f;
-    --border: #2e2e29;
-    --text-primary: #f2f2ee;
-    --text-secondary: #a8a8a0;
-    --text-muted: #6e6e68;
-    --accent: #f2f2ee;
-    --accent-contrast: #141412;
-    --input-bg: #232320;
-    --danger: #ff8a80;
-    --danger-bg: #3a1d1d;
-    --danger-border: #6b2b2b;
-    --reasoning: #6f9dff;
-    --reasoning-bg: #1d2b4a;
-    --reasoning-divider: #34507f;
-    --json-key: #7fb0ff;
-    --json-string: #7ddc9a;
-    --json-number: #f0c674;
-    --json-literal: #c4a7ff;
-    /* The two code roles JSON has not got. The other three follow the JSON
-       view's tokens, which this scheme has already turned. */
-    --code-function: #c4a7ff;
-    --code-type: #5eead4;
-  }
+/* The scheme the window wears when it is told to — the other half of the choice
+   in Settings, General.
+ *
+ * It is selected by the attribute `theme.ts` paints on <html> rather than by the
+ * OS's own query. The query answers for the desktop and not for the window, and
+ * the window has its own answer now: `system` is one of the three choices, and it
+ * is resolved where the OS is asked — once, into one of these two names. What the
+ * sheets read is therefore always a scheme and never a question, and an explicit
+ * `dark` is dark on a light desktop, and the other way round.
+ *
+ * The tokens are the light ones inverted, as they were while this followed the
+ * OS: the same names in the same roles, one value each. The accent is inverted
+ * with them — white, with the rail's own black written on it — so what writes
+ * something is the light button on a dark page, and the ring the keyboard draws
+ * is the brightest line the scheme has. */
+:root[data-theme="dark"] {
+  /* The platform's own widgets — the scrollbar, a select's list, the caret —
+     follow the window rather than the desktop, as they do in `base.css`. */
+  color-scheme: dark;
 
-  .log-line.warn .log-level {
-    color: #fdba74;
-  }
-
-  .log-line.error .log-level {
-    color: #ff8a80;
-  }
+  --bg: #1a1a18;
+  --sidebar: #141412;
+  --sidebar-hover: #1b1b18;
+  --sidebar-active: #24241f;
+  --border: #2e2e29;
+  --text-primary: #f2f2ee;
+  --text-secondary: #a8a8a0;
+  --text-muted: #6e6e68;
+  --accent: #ffffff;
+  --accent-contrast: #141412;
+  --input-bg: #232320;
+  --danger: #ff8a80;
+  --danger-bg: #3a1d1d;
+  --danger-border: #6b2b2b;
+  --reasoning: #6f9dff;
+  --reasoning-bg: #1d2b4a;
+  --reasoning-divider: #34507f;
+  /* The row under the pointer at night: a warm step up from the content, so the
+     row lifts off the page. It is the palette's own neutral one step above the
+     content — the same value the rail marks a row in force with — and it is
+     picked over a step higher, which would sit on a pinned row's ground and
+     swallow the hairline the models list draws between its rows. The light
+     scheme's hover presses instead, since there the page is lighter than the
+     rail: in either scheme the row answers the pointer by moving away from the
+     ground it was drawn on. */
+  --row-hover: #24241f;
+  --pin-bg: #302e26;
+  --pin: #d4a44a;
+  /* What has just been written, at night: a green of its own rather than the
+     JSON view's string ink, as the light scheme's is — the palette leaves the
+     ink and the brand for it — on a ground dark enough to be a row rather than
+     a surface of its own. */
+  --ok: #4ade80;
+  --ok-bg: #12251a;
+  --json-key: #7fb0ff;
+  --json-string: #7ddc9a;
+  --json-number: #f0c674;
+  --json-literal: #c4a7ff;
+  /* The two code roles JSON has not got. The other three follow the JSON
+     view's tokens, which this scheme has already turned. */
+  --code-function: #c4a7ff;
+  --code-type: #5eead4;
 }
 
+/* A warning and an error have no token of their own: their two levels are picked
+   to read on the panel they are written in, and each scheme picks its own pair. */
+:root[data-theme="dark"] .log-line.warn .log-level {
+  color: #fdba74;
+}
+
+:root[data-theme="dark"] .log-line.error .log-level {
+  color: #ff8a80;
+}

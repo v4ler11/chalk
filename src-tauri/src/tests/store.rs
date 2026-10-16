@@ -104,7 +104,9 @@ fn a_chats_servers_round_trip_and_its_silence_is_not_a_choice() {
 /// is holding, and the reasoning level it is asking with. The channel reads
 /// three more: when the thread was posted, the prompt it was posted as, and how
 /// much has come back since — and a fourth, how many pictures that prompt
-/// carried, which is what tells its row whether there are any to draw.
+/// carried, which is what tells its row whether there are any to draw. The
+/// sidebar's list reads one more: when the thread was pinned, which is both what
+/// puts it in that list and what marks its row.
 /// Renaming a field, or losing the attribute that camel-cases it, would leave
 /// the feed drawing threads with nothing to draw.
 #[test]
@@ -133,6 +135,10 @@ fn a_row_crosses_to_the_frontend_as_it_is_read() {
             // user either — and the prompt is not a thing said in a thread.
             "mine": 0,
             "images": 0,
+            // A thread nobody has pinned says so with a zero rather than with an
+            // absent field: the list is drawn from the same rows the feed is, and
+            // a key that came and went would be a second shape to read.
+            "pinnedAt": 0,
         })
     );
 }
@@ -405,6 +411,9 @@ fn a_v1_database_gains_the_later_columns() {
     // A chat written before the servers had a control has never chosen, so it
     // offers every enabled server rather than none of them.
     assert_eq!(loaded.servers, None);
+    // And one written before there were pins is not pinned: the column arrives
+    // with a zero in it rather than with nothing to read.
+    assert_eq!(rows[0].pinned_at, 0);
 
     drop(store);
     cleanup();
@@ -528,4 +537,133 @@ fn saving_a_deleted_chat_fails() {
             20
         )
         .is_err());
+}
+
+/// A pin is a mark on a thread's own row rather than a row of its own, so the
+/// pins list is a list of chats with one more thing in it: what comes back is
+/// what any other list would draw about the thread, ordered by when it was
+/// pinned, and a thread that is not pinned is not in it at all.
+#[test]
+fn pinned_threads_are_listed_most_recently_pinned_first() {
+    let store = Store::in_memory().unwrap();
+    let older = store
+        .save(
+            None,
+            "first",
+            "test/model",
+            "",
+            None,
+            &json!([{ "role": "user", "content": "what we pinned" }]),
+            10,
+        )
+        .unwrap();
+    let newer = store
+        .save(
+            None,
+            "second",
+            "test/model",
+            "",
+            None,
+            &json!([
+                { "role": "user", "content": "the other one" },
+                { "role": "assistant", "content": "an answer" },
+            ]),
+            20,
+        )
+        .unwrap();
+    // A thread nobody pinned: the query is what decides, so it is not in the list.
+    store
+        .save(None, "third", "test/model", "", None, &json!([]), 30)
+        .unwrap();
+
+    assert!(store.pins().unwrap().is_empty(), "nothing is pinned yet");
+
+    store.set_pinned(newer.id, 200).unwrap();
+    store.set_pinned(older.id, 100).unwrap();
+
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 2);
+    // Most recently pinned first, whichever thread was written when.
+    assert_eq!(pins[0].id, newer.id);
+    assert_eq!(pins[0].pinned_at, 200);
+    assert_eq!(pins[0].root, "the other one");
+    assert_eq!(pins[0].replies, 1, "the list says what any list says");
+    assert_eq!(pins[1].id, older.id);
+    assert_eq!(pins[1].pinned_at, 100);
+    assert_eq!(pins[1].root, "what we pinned");
+
+    // Unpinning takes it out, and leaves the rest of the row alone: what the feed
+    // says about a thread is about its messages, and a pin is not one.
+    let before = store.list().unwrap();
+    let written = before.iter().find(|chat| chat.id == newer.id).unwrap();
+    assert_eq!(written.updated_at, 20, "the row's own moment does not move");
+    store.set_pinned(newer.id, 0).unwrap();
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].id, older.id);
+    let after = store.list().unwrap();
+    let written = after.iter().find(|chat| chat.id == newer.id).unwrap();
+    assert_eq!(written.updated_at, 20);
+    assert_eq!(written.replies, 1, "and neither does anything else about it");
+
+    // A row that is gone cannot be pinned: an update that hits nothing must not
+    // report success.
+    store.delete(older.id).unwrap();
+    assert!(store.set_pinned(older.id, 5).is_err());
+}
+
+/// A pin is taken while a thread may be answering, and answering writes the
+/// whole row — as does the answer after it, and the one after that. So the pin
+/// is written on its own, and the row's own write must name the columns it owns
+/// and leave the pin's alone: a save that wrote a zero into it, the way a row
+/// is born, would unpin every thread that was ever answered, and the pins list
+/// would empty itself an answer at a time.
+#[test]
+fn a_thread_answered_again_keeps_the_pin_it_was_given() {
+    let store = Store::in_memory().unwrap();
+    let chat = store
+        .save(
+            None,
+            "pinned",
+            "test/model",
+            "low",
+            None,
+            &json!([{ "role": "user", "content": "what we pinned" }]),
+            10,
+        )
+        .unwrap();
+    // A moment from the clock rather than a fixture number: it has to survive a
+    // write that is told a moment of its own, and neither the moment of the pin
+    // nor the moment of the write may stand in for the other.
+    let pinned_at = chrono::Utc::now().timestamp_millis();
+    store.set_pinned(chat.id, pinned_at).unwrap();
+
+    let answered = json!([
+        { "role": "user", "content": "what we pinned" },
+        { "role": "assistant", "content": "an answer" },
+    ]);
+    let written = store
+        .save(
+            Some(chat.id),
+            "pinned",
+            "test/model",
+            "high",
+            None,
+            &answered,
+            20,
+        )
+        .unwrap();
+
+    // The save did what a save does: the transcript it was handed, the level it
+    // was asked for, the moment it was written.
+    assert_eq!(written.reasoning, "high");
+    assert_eq!(written.updated_at, 20);
+    assert_eq!(store.load(chat.id).unwrap().unwrap().messages, answered);
+    // And the pin is where it was left, both in the row the write answers with
+    // and in the list the sidebar draws.
+    assert_eq!(written.pinned_at, pinned_at);
+    let pins = store.pins().unwrap();
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].id, chat.id);
+    assert_eq!(pins[0].pinned_at, pinned_at);
 }

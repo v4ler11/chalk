@@ -137,10 +137,21 @@ function changed(summary: RunSummary) {
  * whose snapshot is held has a partial to replace — a thread the window is
  * showing. A background chat's delta is dropped, since the feed reads its phase
  * from the summary and a fetch per push would be a fetch per token.
+ *
+ * A partial that has gone says the answer is no longer arriving — but the answer
+ * is not in the transcript the window holds yet, and it is the run's snapshot and
+ * not the delta that carries a transcript. Dropping the bubble here would leave
+ * the thread showing a conversation with the answer taken out of it: shorter than
+ * it was, and shorter than the text under the reader, whose scroll the browser
+ * then clamps to what is left — and a tool round can run for seconds between the
+ * two reports, which is a whole answer blinking out and back. So the window keeps
+ * drawing the answer until the transcript it reads says the answer is a message,
+ * which is where the answer is the same text and the bubble goes.
  */
 function delta(payload: { chat: number; partial: Partial | null }) {
   const entry = entries.get(payload.chat);
   if (entry?.kind !== "snapshot") return;
+  if (payload.partial === null) return;
   entries.set(payload.chat, {
     kind: "snapshot",
     snapshot: { ...entry.snapshot, partial: payload.partial },

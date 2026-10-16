@@ -1,0 +1,812 @@
+/* --------------------------------------------------------------- components */
+
+/* The app's controls, drawn once. A feature still draws its own surfaces — a
+   feed row, a card, a pane — but the things a reader presses, types in and picks
+   from are these, so the dark button is written here rather than three times in
+   three sheets, at three sizes, and a control that changes changes everywhere.
+
+   Each is a plain element with a class: `<button class="btn btn--primary">`,
+   `<input class="input">`, `<div class="menu">`. A control is therefore two
+   classes at most — one for what it is, one for the variant it wears — and every
+   colour, radius and size resolves from the tokens in `base.css`, so the two
+   schemes stay in step without a rule of their own.
+
+   What a feature keeps is what is *its* business: where a thing stands, how wide
+   it is, and the words on it. What it never keeps is the recipe. */
+
+/* ------------------------------------------------------------------- icons */
+
+/* Every mark in the app is Lucide, at one size and one weight. Lucide names
+   every icon it draws, so one rule reaches all of them — the button, the pill,
+   the menu, the bar — and a feature that needs a mark of another size says so
+   where it draws it, which is now the exception rather than the rule. Two marks
+   are smaller because the box around them is, and each says so. */
+svg.lucide {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+}
+
+/* ----------------------------------------------------------------- buttons */
+
+/* The app's button: a control with something written on it, or a mark alone. Its
+   variants are the few things a button can be — filled, outlined, quiet — and
+   its sizes are the places one sits: a settings form, a card, a row, a bar. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* A control that is holding something: the view a bar's button is showing, and
+   the menu it has open. The ground says it is in force, the way a nav row's
+   does. */
+.btn.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}
+
+/* The keyboard reaches every control, so every control says where the keyboard
+   is. A click never draws it: it is the one thing that is only for the reader
+   who is not using the pointer. */
+.btn:focus-visible,
+.nav-row:focus-visible,
+.menu-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The filled one: what writes something — the Add, the Run, the Save on the
+   MCP page — and the send button, which is the same button with nothing written
+   on it. */
+.btn--primary {
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* An outlined one: a button that does something to the page without writing it
+   — Test, and the answer to a question about removing a row. */
+.btn--secondary {
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  background-color: var(--sidebar-hover);
+}
+
+/* The same shape, reading in the supporting ink: the controls that do nothing to
+   the page's data — copy, refresh, the way back to the end of a transcript. */
+.btn--subtle {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.btn--subtle:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+/* The quiet one: no box at all until the pointer is in it. It is how an icon
+   button answers — the mark is the control, and the box is the pointer's own
+   answer to it. While the question is up it reads in the primary ink instead. */
+.btn--quiet {
+  border: none;
+  padding: 5px 9px;
+  color: var(--text-secondary);
+}
+
+.btn--quiet:hover:not(:disabled) {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+/* A box that arrives with the pointer, for a control standing on a surface that
+   is already a card (the copy on a code block). */
+.btn--ghost {
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  border-color: var(--border);
+  background-color: var(--bg);
+  color: var(--text-primary);
+}
+
+/* No box and no ground: a mark in a bar rather than a button (the paperclip),
+   which is read with the bar's own ink and answers the pointer with the
+   foreground one. */
+.btn--bare {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+}
+
+.btn--bare:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+/* What a bar names itself with: no box, a chevron, and the app's small voice.
+   The composer's model is the one of these. */
+.btn--chip {
+  padding: 4px 6px;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn--chip:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+/* The way out, named for the key that does the same: a keycap rather than a
+   button, in the app's monospace at the size a cap is written. */
+.btn--key {
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+}
+
+/* Adding a row to a list — a model, a server, a header: dashed, since the row is
+   not there yet. */
+.btn--dashed {
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  color: var(--text-secondary);
+}
+
+.btn--dashed:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+/* A pill: the period a feed is read by, on the panel's own colour, which is what
+   it masks the feed behind it with. */
+.btn--pill {
+  padding: 4px 12px;
+  border-color: var(--border);
+  border-radius: 999px;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.btn--pill:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+/* Removing something is said in the danger ink, and the ground it is offered on
+   is the danger's own. */
+.btn--danger {
+  color: var(--danger);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* The same ink in an outline instead of a fill: a way out of a mode, which says
+   what it does without shouting it — and so is offered no ground under the
+   pointer, the fill being what a button that writes wears. */
+.btn--danger-outline {
+  border-color: var(--danger-border);
+}
+
+.btn--danger-outline:hover:not(:disabled) {
+  border-color: var(--danger);
+  background-color: transparent;
+}
+
+/* The × on an attachment: a badge over a picture rather than a control on a
+   surface, so it is its own dark ground — the one place the app is not the
+   page's colour, because what is under it is a photograph — and it sits at the
+   tile's own corner. */
+.btn--overlay {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(20, 20, 20, 0.62);
+  color: #fff;
+}
+
+.btn--overlay:hover:not(:disabled) {
+  background-color: rgba(20, 20, 20, 0.85);
+}
+
+.btn--overlay svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* The grounds a control can stand on: a page — the settings, a card — and a
+   pane, which is what the two floating controls sit on. */
+.btn--tonal {
+  background-color: var(--sidebar);
+}
+
+.btn--surface {
+  background-color: var(--bg);
+}
+
+/* --------------------------------------------------------------- btn sizes */
+
+/* The small button of a card: the two answers to a question about running a
+   call. */
+.btn--sm {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* The small one of a row, which is the word alone: no size of its own, so it
+   grows with what it says. */
+.btn--mini {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Square, and as tall as the control beside it: the dots of a pane's bar, the ×
+   beside a field, a mark in a menu. */
+.btn--icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.btn--icon-sm {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.btn--icon-xs {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.btn--round {
+  border-radius: 50%;
+}
+
+/* A square button in a row of fields stands the height of the field rather than
+   the 30px of a bar's button, so the row reads as one line. */
+.btn--stretch {
+  height: auto;
+  align-self: stretch;
+}
+
+/* --------------------------------------------------------------- seg (choice) */
+
+/* A set of mutually exclusive picks, standing in one track: the appearance's
+   three schemes, and whatever else is one of a few rather than on or off. The
+   buttons are the library's own — a form sizes them — and the track is the
+   ground a field is drawn on, so the group reads as one control rather than as
+   three buttons that happen to stand together.
+ *
+ * The chosen one is filled the way a switch's track is when it is on: the page's
+ * ink, with the page written on it. It is the same answer as the switch's to the
+ * same question — which of these is in force — and it needs no colour of its own
+ * to give it, so the brand's accent stays what it is for: what the app does.
+ *
+ * A strip of tabs is not this: a tab is a name over the panel it opens rather
+ * than one of a few states, so the models' gateways are drawn by their own sheet
+ * as tabs, and this track stays what it is. */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  align-self: flex-start;
+  padding: 2px;
+  border-radius: 8px;
+  background-color: var(--input-bg);
+}
+
+/* The house corner belongs to the track, so the chip inside it takes the
+   smaller one. */
+.seg .btn {
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+/* The unchosen ones only: the chosen chip is already the ink, and a hover that
+   repainted it would paint the ink on the ink — which is what this rule did
+   before the exclusion, since `:not(:disabled)` made it the stronger of the two
+   and the label vanished under the pointer. */
+.seg .btn:hover:not(:disabled):not([aria-pressed="true"]) {
+  color: var(--text-primary);
+}
+
+.seg .btn[aria-pressed="true"] {
+  background-color: var(--text-primary);
+  color: var(--bg);
+}
+
+/* ------------------------------------------------------------ pill and chip */
+
+/* The composer's pills: one control of two halves while the chat is asking for
+   something — how hard to think, and what it may call — and the mark alone while
+   it is not. The fill is the app's blue, which is what "in force" reads as
+   everywhere; the mark's own grey is what "nothing asked" reads as. */
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 2px;
+  border-radius: 999px;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.pill--on {
+  padding: 3px 4px 3px 3px;
+  background-color: var(--reasoning-bg);
+  color: var(--reasoning);
+}
+
+/* One of the two: the mark, or the value with the chevron onto what it holds.
+   The halves are two buttons, so each answers the pointer on its own — which is
+   how one of them can give the level up while the other opens it. */
+.pill__half {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 1px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pill__half:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pill:not(.pill--on) .pill__half {
+  color: var(--text-muted);
+}
+
+.pill:not(.pill--on) .pill__half:hover {
+  color: var(--text-primary);
+}
+
+.pill--on .pill__half:hover {
+  background-color: var(--reasoning-divider);
+}
+
+/* Only while both halves are there: a pill drawn around one button has no middle
+   to cut in two. */
+.pill--on .pill__half:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.pill--on .pill__half:last-child {
+  padding-left: 4px;
+  border-left: 1px solid var(--reasoning-divider);
+  border-radius: 0 999px 999px 0;
+}
+
+/* What the pill holds: the level's letter, or the count of servers. */
+.pill__value {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* The marks the pill is made of — the brain, the hammer — at the size the pill's
+   own type is, and the chevron onto what it holds a shade under them, since it
+   is punctuation beside a word rather than a mark of its own. */
+.pill svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pill__value + svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* A pill that is only read: what a call was answered with. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ fields */
+
+/* A field: its name above the control it names, which is how every form in the
+   app is written. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* The name alone, for the labels that head a row rather than a field. */
+.field-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* The control itself. It is the platform's own input, select or textarea —
+   dressed, not rebuilt: a list of two providers is not worth a hand-built menu,
+   and a native control keeps the caret, the selection and the accessibility the
+   platform already knows how to give. */
+.input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.input:focus {
+  border-color: var(--text-muted);
+}
+
+/* A field that takes nothing yet says so by going quiet rather than by taking
+   the click: the composer's draft while an answer is arriving. */
+.input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.input--area {
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* The composer's draft: a field with no box of its own, since the card it is
+   written in is the box. Its type is the chat's own — the answer, the prompt
+   that asked for it and the prompt being written are one size, so what is typed
+   and what it becomes are set alike — and it takes the bar's ramp with the rest
+   of the composer's parts only in what is around it, never in the size of the
+   words. */
+.input--bare {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  font-size: var(--chat-text);
+  line-height: 1.5;
+  resize: none;
+}
+
+.input--bare::placeholder {
+  color: var(--text-muted);
+}
+
+/* The switch: a track and a knob — grey and to the left while a thing is out,
+   filled and to the right while it is in. The fill and the knob swap places with
+   the scheme the way the filled buttons do, so it reads in either one without a
+   colour of its own. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--sidebar-active);
+  transition: background-color 150ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+[aria-pressed="true"] .switch {
+  background-color: var(--text-primary);
+}
+
+[aria-pressed="true"] .switch::after {
+  transform: translateX(14px);
+  background-color: var(--bg);
+}
+
+/* The checkbox: an empty square when it is off, and a filled square with a tick
+   when it is on. The box is the app's own rather than the platform's, because
+   the platform draws that one in its own colours while every other control here
+   is the app's — and it reads the same in both schemes, since the tick is the
+   page's colour. The input keeps the click, the keyboard and the accessibility
+   tree; only its box is replaced. */
+.check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.check input {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  opacity: 0;
+}
+
+.check-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--text-muted);
+  border-radius: 4px;
+  color: var(--bg);
+}
+
+.check input:checked + .check-box {
+  border-color: var(--text-primary);
+  background-color: var(--text-primary);
+}
+
+.check input:focus-visible + .check-box {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The tick sits in a 15px box, so it is drawn smaller and heavier than an icon
+   of a control — the one glyph that is not the app's icon size. */
+.check-box svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+/* ------------------------------------------------------------------- menus */
+
+/* Anywhere else closes the menu, which is what a click outside one is for. */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+
+/* A menu of choices: the models above the chip in the composer's bar, the
+   reasoning levels beside the composer's brain, and the servers under the
+   hammer. Held at the window rather than in a card, since each is placed from
+   its own control's rect — the composer's bar clips whatever would hang out of
+   it. It is one of the app's two floating surfaces, so it is one of the two
+   things that carries the app's one shadow. */
+.menu {
+  position: fixed;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg);
+  box-shadow: var(--shadow-menu);
+}
+
+/* The three-dots' menu hangs under the control that opened it, at the bar's own
+   right edge. The composer's menus are placed from their control's rect instead,
+   since the bar would clip them. */
+.menu.below {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+}
+
+/* The same menu standing in a row rather than at the window's edge: what a feed
+   row offers at its own corner, which is a pill of its own rather than a list. */
+.menu--row {
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  max-height: none;
+  overflow: visible;
+  padding: 3px;
+}
+
+/* What stands in it is the smallest of the app's button sizes: the pill is a
+   row's own offer rather than a control in a bar, so the box comes down and the
+   mark with it — one size for the pill wherever it is worn, since it is one
+   component and its two corners must not come to disagree.
+   
+   Only the icon actions: the delete question is a pair of buttons with words on
+   them, and words need the width they are written at. */
+.menu--row .btn--icon-sm {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+.menu--row .btn--icon-sm svg.lucide {
+  width: 13px;
+  height: 13px;
+}
+
+/* One choice: what it says, the shortcut bound to it if any, and a check while
+   it is the one in force. */
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-option.active {
+  color: var(--text-primary);
+}
+
+.menu-option:hover {
+  background-color: var(--sidebar);
+  color: var(--text-primary);
+}
+
+.menu-option.empty {
+  color: var(--text-muted);
+}
+
+.menu-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu-option-check {
+  flex: none;
+}
+
+/* A button's name and its shortcut, under the button and under the pointer. It
+   is out of the flow so nothing it explains is moved by it, and it takes no
+   clicks, so it never stands between the pointer and the button it belongs to. */
+.key-hint {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.hint:hover .key-hint,
+.hint:focus-within .key-hint {
+  opacity: 1;
+}
+
+/* A key inside a sentence: the shortcut in a tip, and the one beside a menu's
+   choice. */
+.key-hint kbd,
+.menu-option kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------- nav rows */
+
+/* A row that shows a view rather than doing something to the page: the sidebar's
+   three, the settings' sections, and the row into the log window. It is a button
+   in the markup and a row on the screen, so it reads as a list — the ground
+   answers the pointer, and the row the reader is in keeps it. */
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-row:hover {
+  background-color: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+/* Where the reader is: a view that is showing rather than a button that did
+   something, so it is marked by the ground and the ink both. */
+.nav-row.active {
+  background-color: var(--sidebar-active);
+  color: var(--text-primary);
+}

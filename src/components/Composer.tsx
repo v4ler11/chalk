@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type RefObject,
+} from "react";
 import { ArrowUp, Brain, ChevronDown, Hammer, Paperclip, Pencil, Square, X } from "lucide-react";
 import { MOD, mod } from "../keybinds";
 import { newAttachment, processImage, type Attachment } from "../images";
@@ -7,6 +15,8 @@ import { ServersMenu, type ServersProps } from "./ServersMenu";
 import { Hint } from "./Hint";
 import { Menu, MenuOption, useOpenMenu } from "./Menu";
 import { offeredServers } from "../lazy";
+import { spend } from "../money";
+import { useSendRoom } from "../useSendRoom";
 
 /** The menus the composer's own bar opens: the levels, the servers, the models. */
 type MenuName = "reasoning" | "servers" | "model";
@@ -30,6 +40,12 @@ interface Props {
   models: string[];
   /** The model to post with from the next request on. */
   onModel: (model: string) => void;
+  /**
+   * What this chat has cost in USD, and what its newest message added — both
+   * summed by the pane, which is where the transcript is. Either may be zero,
+   * and a zero is written as nothing rather than as `$0.00`.
+   */
+  cost: { total: number; latest: number };
   /**
    * How hard the chat is asking the model to think. `""` is off, which is what a
    * request carries when nothing has been chosen.
@@ -56,10 +72,14 @@ interface Props {
 }
 
 /**
- * Composer card: the images attached to the draft, then the draft, then a row of
- * actions beneath them. The shortcut sends; Enter is a newline. Rewriting an
- * earlier prompt puts its text here, under a line that says so and a button that
- * gives up on it.
+ * The composer: one card holding the field the prompt is written in — with the
+ * shortcut to send beside the button that does it — and, under the card, the row
+ * of controls that belong to the message rather than to the text: what is
+ * attached and what the chat asks for on the left, and what it has cost and what
+ * it is asking on the right.
+ *
+ * The shortcut sends; Enter is a newline. Rewriting an earlier prompt puts its
+ * text here, under a line that says so and a button that gives up on it.
  *
  * Owns the draft and its attachments locally so typing and preparing an image
  * re-render only this component, never the message list. Images arrive from the
@@ -69,8 +89,9 @@ interface Props {
  * same shape and colour: the hammer alone while this chat calls no server —
  * which is then the way into the list — and, while it calls any, a pill of the
  * hammer and how many it calls, whose chevron opens that list and whose hammer
- * gives them all up. The model in use sits in the bar's right corner, beside the
- * send button, and opens the list of them.
+ * gives them all up. The cost and the model in use close the row: what the chat
+ * has spent, and which model it is spending it on, which is also the way into
+ * the list of them.
  */
 export function Composer({
   textareaRef,
@@ -78,6 +99,7 @@ export function Composer({
   model,
   models,
   onModel,
+  cost,
   reasoning,
   onReasoning,
   editingText,
@@ -96,6 +118,10 @@ export function Composer({
   const menus = useOpenMenu<MenuName>();
   const levelRef = useRef<HTMLDivElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
+  // The column the draft keeps clear at its right end: the shortcut and the
+  // button, measured into the row so the draft's words wrap before them.
+  const sendRef = useRef<HTMLDivElement>(null);
+  useSendRoom(sendRef);
   // The chip in the bar's right corner, which the model list hangs above.
   const modelRef = useRef<HTMLButtonElement>(null);
   const current = REASONING_LEVELS.find((option) => option.level === reasoning) ?? REASONING_LEVELS[0];
@@ -105,6 +131,9 @@ export function Composer({
   // reasoning pill's brain does with the level.
   const offered = offeredServers(servers.declared, servers.chosen);
   const enabled = servers.declared.filter((server) => server.enabled).length;
+  // What this chat has spent and what its newest message added, written as one
+  // line — or as nothing while the two of them still have nothing to say.
+  const costText = spend(cost.total, cost.latest);
 
   /** The draft an edit displaced, put back if the edit is given up. */
   const stash = useRef("");
@@ -126,7 +155,7 @@ export function Composer({
     shown.current = mode;
     setSwapping(true);
   }, [mode]);
-  const sendClass = `send-btn${swapping ? " swapping" : ""}`;
+  const sendClass = `btn btn--primary btn--icon btn--round send-btn${swapping ? " swapping" : ""}`;
   const sendSettled = () => setSwapping(false);
 
   // `value` is read here, not listed as a dependency: this runs on the render
@@ -151,13 +180,47 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingText]);
 
-  // The card is one line tall until the draft needs more; CSS caps the growth.
-  useLayoutEffect(() => {
+  // The draft is as tall as its words need at the width the field has, re-taken
+  // when either changes. The words are `value`; the width is the field's own
+  // content box, and both the window's measure and the shortcut giving way to
+  // Stop move it — the button takes its room out of the field's right padding,
+  // so the same words wrap into more lines once the button is wider. A height
+  // left from the wider draft is shorter than the re-wrapped one while the box
+  // is still under its own cap, and the box then has nothing to scroll: the
+  // field clips the lines past its end, out of reach until the next keystroke.
+  // The height written is the field's own scroll height, taken from the box that
+  // carries it, and this is its one copy — both fits below read it.
+  const fitDraft = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  }, [textareaRef]);
+
+  useLayoutEffect(() => {
+    fitDraft();
+  }, [value, fitDraft]);
+
+  // The field's width, followed for the fit above. What is compared is the
+  // content box, not the border box: the border box is the card's own measure
+  // and does not move when the button takes room from the words' side, so only
+  // the content width says whether the same words still wrap the same way. A
+  // width already fitted is ignored, since the height the fit writes comes back
+  // as a size of its own and following it would be the loop. It is disconnected
+  // with the field rather than with a render: a window narrowed between two
+  // keystrokes re-wraps the draft in the frame it narrows.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    let width = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === width) return;
+      width = entry.contentRect.width;
+      fitDraft();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [textareaRef, fitDraft]);
 
   /**
    * Attaches each image at once, from the file's own object URL, and prepares it
@@ -210,7 +273,11 @@ export function Composer({
   }
 
   return (
-    <div className="composer">
+    <>
+      {/* The card: the box the prompt is written in. What is attached to the
+          draft and what the draft is rewriting stand above the field, since both
+          are about the text itself. */}
+      <div className="composer">
       {editingText !== null && (
         <div className="composer-editing">
           <span className="composer-editing-label">
@@ -218,7 +285,7 @@ export function Composer({
             Editing message
           </span>
           <button
-            className="composer-editing-cancel"
+            className="btn btn--quiet btn--icon-xs"
             title="Cancel edit"
             aria-label="Cancel edit"
             onClick={onCancelEdit}
@@ -241,7 +308,7 @@ export function Composer({
                 </span>
               )}
               <button
-                className="attachment-remove"
+                className="btn btn--overlay"
                 title={`Remove ${attachment.name}`}
                 aria-label={`Remove ${attachment.name}`}
                 onClick={() => removeAttachment(attachment.id)}
@@ -252,147 +319,45 @@ export function Composer({
           ))}
         </div>
       )}
-      <textarea
-        ref={textareaRef}
-        rows={1}
-        value={value}
-        placeholder={`Ask anything, press ${MOD}+Enter to send`}
-        disabled={streaming}
-        onChange={(e) => setValue(e.target.value)}
-        onPaste={handlePaste}
-        onKeyDown={(e) => {
-          // Escape gives up a rewrite, the way Escape gives up the delete
-          // question in the history: the draft the edit displaced comes back.
-          if (e.key === "Escape" && editingText !== null) {
-            e.preventDefault();
-            onCancelEdit();
-            return;
-          }
-          // Only the chord sends. Enter is a newline like any other editor's,
-          // which is what the placeholder promises, and what makes a prompt of
-          // several lines something you can type.
-          if (e.key !== "Enter" || !mod(e)) return;
-          e.preventDefault();
-          submit();
-        }}
-      />
-      <div className="composer-actions">
-        <div className="composer-tools">
-          {/* Each tool names itself under the pointer: a tip of the app's own,
-              since the window draws its own chrome and has no native ones. */}
-          <Hint label="Attach files">
-            <button
-              className="composer-tool"
-              aria-label="Attach files"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Paperclip />
-            </button>
-          </Hint>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              addFiles(Array.from(e.target.files ?? []));
-              // So picking the same file again is still a change.
-              e.target.value = "";
+      <div className="composer-row">
+        {/* The field rides in a box of its own: that box is what scrolls when a
+            draft outgrows it, so reaching either end of it is a hard stop — a
+            `textarea` scrolls itself and rubber-bands past its end, which is
+            what the transcript's own box does not do. */}
+        <div className="composer-draft">
+          <textarea
+            className="input input--bare"
+            ref={textareaRef}
+            rows={1}
+            value={value}
+            placeholder="Ask anything"
+            disabled={streaming}
+            onChange={(e) => setValue(e.target.value)}
+            onPaste={handlePaste}
+            onKeyDown={(e) => {
+              // Escape gives up a rewrite, the way Escape gives up the delete
+              // question in the history: the draft the edit displaced comes back.
+              if (e.key === "Escape" && editingText !== null) {
+                e.preventDefault();
+                onCancelEdit();
+                return;
+              }
+              // Only the chord sends. Enter is a newline like any other editor's,
+              // which is what the hint beside the button says, and what makes a
+              // prompt of several lines something you can type.
+              if (e.key !== "Enter" || !mod(e)) return;
+              e.preventDefault();
+              submit();
             }}
           />
-          {/* Off, this is the brain alone, in the tools' own grey: one button
-              that takes up med — the level in the middle of the three — and
-              turns into the pill. A level in force is a pill of two buttons:
-              the brain gives the level up, and the level beside it opens the
-              menu, which is also where off is. */}
-          <Hint label="Reasoning">
-            <div
-              ref={levelRef}
-              className={`reasoning-pill${current.level === "" ? "" : " on"}`}
-            >
-              <button
-                className="reasoning-btn"
-                aria-label={
-                  current.level === "" ? "Turn reasoning on (med)" : "Turn reasoning off"
-                }
-                onClick={() => onReasoning(current.level === "" ? "medium" : "")}
-              >
-                <Brain />
-              </button>
-              {current.level !== "" && (
-                <button
-                  className="reasoning-btn"
-                  aria-haspopup="menu"
-                  aria-expanded={menus.open === "reasoning"}
-                  aria-label={`Reasoning level: ${current.label}`}
-                  onClick={() => menus.toggle("reasoning")}
-                >
-                  <span className="reasoning-level">{current.letter}</span>
-                  <ChevronDown className="reasoning-chevron" />
-                </button>
-              )}
-            </div>
-          </Hint>
-          {/* The servers this chat calls, in the reasoning control's own shape:
-              the hammer alone while it calls none — and then the hammer is what
-              opens the list, which is the only way one can be switched back on —
-              and, while it calls any, a pill of the hammer and the count: the
-              hammer gives them all up, the count with its chevron opens the
-              list. Either way the choice is the chat's, written with it, so it
-              is made here rather than in the settings, where the servers
-              themselves are edited. */}
-          <Hint label="Tools">
-            <div ref={toolsRef} className={`tools-pill${offered.length > 0 ? " on" : ""}`}>
-              {offered.length > 0 ? (
-                <button
-                  className="tools-btn"
-                  aria-label="Call no servers in this chat"
-                  onClick={() => servers.onChoose([])}
-                >
-                  <Hammer />
-                </button>
-              ) : (
-                <button
-                  className="tools-btn"
-                  aria-expanded={menus.open === "servers"}
-                  aria-controls="composer-servers"
-                  aria-label="Tools"
-                  onClick={() => menus.toggle("servers")}
-                >
-                  <Hammer />
-                </button>
-              )}
-              {offered.length > 0 && (
-                <button
-                  className="tools-btn"
-                  aria-expanded={menus.open === "servers"}
-                  aria-controls="composer-servers"
-                  aria-label={`Tools: ${offered.length} of ${enabled} server(s) called`}
-                  onClick={() => menus.toggle("servers")}
-                >
-                  <span className="tools-count">{offered.length}</span>
-                  <ChevronDown className="tools-chevron" />
-                </button>
-              )}
-            </div>
-          </Hint>
         </div>
-        <div className="composer-right">
-          {/* The model this chat is holding, or the one the next thread will be
-              posted with. It sits beside the send button because the choice
-              belongs to the message being written, and the list it opens is
-              written in Settings. */}
-          <button
-            ref={modelRef}
-            className="model-chip"
-            aria-haspopup="listbox"
-            aria-expanded={menus.open === "model"}
-            onClick={() => menus.toggle("model")}
-          >
-            <span className="model-name">{model || "model"}</span>
-            <ChevronDown className="chevron" />
-          </button>
+        {/* The shortcut is written where it is used rather than in the
+            placeholder: the placeholder is the first thing a draft erases, and
+            this is what the reader wants to know before they have typed
+            anything — and after, while the button they would reach for the
+            mouse to press is already under their eye. */}
+        <div className="composer-send" ref={sendRef}>
+          <span className="composer-hint">{`${MOD}+Enter`}</span>
           {/* The button holds its place whether or not there is a draft — an
               empty one sends nothing — and the animation marks the swap between
               Send and Stop when the role changes, not the button's arrival. It
@@ -422,8 +387,137 @@ export function Composer({
           )}
         </div>
       </div>
+      </div>
+      {/* The row under the card: what belongs to the message rather than to the
+          text in it. It is a row of the bar rather than of the card, so the card
+          is the box the prompt is written in and nothing else, and the controls
+          that are only read — the cost, the model — stand with it. */}
+      <div className="composer-toolbar">
+        <div className="composer-tools">
+          {/* Each tool names itself under the pointer: a tip of the app's own,
+              since the window draws its own chrome and has no native ones. */}
+          <Hint label="Attach files">
+            <button
+              className="btn btn--bare"
+              aria-label="Attach files"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip />
+            </button>
+          </Hint>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              addFiles(Array.from(e.target.files ?? []));
+              // So picking the same file again is still a change.
+              e.target.value = "";
+            }}
+          />
+          {/* Off, this is the brain alone, in the tools' own grey: one button
+              that takes up med — the level in the middle of the three — and
+              turns into the pill. A level in force is a pill of two buttons:
+              the brain gives the level up, and the level beside it opens the
+              menu, which is also where off is. */}
+          <Hint label="Reasoning">
+            <div
+              ref={levelRef}
+              className={`pill${current.level === "" ? "" : " pill--on"}`}
+            >
+              <button
+                className="pill__half"
+                aria-label={
+                  current.level === "" ? "Turn reasoning on (med)" : "Turn reasoning off"
+                }
+                onClick={() => onReasoning(current.level === "" ? "medium" : "")}
+              >
+                <Brain />
+              </button>
+              {current.level !== "" && (
+                <button
+                  className="pill__half"
+                  aria-haspopup="menu"
+                  aria-expanded={menus.open === "reasoning"}
+                  aria-label={`Reasoning level: ${current.label}`}
+                  onClick={() => menus.toggle("reasoning")}
+                >
+                  <span className="pill__value">{current.letter}</span>
+                  <ChevronDown />
+                </button>
+              )}
+            </div>
+          </Hint>
+          {/* The servers this chat calls, in the reasoning control's own shape:
+              the hammer alone while it calls none — and then the hammer is what
+              opens the list, which is the only way one can be switched back on —
+              and, while it calls any, a pill of the hammer and the count: the
+              hammer gives them all up, the count with its chevron opens the
+              list. Either way the choice is the chat's, written with it, so it
+              is made here rather than in the settings, where the servers
+              themselves are edited. */}
+          <Hint label="Tools">
+            <div ref={toolsRef} className={`pill${offered.length > 0 ? " pill--on" : ""}`}>
+              {offered.length > 0 ? (
+                <button
+                  className="pill__half"
+                  aria-label="Call no servers in this chat"
+                  onClick={() => servers.onChoose([])}
+                >
+                  <Hammer />
+                </button>
+              ) : (
+                <button
+                  className="pill__half"
+                  aria-expanded={menus.open === "servers"}
+                  aria-controls="composer-servers"
+                  aria-label="Tools"
+                  onClick={() => menus.toggle("servers")}
+                >
+                  <Hammer />
+                </button>
+              )}
+              {offered.length > 0 && (
+                <button
+                  className="pill__half"
+                  aria-expanded={menus.open === "servers"}
+                  aria-controls="composer-servers"
+                  aria-label={`Tools: ${offered.length} of ${enabled} server(s) called`}
+                  onClick={() => menus.toggle("servers")}
+                >
+                  <span className="pill__value">{offered.length}</span>
+                  <ChevronDown />
+                </button>
+              )}
+            </div>
+          </Hint>
+        </div>
+        <div className="composer-right">
+          {/* What the chat has spent, and what the newest message added to it.
+              Read rather than pressed, and written in the app's monospace — it
+              is a number — so it stands apart from the model beside it. A chat
+              that has spent nothing says nothing here. */}
+          {costText !== "" && <span className="composer-cost">{costText}</span>}
+          {/* The model this chat is holding, or the one the next thread will be
+              posted with. It closes the row because the choice belongs to the
+              message being written, and the list it opens is written in
+              Settings. */}
+          <button
+            ref={modelRef}
+            className="btn btn--chip"
+            aria-haspopup="listbox"
+            aria-expanded={menus.open === "model"}
+            onClick={() => menus.toggle("model")}
+          >
+            <span className="model-name">{model || "model"}</span>
+            <ChevronDown />
+          </button>
+        </div>
+      </div>
       {/* The levels, the servers and the models, hung from their own controls at
-          the window's edge rather than in the card: a click anywhere else closes
+          the window's edge rather than in the bar: a click anywhere else closes
           them. The servers stay open as they are switched, since a row is not a
           choice that is over once it is made and several are usually moved at
           once, so only the backdrop, or the hammer again, closes them. */}
@@ -472,6 +566,6 @@ export function Composer({
           <ServersMenu {...servers} />
         </Menu>
       )}
-    </div>
+    </>
   );
 }

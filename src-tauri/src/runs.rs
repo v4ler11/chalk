@@ -27,7 +27,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::mcp;
-use crate::settings::AppConfig;
+use crate::settings::{self, AppConfig};
 use crate::types::chat::Usage;
 use crate::types::chat_message::{Content, Message, Part};
 use crate::{assembled, log, one_round, AppState, Round, WireCall};
@@ -245,6 +245,19 @@ impl Runs {
 
 fn now() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// The model a chat asks with: the one it holds, or the one the settings start
+/// new chats from when it holds none. A chat that has answered keeps the model
+/// it was asked with; the fallback is for a row that predates models — a row a
+/// preview can meet, since filling the empty one in is what a turn's start does,
+/// and a preview only reads.
+fn asking_model(state: &Inner, config: &AppConfig) -> String {
+    if state.model.trim().is_empty() {
+        settings::default_model(config).to_string()
+    } else {
+        state.model.clone()
+    }
 }
 
 impl Run {
@@ -468,6 +481,14 @@ impl Run {
             state.pushed = None;
         }
         self.persist(app);
+        // The transcript has a message in it now, and the window is told so here
+        // rather than a round later: a window that is holding the answer as the
+        // partial it watched arrive reads the run again the moment the round
+        // moves, and finds the same text as a message. Left until the next move,
+        // it would draw as live for as long as the calls a round asked for take —
+        // which is a whole answer, and the calls under it, missing from the
+        // thread until they are done.
+        self.emit_changed(app);
         self.emit_partial(app, None);
     }
 
@@ -569,14 +590,19 @@ impl Run {
 
     /// The transcript as the round is sent it, with the system prompt and the
     /// lazily imported servers in front of it.
-    fn request(&self, config: &AppConfig, lazy: &[mcp::Lazy]) -> Vec<Message> {
+    ///
+    /// The model being asked is passed in rather than read here: whether the
+    /// prefix mark goes on the request depends on where that model is going, and
+    /// it has to be the model the round's own header is decided from, not one
+    /// resolved a second time beside it.
+    fn request(&self, config: &AppConfig, model: &str, lazy: &[mcp::Lazy]) -> Vec<Message> {
         let state = self.state.lock();
         let mut messages: Vec<Message> = state
             .messages
             .iter()
             .filter_map(|message| serde_json::from_value(message.clone()).ok())
             .collect();
-        assembled(config, lazy, &mut messages);
+        assembled(config, model, lazy, &mut messages);
         messages
     }
 
@@ -614,7 +640,8 @@ impl Run {
     pub(crate) async fn preview(&self, app: &AppHandle) -> Preview {
         let (tools, lazy) = self.offers(app).await;
         let config = app.state::<AppState>().config.lock().clone();
-        let messages = self.request(&config, &lazy);
+        let model = asking_model(&self.state.lock(), &config);
+        let messages = self.request(&config, &model, &lazy);
         Preview {
             messages,
             tools,
@@ -999,7 +1026,7 @@ async fn drive(app: AppHandle, run: Arc<Run>) {
         // anything that is not a level a model can be asked for is read as off
         // rather than sent as a typo.
         let reasoning = crate::reasoning_level(Some(reasoning));
-        let messages = run.request(&config, &lazy);
+        let messages = run.request(&config, &model, &lazy);
         // A place among the requests in flight is held around the round trip and
         // nothing else: the tools that follow, and the user's answer when a call
         // waits on one, are not asking a provider anything.
@@ -1232,7 +1259,7 @@ pub(crate) async fn run_start(
             let born = store.save(
                 None,
                 &title_from(&content),
-                model.as_deref().unwrap_or_else(|| first_model(&config)),
+                model.as_deref().unwrap_or_else(|| settings::default_model(&config)),
                 reasoning.as_deref().unwrap_or(""),
                 servers.as_deref(),
                 &json!([prompt]),
@@ -1250,10 +1277,11 @@ pub(crate) async fn run_start(
     {
         let mut held = run.state.lock();
         // A row written before there were models to hold still has a turn to make
-        // in it, and it is asked with the head of the settings' list.
-        if held.model.is_empty() {
-            held.model = first_model(&config).to_string();
-        }
+        // in it, and it is asked with the model the settings start new chats from
+        // — the same model a preview of this chat assents to, so a chat's stored
+        // model is what both read.
+        let model = asking_model(&held, &config);
+        held.model = model;
     }
     state.runs.put(run.clone());
     run.mark_running(&app);
@@ -1262,17 +1290,6 @@ pub(crate) async fn run_start(
         drive(app, driving).await
     }));
     Ok(Started { chat: run.chat })
-}
-
-/// The model a chat with none starts from: the head of the settings' list, and a
-/// row someone left empty in there is not one to ask a provider for.
-fn first_model(config: &AppConfig) -> &str {
-    config
-        .models
-        .iter()
-        .find(|model| !model.trim().is_empty())
-        .map(String::as_str)
-        .unwrap_or("")
 }
 
 /// Stops the turn: whatever arrived stays as the answer, and the request in

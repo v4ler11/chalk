@@ -23,18 +23,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  /* Only as wide as its controls, and wearing no colour of its own: the pane's
-     bar is what shows behind it, so the band across the top is one surface from
-     the controls to the far edge, and a pane that slides takes its own corner
-     with it. Its rule is the beginning of the line the nav draws across the rest
-     of the window. The sidebar used to be this column's body; the channel is the
-     window now, so this corner is all of the chrome there is. */
-  width: var(--rail-collapsed);
+  /* As wide as the column it stands on, and wearing that column's own colour: the
+     chrome is the sidebar's head rather than a corner of the pane's, and its
+     right edge is the border the sidebar carries on down — so the two read as one
+     surface from the lights to the far edge, and the pane's bar begins where the
+     column ends. Nothing rules the rail off from the column under it: the head
+     and the rows are one surface, and the only line there is that right edge,
+     which runs from the top of the window to its foot. */
+  width: var(--sidebar-w);
   height: var(--titlebar);
   padding: 0 16px;
-  background-color: transparent;
-  border-right: 1px solid transparent;
-  border-bottom: 1px solid var(--border);
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
   user-select: none;
 }
 
@@ -66,32 +66,6 @@
   background-color: #28c840;
 }
 
-.icon-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.icon-btn:hover,
-.icon-btn.active {
-  background-color: var(--sidebar-active);
-  color: var(--text-primary);
-}
-
-.icon-btn .icon {
-  width: 16px;
-  height: 16px;
-}
-
 /* A face in the channel — or wherever the window draws one: initials in a circle
    of the colour their name hashes to. The colour arrives inline, since it is
    derived from the name rather than chosen here, and white reads on all of them.
@@ -110,74 +84,16 @@
   pointer-events: none;
 }
 
-/* A button's name and its shortcut, under the button and under the pointer. It
-   is out of the flow so the rail is the same width whether or not it is drawn,
-   and it takes no clicks, so it never stands between the pointer and the button
-   it belongs to. */
+/* The box a button's tip hangs from: it is positioned so the tip can be drawn
+   against it, and it draws nothing else — a tip's own recipe is the library's. */
 .hint {
   position: relative;
   display: flex;
 }
 
-.key-hint {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background-color: var(--bg);
-  color: var(--text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-
-.hint:hover .key-hint,
-.hint:focus-within .key-hint {
-  opacity: 1;
-}
-
-/* Anywhere else closes the menu, which is what a click outside one is for. */
-.menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 5;
-}
-
-/* A menu of choices: the models above the chip in the composer's bar, the
-   reasoning levels beside the composer's brain, and the servers' list under the
-   hammer. Held at the window rather than in the card, since each is placed from
-   its own control's rect — the composer's bar clips whatever would hang out of
-   it. */
-.menu {
-  position: fixed;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  max-height: 320px;
-  overflow-y: auto;
-  overscroll-behavior: none;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background-color: var(--bg);
-}
-
-/* The three-dots' menu hangs under the control that opened it, at the nav's own
-   right edge. The composer's menus are placed from their control's rect instead,
-   since the bar would clip them. */
-.menu.below {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-}
-
+/* How wide each of the composer's menus stands. The library's menu takes its
+   width from what it holds; these are the few whose list must not narrow to the
+   words on its rows. */
 .model-menu {
   min-width: 260px;
 }
@@ -190,48 +106,6 @@
   min-width: 132px;
 }
 
-.menu-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 7px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.menu-option.active {
-  color: var(--text-primary);
-}
-
-.menu-option:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.menu-option-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.menu-option-check {
-  flex: none;
-  width: 13px;
-  height: 13px;
-}
-
-.menu-option.empty {
-  color: var(--text-muted);
-}
-
 /* The servers this chat calls: a row each, its switch at the right. Nothing in
    a row leads to the settings, since what a server *is* is edited there and
    whether this conversation calls it is decided here. */
@@ -241,22 +115,11 @@
   gap: 2px;
 }
 
+/* A row that is a switch reads as the chat's own content rather than as one of a
+   menu's choices, which is what its ink says: where a menu option reads in the
+   supporting grey, a server the chat may call reads in the primary one. */
 .menu-server {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 7px;
-  background-color: transparent;
   color: var(--text-primary);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.menu-server:hover {
-  background-color: var(--sidebar);
 }
 
 /* The name and, under it, what the server has to say for itself: two lines that
@@ -293,72 +156,12 @@
   font-style: italic;
 }
 
-/* The switch: a track and a knob — grey and to the left while the server is out
-   of this chat, filled and to the right while it is in. The fill and the knob
-   swap places with the theme the way the filled buttons do, so it reads in
-   either scheme without a colour of its own. */
-.switch {
-  position: relative;
-  flex: none;
-  width: 34px;
-  height: 20px;
-  border-radius: 999px;
-  background-color: var(--sidebar-active);
-  transition: background-color 150ms ease;
-}
-
-.switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background-color: var(--text-muted);
-  transition: transform 150ms ease, background-color 150ms ease;
-}
-
-.menu-server[aria-pressed="true"] .switch {
-  background-color: var(--text-primary);
-}
-
-.menu-server[aria-pressed="true"] .switch::after {
-  transform: translateX(14px);
-  background-color: var(--bg);
-}
-
 /* Asking every server again: the one thing a list of switches needs, and the
-   only way to see a tool a server has grown since the window was opened. */
+   only way to see a tool a server has grown since the window was opened. Its
+   box is the subtle button's, which the markup wears; only that it stands apart
+   from the rows is left here. */
 .menu-refresh {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   margin-top: 5px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.menu-refresh:hover:not(:disabled) {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-.menu-refresh:disabled {
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.menu-refresh svg {
-  width: 13px;
-  height: 13px;
 }
 
 /* The icon turning while the servers are asked: the same motion the attachment
@@ -373,18 +176,6 @@
   color: var(--text-muted);
   font-size: 12.5px;
   line-height: 1.4;
-}
-
-.key-hint kbd,
-.menu-option kbd {
-  padding: 1px 4px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background-color: var(--input-bg);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 500;
 }
 
 /* The panes share one box so the channel can stay mounted under a thread: a
@@ -444,11 +235,19 @@
    transition it goes the instant the pane is off, rather than fading while the
    other one slides across. The reveal rules are the row's and the transcript's,
    which are imported after this file, so the weight is stated rather than
-   matched; a `display` here would move the row's own layout. */
+   matched; a `display` here would move the row's own layout.
+   
+   The row's own menu is in this list because its reveal is a `visibility` as well
+   as an opacity: a row left asking a question reveals its menu through the
+   `confirming` class, and a `visibility: visible` written on a descendant is also
+   what an off pane cannot take back — the menu would otherwise be drawn over the
+   thread that stands in front of the pane it belongs to. */
+.pane.off .row-menu,
 .pane.off .row-actions,
 .pane.off .msg-actions,
 .pane.off .key-hint {
   opacity: 0 !important;
+  visibility: hidden !important;
   transition: none;
 }
 
@@ -480,13 +279,40 @@
    from the right edge, moving left, and leaves the same way, so going in and
    coming back are one movement read forwards and backwards.
 
+   The strip the composer floats on is in the same movement: it is the sheet's
+   colour at the bar's own height, and without it the one part of the pane that
+   did not move would be the part under the composer.
+
    The bar is not part of that movement. Its own surface is the sheet behind it —
    the sheet covers the pane's whole height — so what passes under the controls is
    the background, and the controls themselves stay where they are. */
 .transcript,
-.transcript-sheet {
+.transcript-sheet,
+.composer-sheet {
   animation: thread-in 180ms ease-out;
   transition: transform 180ms ease-out;
+}
+
+/* The strip the composer floats on, and the reason the space under the composer
+   travels with the thread. The bar cannot draw it: the bar clips what it holds,
+   and a surface inside it would be wiped by that clip rather than carried out of
+   the bar's own box. So it is drawn here, the sheet's colour at the bar's own
+   height — the measurement the pane already reserves for the bar — and painted
+   after the transcript, so the messages passing under the bar are hidden by it,
+   and before the bar, so the composer's card is not. */
+.composer-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--composer-h, 0px);
+  background-color: var(--sidebar);
+}
+
+/* A thread's bar wears no colour of its own: the sheet is what is behind it, and
+   what the bar itself drew would be the one part of the pane that never moved. */
+.pane.thread > .composer-bar {
+  background-color: transparent;
 }
 
 /* The bar over the sheet wears no colour of its own: the sheet is what is seen
@@ -498,15 +324,17 @@
   background-color: transparent;
 }
 
-/* Both are positioned so they are painted over the sheet rather than under it,
-   which is what an absolute box would otherwise do to a static one. */
-.transcript,
-.composer-bar {
+/* The transcript is positioned so it is painted over the sheet rather than under
+   it, which is what an absolute box would otherwise do to a static one. The
+   composer bar is positioned too, by its own stylesheet: it floats at the pane's
+   foot. */
+.transcript {
   position: relative;
 }
 
 .pane.thread.off .transcript,
-.pane.thread.off .transcript-sheet {
+.pane.thread.off .transcript-sheet,
+.pane.thread.off .composer-sheet {
   transform: translateX(100%);
 }
 

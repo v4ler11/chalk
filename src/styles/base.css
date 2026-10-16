@@ -2,13 +2,31 @@
   /* Chalk colour tokens, taken from the design file's variables. */
   --bg: #ffffff;
   --sidebar: #f7f7f4;
-  --sidebar-hover: #fdfdfc;
-  --sidebar-active: #ebebe7;
+  /* The fill a hovered row or button takes — the rail's rows, the secondary
+     buttons, a server's row on the MCP page. The design file had it a shade
+     above the rail; here it goes the other way, a shade under the ground it
+     stands on, so the pointer presses what it is over rather than lifting
+     another surface out of the column. The active row keeps the stronger step,
+     so where the reader is still reads as marked. */
+  --sidebar-hover: #efefea;
+  /* Where the reader is, and every surface that is holding something — the rail
+     row that is open, a server's row on the MCP page, a control's on-ground, a
+     switch's off track. It is a clear step deeper than the hover, since the
+     pointer and the open row are read against each other and must never be the
+     same grey: the design file's own value sat a step *shallower* than this,
+     which read as one shade once the hover moved under the rail. */
+  --sidebar-active: #e0dfd9;
   --border: #e7e7e2;
   --text-primary: #1c1c1a;
   --text-secondary: #6e6e68;
   --text-muted: #a2a29b;
-  --accent: #1c1c1a;
+  /* The brand's own colour, and what may be written on it. It is the fill of the
+     primary button — the Add, the Run, the send — and the ring the keyboard
+     draws, and there is nothing else in the app it paints: the ink of a row, of
+     a field and of a message is `--text-primary`, which is the same value the
+     design file gave this token before the brand had a colour. 5.2:1 with white
+     written on it. */
+  --accent: #c2410c;
   --accent-contrast: #ffffff;
   --input-bg: #f4f4f1;
   --danger: #b00020;
@@ -19,6 +37,22 @@
   --reasoning: #2563eb;
   --reasoning-bg: #e7eefc;
   --reasoning-divider: #b9cdf5;
+  /* A list row under the pointer. It is the sidebar's hover made to read: the
+     feed is the window's main surface, and a row that lifts by a shade nobody
+     can see is a row that does not answer the pointer. */
+  --row-hover: #f0efe9;
+  /* A pinned message: the ground it is drawn on, and the rule down its left
+     edge. Warm where the rest of the palette is neutral, so a pin reads as a
+     mark on the message rather than as another kind of surface. */
+  --pin-bg: #fbf3e2;
+  --pin: #c8952f;
+  /* What has just been written: the ink of the mark, and the ground under the
+     row it sits on. The one place the palette leaves the ink and the brand for a
+     colour of its own, since a row that has only just arrived is a fact about
+     the page rather than a state anything is in — and green is what that reads
+     as wherever a list says so. */
+  --ok: #15803d;
+  --ok-bg: #eefbf1;
   /* The JSON view's token colours: a key, a string, a number, and the three
      literals. Chosen to read on either scheme's panel. */
   --json-key: #0b62c4;
@@ -34,6 +68,13 @@
   --code-function: #7c3aed;
   --code-type: #0f766e;
 
+  /* The app's one shadow, and with it the app's depth: everything is flat — a
+     surface is told from the surface under it by a hairline and a shade of
+     ground — except what floats over a pane, which is the menus and the two
+     things that stand on the transcript. One recipe for all of them, so nothing
+     in the window casts a shadow darker than anything else in it. */
+  --shadow-menu: 0 2px 10px rgba(0, 0, 0, 0.08);
+
   --font-display: "Space Grotesk Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-body: "DM Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-message: "Newsreader Variable", Georgia, "Times New Roman", serif;
@@ -43,15 +84,38 @@
      and the transcript so the two always agree. Then the fixed measure a prompt
      is set to. */
   --content-w: clamp(420px, 72vw, 1120px);
-  /* The rail: its own padding and its controls — the three lights, and the gap
-     after them — 16 + 52 + 16. Only as wide as what it holds, so the chrome
-     covers just the corner of the panel beneath it; the panel's own bar reserves
-     the same strip, and the two read as one band. */
-  --rail-collapsed: 84px;
-  --titlebar: 48px;
+  /* The measure a page of the settings reads on. Its fields are a form, not a
+     transcript: the pane is as wide as the window, and a field drawn across the
+     whole of it is one whose beginning and end cannot be read at once. Not one
+     of the design file's tokens — it has no measure for the settings — and the
+     narrowest that still sets the models page's two fields side by side. */
+  --form-w: 640px;
+  /* The window's own column: the sidebar, and the chrome that stands on its
+     head — 16 of padding, the three lights at 52, and the 16 after them, with
+     room for a view's name beside them. Narrow on purpose: what a row says is one
+     word, and the window is for the transcript. */
+  --sidebar-w: 168px;
+  /* The strip the window's chrome stands in, and the height every bar that reads
+     as part of that band takes — the rail over the column's head and the pane's
+     own bar beside it: the lights and the controls in them are 30px at the
+     tallest, so this is that and the air around it. */
+  --titlebar: 38px;
+  /* What the chat's own words are set in, wherever they are written: the message
+     a channel's row shows, the question a row asks in its place, a prompt and an
+     answer in the transcript, and the draft in the composer, which is those words
+     on their way in. The chat's face is the serif, and this is its one size —
+     the composer's controls keep the bar's own ramp, the words never do. */
+  --chat-text: 12pt;
   /* How much the composer grows past its design size: nothing at the 820px
-     minimum window, 2px of extra type by 1600px. */
+     minimum window, 2px of extra padding and controls by 1600px. The draft's
+     type is the chat's own size at every width and so does not grow with it. */
   --composer-grow: clamp(0px, calc((100vw - 820px) * 0.00256), 2px);
+  /* The circle that sends the draft, grown with the bar: the size a control of
+     the bar's smallest kind is. It is written once here because three things are
+     measured by it — the button itself, the floor the draft's row keeps, a
+     one-line draft being exactly the button's height, and the row of controls
+     under the card, which keeps the height the send's own row has. */
+  --send-btn: calc(26px + var(--composer-grow) * 2);
 
   font-family: var(--font-body);
   font-size: 16px;
@@ -59,6 +123,12 @@
   color: var(--text-primary);
   /* The window is transparent so its corners are ours to round; .app paints. */
   background-color: transparent;
+  /* What the platform draws itself — the scrollbar, a select's list, the
+     caret — is drawn for the scheme *these* tokens are in rather than for the
+     one the OS is in: a scheme chosen in Settings is the window's, and a light
+     window on a dark desktop keeps its own scrollbars. `dark.css` says so for
+     the other half of the choice. */
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

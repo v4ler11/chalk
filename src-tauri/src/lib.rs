@@ -129,8 +129,13 @@ fn carried_over(app: &tauri::AppHandle) -> Option<Settings> {
         provider,
         endpoint,
         api_key: old.api_key,
+        // The one model it had is both what a chat starts from and the only
+        // thing to choose.
+        default_model: old.model.clone(),
         models: vec![old.model],
         system_prompt: String::new(),
+        // The old file had nowhere to name a gateway either: none.
+        gateways: Vec::new(),
     })
 }
 
@@ -281,6 +286,40 @@ fn get_logs(state: State<'_, AppState>) -> Vec<LogEntry> {
 #[tauri::command]
 fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
+}
+
+/// The pinned threads, most recently pinned first: what the sidebar's Pins row
+/// draws. A thread rather than a message of one, since a row of the channel is
+/// the thread — so what comes back is a chat's own summary, with the moment it
+/// was pinned in it.
+#[tauri::command]
+fn list_pins(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
+    history(&app, "could not list the pins", history_store(&state).and_then(|store| store.pins()))
+}
+
+/// Pins a thread, or takes the pin off it.
+///
+/// The row is written column by column rather than whole, so a pin taken while a
+/// thread is answering is not undone by the next thing its run writes.
+#[tauri::command]
+fn pin_chat(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    chat: i64,
+    pinned: bool,
+) -> Result<(), String> {
+    let at = if pinned {
+        chrono::Utc::now().timestamp_millis()
+    } else {
+        0
+    };
+    history(
+        &app,
+        "could not pin the thread",
+        history_store(&state).and_then(|store| store.set_pinned(chat, at)),
+    )?;
+    log(&app, "info", format!("chat {chat} {}", if pinned { "pinned" } else { "unpinned" }));
+    Ok(())
 }
 
 /// The pictures a thread was opened with, for the row in the feed that stands
@@ -516,12 +555,20 @@ fn mark_cacheable(messages: &mut [Message]) {
 /// window holds, which is what keeps a prompt the user's own text — what an edit
 /// hands back, and what the store keeps — while what the model reads is the
 /// whole of what it is being told.
-pub(crate) fn assembled(config: &AppConfig, lazy: &[mcp::Lazy], messages: &mut Vec<Message>) {
+pub(crate) fn assembled(
+    config: &AppConfig,
+    model: &str,
+    lazy: &[mcp::Lazy],
+    messages: &mut Vec<Message>,
+) {
     stamp_prompts(messages);
     // Only OpenRouter is asked to reuse a prefix this way: the mark means
     // nothing to a gateway that does not know it, and a custom endpoint's own
-    // API is not this app's to decorate.
-    if is_openrouter(config) {
+    // API is not this app's to decorate. Which gateway this is comes from where
+    // the model is going rather than from the app's own provider — a model
+    // routed elsewhere by its id is elsewhere — so the breakpoint is decided by
+    // the same derivation the request's own header is.
+    if settings::is_openrouter_url(&settings::destination(config, model).url) {
         mark_cacheable(messages);
     }
     with_system_prompt(&config.system_prompt, lazy, messages);
@@ -660,13 +707,6 @@ fn offered(tools: Vec<mcp::ToolOffer>) -> Vec<Tool> {
     tools.iter().map(mcp::ToolOffer::as_tool).collect()
 }
 
-/// Whether requests go to OpenRouter, which is the one gateway this app knows
-/// things about: the response cache it asks for below, and the word it reads
-/// back off the response.
-fn is_openrouter(config: &AppConfig) -> bool {
-    config.provider.trim() == settings::OPENROUTER
-}
-
 /// Asks OpenRouter to answer a repeated request from its own cache.
 ///
 /// The header is what turns response caching on; a request identical to an
@@ -674,9 +714,11 @@ fn is_openrouter(config: &AppConfig) -> bool {
 /// for five minutes without reaching a model, which is free and immediate. The
 /// gateway's verdict comes back on `X-OpenRouter-Cache-Status`, which
 /// [`stream_chat`] keeps with the response's usage. No other gateway has this,
-/// so nothing is sent anywhere else.
-fn with_cache(request: reqwest::RequestBuilder, config: &AppConfig) -> reqwest::RequestBuilder {
-    if is_openrouter(config) {
+/// so nothing is sent anywhere else — and which gateway a request is for is
+/// read from the URL it is going to, since a model routed to another gateway by
+/// its id goes there whatever the app's own provider is.
+fn with_cache(request: reqwest::RequestBuilder, url: &str) -> reqwest::RequestBuilder {
+    if settings::is_openrouter_url(url) {
         request.header("X-OpenRouter-Cache", "true")
     } else {
         request
@@ -765,10 +807,22 @@ pub(crate) async fn one_round(
     run: &runs::Run,
 ) -> Round {
     let client = app.state::<AppState>().client.clone();
-    let url = format!(
-        "{}/chat/completions",
-        settings::endpoint(&config.provider, &config.endpoint).trim_end_matches('/')
-    );
+    // Where this model is asked, and as what: a gateway named by its id's first
+    // segment is asked of that gateway, with that gateway's key and under the
+    // model's own name, and everything else is asked of the app's own provider
+    // as before.
+    let settings::Destination {
+        gateway,
+        url: base,
+        key,
+        model: asked,
+    } = settings::destination(&config, &model);
+    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
+    // OpenRouter is the one gateway that is told about its own cache and about
+    // the conversation it is meant to pin, and which gateway this is comes from
+    // where the request is going rather than from the app's own provider: a
+    // model routed elsewhere by its id is elsewhere.
+    let openrouter = settings::is_openrouter_url(&base);
     // The names, not only the count: whether a particular tool is being offered
     // is the thing worth being able to check, and a count cannot say.
     let offered = tools
@@ -781,12 +835,12 @@ pub(crate) async fn one_round(
                 .join(", ")
         })
         .unwrap_or_else(|| "none".to_owned());
-    let mut post = completion(model, messages, reasoning, tools);
+    let mut post = completion(asked, messages, reasoning, tools);
     // A conversation is pinned to one upstream for as long as it keeps asking:
     // OpenRouter's sticky routing is what keeps a provider's prompt cache warm
     // between one prompt and the next, and it is the conversation's own key that
     // pins it. Only OpenRouter has one, and only OpenRouter is told.
-    if is_openrouter(&config) {
+    if openrouter {
         post.session_id = session_name(&post.messages);
     }
 
@@ -794,7 +848,7 @@ pub(crate) async fn one_round(
         &app,
         "info",
         format!(
-            "POST {url} (model={}, messages={}, reasoning={}, tools=[{offered}], cache={})",
+            "POST {url} (gateway={gateway}, model={}, messages={}, reasoning={}, tools=[{offered}], cache={})",
             post.model,
             post.messages.len(),
             // Read back off the body itself, so the line names what was sent.
@@ -802,11 +856,11 @@ pub(crate) async fn one_round(
                 .as_ref()
                 .and_then(|config| config.effort.as_deref())
                 .unwrap_or("off"),
-            if is_openrouter(&config) { "on" } else { "off" },
+            if openrouter { "on" } else { "off" },
         ),
     );
 
-    let request = with_cache(client.post(&url).bearer_auth(&config.api_key), &config);
+    let request = with_cache(client.post(&url).bearer_auth(key), &base);
     let resp = match request.json(&post).send().await {
         Ok(resp) => resp,
         Err(e) => {
@@ -952,6 +1006,7 @@ pub fn run() {
             list_chats,
             root_images,
             delete_chat,
+            list_pins,
             runs::run_start,
             runs::run_stop,
             runs::run_allow,
@@ -959,6 +1014,7 @@ pub fn run() {
             runs::run_state,
             runs::runs_state,
             runs::chat_set,
+            pin_chat,
             request_preview,
             mcp_servers,
             mcp_save_servers,

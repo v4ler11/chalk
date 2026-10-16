@@ -13,7 +13,11 @@ export interface AppConfig {
    * put it — and the channel says "You" instead.
    */
   name: string;
-  /** `openrouter`, or `custom` — the two the settings' selector offers. */
+  /**
+   * What the app's own models — the ones whose ids name no gateway — are asked
+   * of: `openrouter`, or `custom`, an OpenAI-compatible endpoint at `endpoint`.
+   * The two are what the Add provider screen offers.
+   */
   provider: string;
   /**
    * Where a custom provider is: the base URL of an OpenAI-compatible API, with
@@ -23,16 +27,57 @@ export interface AppConfig {
   endpoint: string;
   apiKey: string;
   /**
-   * The models to choose between, in the order the picker shows them. The first
-   * is what a chat starts from when the history has nothing to say; a chat then
+   * The other services a model may be asked of, beside the app's own provider.
+   *
+   * A model whose id starts with a gateway's name is sent to that gateway, with
+   * that gateway's key, and under the model's own name — the part after that
+   * word, since the gateway knows nothing of this app's spelling of it:
+   * `anthropic/claude-sonnet-4.5` is asked of Anthropic as
+   * `claude-sonnet-4.5` when Anthropic is configured here, and goes to the
+   * app's own provider, id whole, when it is not — which is how an Anthropic
+   * model served by OpenRouter stays on OpenRouter, its id naming the model
+   * rather than the way to reach it.
+   */
+  gateways: Gateway[];
+  /**
+   * The models to choose between, in the order the picker shows them, and the
+   * one a new chat starts from when the history has nothing to say. A chat then
    * keeps whichever it was given.
+   *
+   * The default is a model's id rather than the head of the list — choosing one
+   * is not a way of reordering the picker — and it is empty, or names a model
+   * the list no longer holds, until the settings name one; both of those are
+   * read as the head.
    */
   models: string[];
+  defaultModel: string;
   /**
    * Sent ahead of every chat as a `system` message. It is added to the request
    * on the way out, so it never becomes part of a chat's transcript.
    */
   systemPrompt: string;
+}
+
+/**
+ * A service the app can ask for a model of its own: OpenRouter's neighbours —
+ * Anthropic, OpenAI, a local runner — or any OpenAI-compatible endpoint.
+ *
+ * It is a gateway rather than a vendor of models: what it holds is where the
+ * requests go and what they are sent with, and the models it carries are the
+ * ones whose ids begin with its name.
+ */
+export interface Gateway {
+  /**
+   * The gateway's own name — the word its models' ids are prefixed with, and
+   * the tab the Models page reads them under.
+   */
+  id: string;
+  /**
+   * Where it is, when the name is not one the app knows a URL for. Empty for a
+   * name the backend resolves itself.
+   */
+  endpoint: string;
+  apiKey: string;
 }
 
 type Role = "developer" | "system" | "user" | "assistant" | "tool" | "function";
@@ -340,6 +385,12 @@ export interface ChatSummary {
    * A row that has any asks for them, by id, when it is drawn.
    */
   images: number;
+  /**
+   * Unix time in ms the thread was pinned, or zero while it is not. A thread is
+   * pinned or it is not, and the moment is what the pins list orders by — the
+   * list being the same rows as the feed, with this one not zero.
+   */
+  pinnedAt: number;
 }
 
 /** Flatten a message's content to display text. */

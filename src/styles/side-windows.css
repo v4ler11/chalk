@@ -29,79 +29,62 @@
   overflow: hidden;
 }
 
-/* The window's own sidebar. The tabs are its rows; the log window's button
-   keeps its foot, the way the app's sidebar keeps Settings. */
+/* The window's own sidebar. The rows are the library's nav rows; the log
+   window's button keeps its foot, the way the app's sidebar keeps Settings. */
 .settings-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: none;
-  width: 168px;
-  padding: 12px 8px;
+  width: 180px;
+  padding: 16px 12px;
   border-right: 1px solid var(--border);
   background-color: var(--sidebar);
   overflow-y: auto;
   overscroll-behavior: none;
 }
 
-.settings-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 400;
-  text-align: left;
-  cursor: pointer;
-}
-
-.settings-tab:hover {
-  background-color: var(--sidebar-hover);
-}
-
-.settings-tab.active {
-  background-color: var(--sidebar-active);
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.settings-tab-icon {
-  flex: none;
-  width: 15px;
-  height: 15px;
-}
-
 .settings-nav-spacer {
   flex: 1;
 }
 
-/* The page the open tab draws, and the Save that commits it. The pane does not
-   scroll: the page does, and the Save is the pane's own last line, so it holds
-   the bottom whatever the page is doing. */
+/* The page the open tab draws. The pane does not scroll: the page does, and it
+   is the pane's padding that frames it — the same air the design gives the page,
+   so a field is never against the window's own edge. */
 .settings-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 16px;
+  padding: 24px 28px;
   overflow: hidden;
 }
 
-/* The form's page fills what the pane has left above the Save: the fields are
-   laid out in it, and scroll only when the pane is too short for them. The
-   MCP page is not this — it brings its own columns, each with its own scroll. */
+/* The form's page fills what the pane has: the fields are laid out in it, and
+   scroll only when the pane is too short for them. It stops at the form's own
+   measure first — the pane is as wide as the window, and a field across the
+   whole of it reads as a bar rather than as a field — and the width it does not
+   take stays empty at its right. The MCP page is not this — it brings its own
+   columns, each with its own scroll. */
 .settings-main > .settings {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: var(--form-w);
   overflow-y: auto;
   overscroll-behavior: none;
+}
+
+/* The MCP page brings its own columns, and the first of them is a column of the
+   pane's own kind: the servers stand where the settings' sections stand — the
+   same width, the same air either side — because the two lists are read one
+   beside the other, and rows that begin somewhere else are read as a different
+   thing. So the page's frame is dropped from its left: the frame is the form's,
+   and the form is the column on the far side of the rule. */
+.settings-main--mcp {
+  padding-left: 0;
 }
 
 .notice {
@@ -114,75 +97,19 @@
   font-size: 13px;
 }
 
-.settings-actions,
-.mcp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* The receipt a save shows beside its button: the settings form's, and the MCP
-   pane's, since both say the same thing the same way. */
+/* The receipt a save shows beside its button: the MCP pane's, which is the one
+   page that keeps a Save — the rest of the settings write themselves. */
 .saved {
   color: var(--text-muted);
   font-size: 12px;
 }
 
 /* A page's fields, laid out in the pane itself rather than boxed inside it: the
-   pane's padding is the frame, and the same gap runs inside the page as between
-   the page and the Save under it. */
+   pane's padding is the frame, and the page carries its own air inside that. */
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-.settings label,
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-/* A field of a page: the text ones, and the provider's own selector, which is
-   the platform's control and so is dressed to match rather than drawn again —
-   a list of two is not worth a hand-built menu. */
-.settings input,
-.settings select {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 15px;
-}
-
-.settings input:focus,
-.settings select:focus {
-  border-color: var(--text-muted);
-}
-
-/* The system prompt is prose, so it takes a textarea: the fields' own shape,
-   taller, and free to grow with what is written in it. */
-.settings textarea {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.settings textarea:focus {
-  border-color: var(--text-muted);
+  gap: 20px;
 }
 
 /* The system prompt takes every line the page has left, so the whole of it is
@@ -199,95 +126,361 @@
   resize: none;
 }
 
-/* The models are a list rather than a field: a row each, in the picker's order,
-   with the first as what a new chat starts from. */
-.settings-models {
+/* --------------------------------------------------------------- the models */
+
+/* The page reads: its own name, then what a new chat starts from, then a tab per
+   gateway — and under the tab, the key that pays for its models, the field a
+   model is added with, and the list itself. Every one of those is a field or a
+   group of them, so the page's own gap does the spacing and these rules only say
+   what each piece is. The page scrolls itself: the rule is `.settings-main >
+   .settings`, which this page's root wears as every other page of the form
+   does. */
+
+.models-head {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.settings-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.settings-model {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.settings-model input {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The muted X that drops a row, beside a model in the form and beside a header
-   in the MCP pane. */
-.settings-model-remove,
-.mcp-kv-remove {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 34px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.settings-model-remove:hover:not(:disabled),
-.mcp-kv-remove:hover {
-  background-color: var(--sidebar);
+/* The page's own name, a size above the section it opens on: the mode bar says
+   which mode the window is in, and this says which page of it is being read. */
+.models-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-/* The list cannot be emptied, so the last row keeps its button and says why. */
-.settings-model-remove:disabled {
-  opacity: 0.4;
-  cursor: default;
+/* What the page is, in the design's own words, under the name it is read by. */
+.models-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
-.settings-model-remove svg,
-.mcp-kv-remove svg {
+/* What a new chat starts from: the design's row — a panel of the field's own
+   grey, with the choice standing on it in a box of its own, so the label reads
+   at the left and the model in force at the right. The control is the platform's
+   select: it is what holds the list, and only its box is ours. */
+.models-default {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-radius: 10px;
+  background-color: var(--input-bg);
+}
+
+.models-default-label {
+  color: var(--text-primary);
+  font-size: 13.5px;
+}
+
+/* The value's own box: white on the panel's grey, so the row says which half of
+   it is the thing being chosen. */
+.models-default-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+}
+
+/* The platform's select, undressed down to the box it stands in: a ground of its
+   own would paint over the box's, and the chevron beside it is the one the
+   design drew rather than the platform's. */
+.models-default-select {
+  min-width: 0;
+  max-width: 42ch;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  /* The platform's own chevron is not drawn: the design's mark stands beside
+     the control, and two of them would be one too many. */
+  appearance: none;
+}
+
+.models-default-chevron {
+  flex: none;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* The tabs: a name with the count of its models, over the rule that runs the
+   page's width, with the way to add one kept at their far end. */
+.models-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.models-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 10px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.models-tab:hover {
+  color: var(--text-primary);
+}
+
+/* The tab being read: its name in the page's ink, with its own rule laid over
+   the strip's — the one mark that says which list is open. */
+.models-tab[aria-selected="true"] {
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--text-primary);
+}
+
+/* How many models the tab holds: read with the name rather than pressed with it,
+   so it is a chip of the field's own grey, at a tabular figure that keeps the
+   strip still as models come and go. */
+.models-tab-count {
+  padding: 2px 7px;
+  border-radius: 10px;
+  background-color: var(--input-bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Adding a gateway is the strip's far end rather than another name in it, and
+   its mark is a size down: the strip is read for what is already there. */
+.models-tab-add {
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+
+.models-tab-add svg {
   width: 14px;
   height: 14px;
 }
 
-/* The add button of a list, wherever it sits: the dashed pill under the models
-   and under the servers, and the small `+` beside a header list's label. The
-   page's own class gives it its place and its shape. */
-.add-button {
+/* What a tab draws under its name: the key that pays for its models, the field a
+   model is added with, and the list itself. Every one of those is a field or a
+   group of them, so the page's own gap does the spacing and these rules only say
+   what each piece is. */
+.models-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* The field a model is added with, under the name of what is being added: the
+   input is the form's own, wearing the id's monospace, so what is typed reads as
+   the thing it is — an id, slash and all. */
+.models-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.models-add-row {
   display: flex;
   align-items: center;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
+  gap: 12px;
 }
 
-.settings-model-add {
-  align-self: flex-start;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 13px;
+.models-add-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
-.settings-model-add:hover {
-  border-color: var(--text-muted);
+.models-add-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* The button that writes what the field holds: it keeps its own width, since it
+   is the answer to the field rather than part of it. */
+.models-add-button {
+  flex: none;
+}
+
+/* Why a model or a gateway cannot be added, said in the ink of what went wrong
+   rather than as a note resting under a field. */
+.models-error {
+  color: var(--danger);
+}
+
+/* The list is one card: its rows are divided by the rule between them rather
+   than boxed one by one, so a tab's models read as one thing with a head and a
+   foot rather than as a stack of detached ones. */
+.models-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.models-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.models-row + .models-row {
+  border-top: 1px solid var(--border);
+}
+
+.models-row:hover {
+  background-color: var(--row-hover);
+}
+
+/* The model just written: a fact about the page rather than a state the model is
+   in, so the row is laid on the added ground until the next add. */
+.models-row.fresh {
+  background-color: var(--ok-bg);
+}
+
+/* The row a question has been asked of: it steps off the list's own ground, and
+   its words stand in the panel's rather than the name's voice — the row is not
+   that model for the moment, it is a question about it. */
+.models-row.confirming {
+  background-color: var(--sidebar);
+}
+
+.models-row.confirming .models-row-name {
+  font-weight: 400;
+}
+
+.models-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The name, and the marks that stand beside it. The line is one height whether
+   a mark is in it or not — the badge's own box: its 11px of type at the line
+   height it inherits, its 2px of padding and its 1px rule above and below — so
+   a model that becomes the default does not grow its row and move every row
+   under it. The badge fits the line; the line is not set by the badge. */
+.models-row-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22.5px;
   color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
-.settings-model-add svg {
-  width: 13px;
-  height: 13px;
+/* The id, whole, in the small voice: it is what the picker shows and what a
+   request is sent, so it is read under the name rather than instead of it. */
+.models-row-id {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The mark of where a model stands: a box of the card's own colour, ruled like
+   the card, since it is a fact read beside the name rather than a state painted
+   over it. It keeps its own box — it is a mark, not a part of the name — so a
+   long name never squashes it. */
+.models-badge {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* The mark of a model just added, in the green that says so, on the same ground
+   the row it sits in is drawn on. */
+.models-badge.added {
+  color: var(--ok);
+}
+
+/* The last model of the app has no bin, and says why where the bin would be. */
+.models-row-keep {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* The pills that offer a gateway the app would know by name, in the app's own
+   pill: a name ruled round, with the one just written in the page's ink. */
+.models-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.models-suggest .btn--pill[aria-pressed="true"] {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* The line above the button that starts a gateway: what pressing it would write,
+   at one end, and the button itself at the other. */
+.models-adds {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* What the button would write, said before it is pressed: the word in the
+   supporting ink, the id in the monospace the ids are read in — plain, since it
+   is a sentence about an id rather than a token of one. */
+.models-preview {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.models-preview code {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* The scheme is a group rather than a field: its label heads the control the way
+   a field's does, and the note under it says what the choice is kept in — which
+   is not the file the settings write. */
+.settings-appearance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* The variable a prompt may hold, worn the way a shortcut is: a token of its
@@ -309,44 +502,23 @@
   line-height: 1.4;
 }
 
-/* The one filled button of a settings page: the form's Save, and the MCP
-   pane's. Scoped to the actions so the lists' own buttons, the add and remove
-   ones, are not painted like it. */
-.settings-actions button,
-.mcp-actions .mcp-primary {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background-color: var(--accent);
-  color: var(--accent-contrast);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-/* The way to the log window, at the foot of the sections: a row of the same
-   sidebar, since it opens a window rather than writing anything. */
-.settings-open-logs {
+/* Two fields that belong to one another, on one line rather than two: what a
+   server is called and the id its tools are prefixed with are one answer read
+   twice, and neither needs the page's whole measure. The two halves are equal,
+   since neither is the longer one — a name is a phrase and an id is a word, and
+   both are written in the same field. */
+.settings-row {
   display: flex;
-  align-items: center;
-  align-self: stretch;
-  padding: 7px 8px;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13.5px;
-  text-align: left;
-  cursor: pointer;
+  gap: 12px;
 }
 
-.settings-open-logs:hover {
-  background-color: var(--sidebar-hover);
-  color: var(--text-primary);
+.settings-row .field {
+  flex: 1;
+  min-width: 0;
 }
 
+/* The log's own box: the lines in a column, inside the frame and the ground a
+   card has, scrolling within a cap of its own. */
 .logs {
   display: flex;
   flex-direction: column;
