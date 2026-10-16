@@ -4,15 +4,20 @@
 // only thing that loads it.
 import ReactDOM from "react-dom/client";
 import { useEffect, useRef, useState } from "react";
+import App from "./App";
 import { Composer } from "./components/Composer";
 import { ChannelRowItem } from "./components/ChannelRow";
 import { ChatMessage } from "./components/ChatMessage";
 import { ChatNav } from "./components/ChatNav";
-import { JsonView } from "./components/JsonView";
+import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
 import { MessageList } from "./components/MessageList";
 import { PinsView } from "./components/PinsView";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsView } from "./components/SettingsView";
+import { SectionNav } from "./components/SectionNav";
 import { Sidebar } from "./components/Sidebar";
+import { ToolApproval } from "./components/ToolApproval";
+import { installTheme } from "./theme";
+import { settingsModel } from "./conversation";
 import type { ChannelRow } from "./feed";
 import { buildRows } from "./feed";
 import type {
@@ -20,11 +25,15 @@ import type {
   ChatSummary,
   McpCost,
   McpFailure,
+  McpReport,
   McpServer,
   McpTool,
   Partial,
   ReasoningLevel,
+  RunSnapshot,
+  RunSummary,
   UiMessage,
+  Usage,
 } from "./types";
 import "katex/dist/katex.min.css";
 import "./App.css";
@@ -197,7 +206,7 @@ const TOOL_TURN: UiMessage[] = [
   {
     role: "assistant",
     content:
-      "**Assets**\n\n- Cash: `Assets:Cash:EUR`\n- Mono (UA): `Assets:Mono:EUR`, `Assets:Mono:UAH`",
+      "**Assets**\n\n- Cash: `Assets:Cash:EUR`\n  - the card it is drawn from\n  - its savings account\n- Mono (UA): `Assets:Mono:EUR`, `Assets:Mono:UAH`\n\nThe bills came out of them in this order, and the ledger numbers the old ones\nfrom where its own list began:\n\n1. `Assets:Mono:EUR`\n2. `Assets:Cash:EUR`\n\nAnd the older bills:\n\n4. `Assets:Cash:EUR`\n5. `Assets:Mono:UAH`",
     reasoning: "Two electricity bills came back, so the answer is the accounts they were paid from.",
     waitMs: 1200,
     thinkingMs: 300,
@@ -307,11 +316,374 @@ const PIN_ROWS: ChannelRow[] = buildRows(PINS, new Map(), null).sort(
   (a, b) => b.pinnedAt - a.pinnedAt,
 );
 
+/** The section the settings open on, from `?tab=`, where it names one. */
+const SETTINGS_TABS = ["general", "models", "customization", "mcp"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+const settingsTab = new URLSearchParams(location.search).get("tab");
+const SETTINGS_TAB: SettingsTab | undefined = SETTINGS_TABS.find((t) => t === settingsTab);
+
+/** The servers the MCP page is drawn with: the design's three, one of them
+ *  switched off, and one of each transport. */
+const MCP_SERVERS: McpServer[] = [
+  {
+    id: "workspace",
+    name: "Team workspace",
+    enabled: true,
+    autoRun: true,
+    lazy: false,
+    description: "The team's shared documents and tickets.",
+    transport: {
+      type: "http",
+      url: "https://mcp.example.com/mcp",
+      headers: { Authorization: "Bearer sk-…" },
+    },
+  },
+  {
+    id: "files",
+    name: "Local files",
+    enabled: true,
+    autoRun: true,
+    lazy: false,
+    description: "Reads and writes the files of this project.",
+    transport: {
+      type: "stdio",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      env: {},
+    },
+  },
+  {
+    id: "research",
+    name: "Research library",
+    enabled: false,
+    autoRun: true,
+    lazy: false,
+    description: "",
+    transport: { type: "http", url: "https://research.example.com/mcp", headers: {} },
+  },
+];
+
+/** What the mock server answers a test with. */
+const MCP_REPORT: McpReport = {
+  serverName: "chalk-harness",
+  serverVersion: "1.4.0",
+  protocol: "2025-06-18",
+  tools: [
+    {
+      name: "search",
+      title: "Search the workspace",
+      description: "Finds documents and tickets by their text.",
+    },
+    { name: "fetch", title: "Fetch a document", description: "Reads one document whole." },
+  ],
+};
+
+/**
+ * The settings the app's own window reads, and the ones the scratch page's
+ * settings block is drawn from: one gateway beside the app's own provider, so the
+ * Models page is drawn with two tabs — the models whose ids lead with a gateway's
+ * name under it, and everything else, OpenRouter's own vendor-prefixed ids
+ * included, under OpenRouter.
+ */
+const APP_CONFIG: AppConfig = {
+  name: "Valerii",
+  provider: "openrouter",
+  endpoint: "",
+  apiKey: "sk-or-v1-abcdefghijklmnop",
+  gateways: [
+    { id: "anthropic", endpoint: "https://api.anthropic.com/v1", apiKey: "sk-ant-abcdefghij" },
+  ],
+  models: [
+    "deepseek/deepseek-v4.1-flash",
+    "google/gemini-4-argon",
+    "google/gemini-3.8-flash",
+    "x-ai/grok-4",
+    "local-llama",
+    "anthropic/claude-sonnet-4.5",
+  ],
+  // A model that is deliberately not the head of the list: the page has to show
+  // the default where the list does not, and the picker has to keep its order.
+  defaultModel: "google/gemini-3.8-flash",
+  systemPrompt: "Answer in one line.",
+};
+
+/** The history the app's own window reads: two threads, one of them pinned, so
+ *  the feed, the pins and a thread opened from either of them have something to
+ *  be drawn from. */
+const APP_CHATS: ChatSummary[] = [
+  {
+    id: 1,
+    title: "What did I spend on electricity?",
+    updatedAt: Date.now() - 4 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "medium",
+    createdAt: Date.now() - 6 * 60_000,
+    root: "what did I spend on electricity?",
+    replies: 1,
+    mine: 0,
+    images: 0,
+    pinnedAt: Date.now() - 2 * 60_000,
+  },
+  {
+    id: 2,
+    title: "A thread with nothing pinned about it",
+    updatedAt: Date.now() - 26 * 60 * 60_000,
+    model: "deepseek/deepseek-v4.1-flash",
+    reasoning: "",
+    createdAt: Date.now() - 27 * 60 * 60_000,
+    root: "A thread with nothing pinned about it",
+    replies: 0,
+    mine: 0,
+    images: 0,
+    pinnedAt: 0,
+  },
+];
+
+/** One thread as the run holds it: a prompt and its answer, with nothing
+ *  arriving. The driver starts the stream.
+ *
+ *  The answer carries the usage a provider reports with it — the tokens and the
+ *  price — on the threads that have been answered, which is where the app reads
+ *  a chat's spend from; a thread with no answer yet has none, the way a
+ *  transcript written before the app kept usage has none. */
+function appSnapshot(chat: number): RunSnapshot {
+  const row = APP_CHATS.find((one) => one.id === chat) ?? APP_CHATS[0];
+  return {
+    chat: row.id,
+    status: "idle",
+    title: row.title,
+    model: row.model,
+    reasoning: row.reasoning,
+    servers: null,
+    loaded: [],
+    replies: row.replies,
+    mine: row.mine,
+    messages: [
+      { role: "user", content: row.root, sentAt: row.createdAt },
+      {
+        role: "assistant",
+        content: "An answer.",
+        waitMs: 1200,
+        thinkingMs: 400,
+        ...(row.replies > 0 ? { usage: ANSWERED } : {}),
+      },
+    ],
+    partial: null,
+    awaiting: [],
+    error: null,
+  };
+}
+
+/** What one answered request cost, in the shape a provider reports it. */
+const ANSWERED: Usage = {
+  prompt_tokens: 1204,
+  completion_tokens: 356,
+  total_tokens: 1560,
+  cost: 0.021,
+};
+
+/** What the answer still arriving has cost so far. */
+const ARRIVING: Usage = {
+  prompt_tokens: 1310,
+  completion_tokens: 120,
+  total_tokens: 1430,
+  cost: 0.011,
+};
+
+/**
+ * The window's backend, at the boundary the app talks to: the commands the
+ * window reads on the way in, and the two events a run reports itself with.
+ *
+ * The MCP page's own calls are among them, since they are the same window's. What
+ * is left unanswered is anything a scratch page has no business faking — a send,
+ * a provider, the log window — and the app's own readers catch that and say so
+ * rather than the page dying on it.
+ *
+ * `emit` is the backend's side of an event: the event plugin registers a callback
+ * per event when the window listens, and the backend calls it with the payload.
+ * Driving a run is therefore driving `emit`, which is what makes a stream here
+ * the same sequence of reports the Rust side sends — a delta per push, a summary
+ * on every move, and the transcript read back over `run_state`.
+ */
+function installBackend() {
+  const state = {
+    servers: MCP_SERVERS,
+    runs: new Map<number, RunSnapshot>([[1, appSnapshot(1)], [2, appSnapshot(2)]]),
+  };
+  const listeners = new Map<string, number>();
+  const callbacks = new Map<number, (event: unknown) => void>();
+  /** Every command the window has asked for, in order, with the events it has
+   *  registered: what a driver reads to see that its reports reached the app. */
+  const asked: string[] = [];
+  let nextId = 1;
+
+  const summaries = (): RunSummary[] =>
+    [...state.runs.values()].map((run) => ({
+      chat: run.chat,
+      status: run.status,
+      thinking: false,
+      replies: run.replies,
+      mine: run.mine,
+      awaiting: run.awaiting.length,
+    }));
+
+  /** Sends one report the way Rust does, and says where it landed: a driver that
+   *  sees `no listener` knows the window never asked to be told. */
+  function emit(event: string, payload: unknown): "no listener" | "no callback" | "delivered" {
+    const handler = listeners.get(event);
+    if (handler === undefined) return "no listener";
+    const callback = callbacks.get(handler);
+    if (!callback) return "no callback";
+    callback({ event, id: handler, payload });
+    return "delivered";
+  }
+
+  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
+    invoke: async (cmd: string, args?: Record<string, unknown>) => {
+      const chat = args?.chat as number | undefined;
+      asked.push(cmd === "plugin:event|listen" ? `${cmd}:${String(args?.event)}` : cmd);
+      switch (cmd) {
+        // The event plugin: a window listening is a callback registered under the
+        // id `transformCallback` handed back, and `emit` is what calls it.
+        case "plugin:event|listen":
+          listeners.set(args?.event as string, args?.handler as number);
+          return nextId++;
+        case "plugin:event|unlisten":
+          return null;
+        case "get_config":
+          return APP_CONFIG;
+        case "save_config":
+          return args?.config;
+        case "list_chats":
+          return APP_CHATS;
+        case "list_pins":
+          return APP_CHATS.filter((row) => row.pinnedAt > 0);
+        case "runs_state":
+          return summaries();
+        case "run_state":
+          return chat === undefined ? null : state.runs.get(chat) ?? null;
+        case "chat_set":
+          return null;
+        case "run_stop":
+          return null;
+        case "mcp_servers":
+          return state.servers;
+        case "mcp_save_servers":
+          state.servers = (args?.servers as McpServer[]) ?? state.servers;
+          return state.servers;
+        case "mcp_test":
+          return MCP_REPORT;
+        case "mcp_tools":
+          return { tools: [], failures: [], costs: [] };
+        case "manage_tools":
+          return [];
+        case "root_images":
+          return [];
+        default:
+          throw new Error(`the harness has no answer for ${cmd}`);
+      }
+    },
+    transformCallback: (callback: (event: unknown) => void) => {
+      const id = nextId++;
+      callbacks.set(id, callback);
+      return id;
+    },
+    unregisterCallback: (id: number) => {
+      callbacks.delete(id);
+    },
+    convertFileSrc: (path: string) => path,
+  };
+
+  /** The driver's side: what the backend says, and what it holds. */
+
+  /** What Rust says when a chat's run moves: the summary of it, as the feed and
+   *  the open thread read it. */
+  function announce(chat: number) {
+    const summary = summaries().find((one) => one.chat === chat);
+    if (summary) emit("run-changed", summary);
+  }
+
+  return {
+    emit,
+    asked: () => [...asked],
+    listening: () => [...listeners.keys()],
+    config: APP_CONFIG,
+    chats: APP_CHATS,
+    snapshot: (chat: number) => state.runs.get(chat) ?? null,
+    /** One report, as an arriving stream makes it: the answer so far, and what
+     *  the provider has reported about it — the usage is what a run carries from
+     *  the moment the gateway says, which is where the chat's spend is read
+     *  while it is still being spent. Rust marks the run as running and says so
+     *  in a summary of its own when the run starts, before any token — which is
+     *  what takes the transcript's actions away — so the summary is emitted here
+     *  for the first report of a run. */
+    push: (chat: number, answer: string, usage: Usage | null = ARRIVING) => {
+      const held = state.runs.get(chat);
+      if (!held) return;
+      const starting = held.status !== "running";
+      state.runs.set(chat, {
+        ...held,
+        status: "running",
+        partial: {
+          startedAt: Date.now() - 1500,
+          firstTokenAt: Date.now() - 1000,
+          reasoning: "",
+          answer,
+          thinking: false,
+          thinkingMs: 400,
+          usage,
+        },
+      });
+      if (starting) announce(chat);
+      emit("run-delta", { chat, partial: state.runs.get(chat)?.partial ?? null });
+    },
+    /** The answer committed, as the backend reports it: the partial goes, the
+     *  message it became is in the transcript — with the usage it was reported
+     *  with, which is what keeps a settled answer's price on its own row — and
+     *  the summary moves. */
+    commit: (chat: number) => {
+      const held = state.runs.get(chat);
+      const partial = held?.partial;
+      if (!held || !partial) return;
+      state.runs.set(chat, {
+        ...held,
+        status: "idle",
+        replies: held.replies + 1,
+        messages: [
+          ...held.messages,
+          {
+            role: "assistant",
+            content: partial.answer,
+            reasoning: partial.reasoning,
+            waitMs: 900,
+            thinkingMs: partial.thinkingMs ?? 0,
+            ...(partial.usage ? { usage: partial.usage } : {}),
+          },
+        ],
+        partial: null,
+      });
+      emit("run-delta", { chat, partial: null });
+      announce(chat);
+    },
+    /** A turn that failed: the partial is dropped with nothing committed in its
+     *  place, which takes a whole answer out of the thread at once. */
+    fail: (chat: number, message = "the provider refused the request") => {
+      const held = state.runs.get(chat);
+      if (!held) return;
+      state.runs.set(chat, { ...held, status: "failed", partial: null, error: message });
+      emit("run-delta", { chat, partial: null });
+      announce(chat);
+    },
+  };
+}
+const backend = installBackend();
+
 function Harness() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState<string | null>("An earlier prompt being rewritten");
   const [reasoning, setReasoning] = useState<ReasoningLevel>("");
   const [chosen, setChosen] = useState<string[] | null>(null);
+  const [jsonTab, setJsonTab] = useState<JsonTab>("history");
   const [events, setEvents] = useState<string[]>([]);
   // The feed's rows as the block below draws them, which is what lets a pin be
   // pressed here: the row it is pressed on is the row that changes.
@@ -319,14 +691,7 @@ function Harness() {
   // Which of the sidebar's two rows is the one showing, so the column and the
   // list it opens can both be looked at.
   const [pinsOpen, setPinsOpen] = useState(false);
-  const [config, setConfig] = useState<AppConfig>({
-    name: "Valerii",
-    provider: "openrouter",
-    endpoint: "",
-    apiKey: "sk-or-v1-abcdefghijklmnop",
-    models: ["deepseek/deepseek-v4.1-flash"],
-    systemPrompt: "Answer in one line.",
-  });
+  const [config, setConfig] = useState<AppConfig>(() => ({ ...APP_CONFIG }));
 
   Object.assign(window, { events: () => events });
   Object.assign(window, { setEditing });
@@ -447,31 +812,96 @@ function Harness() {
               </div>
             </main>
           </div>
-          {/* The plain-JSON view over the same turn: the system prompt in front,
-              then every message with its calls, results and timings. */}
-          <div style={{ display: "flex", flex: "none", height: 360, minHeight: 0 }}>
-            <JsonView tab="history" chat={1} costs={COSTS} />
+          {/* The plain-JSON view, in the pane the window puts it in: the mode's
+              own strip — its name at the left, the way out at the right —
+              over the sections and the view itself, which is the one bar the
+              settings wear too. */}
+          <div className="pane-stack" style={{ flex: "none", height: 420 }}>
+            <div className="pane">
+              <ChatNav
+                thread={false}
+                onBack={() => {}}
+                jsonView
+                onJsonView={() => {}}
+                title="JSON"
+                onClose={() => setEvents((e) => [...e, "close json"])}
+              />
+              <div className="settings-body">
+                <SectionNav
+                  label="JSON sections"
+                  sections={JSON_SECTIONS}
+                  active={jsonTab}
+                  onSelect={(id) => setJsonTab(id as JsonTab)}
+                />
+                <JsonView tab={jsonTab} chat={1} costs={COSTS} />
+              </div>
+            </div>
           </div>
           {/* And the other tab: every tool, grouped by its server, which is what
-              the navbar's Tools tab puts in the pane. */}
+              the sections' Tools tab puts in the pane. */}
           <div style={{ display: "flex", flex: "none", height: 320, minHeight: 0 }}>
             <JsonView tab="tools" chat={1} costs={COSTS} />
           </div>
-          <div className="settings-body" style={{ flex: "none", height: 420 }}>
-            <SettingsPanel
-              config={config}
-              onChange={(patch) => setConfig((c) => ({ ...c, ...patch }))}
-              onSave={() => setEvents((e) => [...e, "save"])}
-              onOpenLogs={() => setEvents((e) => [...e, "logs"])}
+          {/* The settings as the window draws them — the pane's own strip with
+              the mode and its way out on it, then the sections and the page —
+              with a stand-in for the write: the page saves itself here exactly
+              as it does in the window, on the reader stopping, on the window
+              losing the focus, and on the way out, and the events below are that
+              write. It is the window's own shape, the pane and its bar included,
+              since a page looked at in a box of its own could hide a fault the
+              pane would show. `?tab=` names the section a reader lands on, since
+              a page that has to be driven to is one that cannot be looked at
+              from the outside. */}
+          <div className="pane-stack" style={{ flex: "none", height: 560 }}>
+            <div className="pane">
+              <ChatNav
+                thread={false}
+                onBack={() => {}}
+                jsonView={false}
+                onJsonView={() => {}}
+                title="Settings"
+                onClose={() => setEvents((e) => [...e, "leave settings"])}
+              />
+              <SettingsView
+                config={config}
+                initialTab={SETTINGS_TAB}
+                save={async (next) => {
+                  await new Promise((resolve) => setTimeout(resolve, 120));
+                  setEvents((e) => [...e, `write ${next.models.length} models`]);
+                  return next;
+                }}
+                onSaved={setConfig}
+                onOpenLogs={() => setEvents((e) => [...e, "logs"])}
+              />
+            </div>
+          </div>
+          {/* The card a turn stops at when a server is not marked to run its
+              calls without asking: the one surface with two answers, and the
+              only place the app says a call is waiting. */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "0 24px 24px",
+            }}
+          >
+            <ToolApproval
+              calls={[
+                { id: "1", name: "ledger__run_query", arguments: '{"query":"SELECT * FROM accounts"}' },
+                { id: "2", name: "ledger__balance", arguments: "{}" },
+              ]}
+              onRun={() => setEvents((e) => [...e, "run"])}
+              onDecline={() => setEvents((e) => [...e, "decline"])}
             />
           </div>
           <footer className="composer-bar">
             <Composer
               textareaRef={textareaRef}
               streaming={false}
-              model={config.models[0] ?? ""}
+              model={settingsModel(config)}
               models={config.models}
               onModel={(name) => setEvents((e) => [...e, `model ${name}`])}
+              cost={{ total: 0.042, latest: 0.011 }}
               reasoning={reasoning}
               onReasoning={(level) => {
                 setReasoning(level);
@@ -564,11 +994,14 @@ function ScrollHarness() {
       setMessages((all) => [...all, { role: "user", content: text }]);
       setPending(started);
     },
-    /** The answer that was arriving lands as a message, as a stream's end does. */
+    /** The answer that was arriving lands as a message, as a stream's end does.
+     *  The window draws it in one render: the transcript it reads has the answer
+     *  as a message and the partial in the same snapshot, and the window holds the
+     *  bubble until that read, so what is delivered here is both at once. */
     settle: () => {
       const answer = pendingLive.current?.answer || "An answer.";
-      setMessages((all) => [...all, { role: "assistant", content: answer }]);
       setPending(null);
+      setMessages((all) => [...all, { role: "assistant", content: answer }]);
     },
     /** What a send does: the app asks for the view by setting follow. */
     followNow: (state = true) => setFollow(state),
@@ -607,4 +1040,18 @@ function ScrollHarness() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(<Harness />);
+// The scratch page wears the scheme the app is set to, as the app's own window
+// does, so a surface looked at here is looked at in the scheme it is worn in.
+installTheme();
+
+// `?app` is the window itself rather than a surface of it: the real `App`, with
+// the backend above standing in for Rust, so what the window does about a view, a
+// run or a report from a run can be driven end to end — the store, the panes and
+// the transcript that reads them. The driver reaches the backend through
+// `window.backend`; without the parameter this is the scratch page it always was.
+const asApp = new URLSearchParams(location.search).has("app");
+Object.assign(window, { backend });
+
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  asApp ? <App /> : <Harness />,
+);

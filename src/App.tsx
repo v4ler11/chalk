@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mod } from "./keybinds";
+import * as api from "./api";
 import { useConfig } from "./useConfig";
 import { useServers } from "./useServers";
 import { useConversation } from "./useConversation";
@@ -9,7 +10,6 @@ import { ChatPane } from "./components/ChatPane";
 import { Composer } from "./components/Composer";
 import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
 import { SectionNav } from "./components/SectionNav";
-import { ModeBar } from "./components/ModeBar";
 import { PinsView } from "./components/PinsView";
 import { SettingsView } from "./components/SettingsView";
 import { Sidebar } from "./components/Sidebar";
@@ -148,12 +148,13 @@ function App() {
   // the way back and the dots that offer the switches a thread has, and a
   // channel's carries neither, so nothing appears on one bar because of what
   // another pane is doing.
-  const nav = (thread: boolean) => (
+  const nav = (thread: boolean, mode?: { title: string; onClose: () => void }) => (
     <ChatNav
       thread={thread}
       onBack={conversation.backToChannel}
       jsonView={conversation.jsonView}
       onJsonView={conversation.showJson}
+      {...mode}
     />
   );
 
@@ -200,6 +201,9 @@ function App() {
                     model={conversation.model}
                     models={models}
                     onModel={conversation.setModel}
+                    /* A prompt typed in the feed is a thread that has not been
+                       written yet: it has spent nothing, and says nothing. */
+                    cost={{ total: 0, latest: 0 }}
                     reasoning={conversation.reasoning}
                     onReasoning={conversation.setReasoning}
                     editingText={null}
@@ -294,19 +298,19 @@ function App() {
 
             {/* The settings take the pane the way the pins do — the pane's own
                 strip, then the sections down the left and the page they open on
-                the right — and, like the JSON view, they wear the bar that names
-                the mode under that strip: the column's own row opens them, but a
-                pane that has taken the window over also says so and holds the
-                way out of itself. The strip above that bar carries nothing: the
-                way back into the feed belongs to a thread's bar, and the way out
-                of a mode is the bar's own ESC, so a mode's strip is the drag
-                region and its rule alone. */}
+                the right — and, like the JSON view, they are a mode: the
+                column's own row opens them, and the pane that has taken the
+                window over says so and holds the way out of itself. Both stand
+                on the strip every pane has rather than under it: the mode's name
+                at its left, where a thread's way back stands, and the red ESC at
+                its right. One bar across the pane, because the pane has one — a
+                second strip would be a band of its own for a name that belongs
+                on this one. */}
             {conversation.settingsView ? (
               <div className="pane">
-                {nav(false)}
-                <ModeBar title="Settings" onClose={conversation.leaveSettings} />
+                {nav(false, { title: "Settings", onClose: conversation.leaveSettings })}
                 {config ? (
-                  <SettingsView config={config} onSaved={setConfig} />
+                  <SettingsView config={config} save={api.saveConfig} onSaved={setConfig} />
                 ) : (
                   <div className="settings-body">
                     <p className="json-note" style={{ padding: 24 }}>
@@ -317,8 +321,7 @@ function App() {
               </div>
             ) : threadOpen && conversation.jsonView ? (
               <div className="pane">
-                {nav(false)}
-                <ModeBar title="JSON" onClose={conversation.closeJson} />
+                {nav(false, { title: "JSON", onClose: conversation.closeJson })}
                 <div className="settings-body">
                   <SectionNav
                     label="JSON sections"

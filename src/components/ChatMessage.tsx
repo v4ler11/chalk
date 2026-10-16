@@ -9,6 +9,7 @@ import { Hint } from "./Hint";
 import { ImageStrip } from "./ImageStrip";
 import { Markdown } from "./Markdown";
 import { MessageHead } from "./MessageHead";
+import { RowMenu } from "./RowMenu";
 import { Thinking } from "./Thinking";
 import { ToolCall } from "./ToolCall";
 
@@ -32,7 +33,11 @@ interface Props {
    * of the call it answered, and `MessageList` is what pairs the two.
    */
   results?: (UiMessage | undefined)[];
-  /** Whether the actions are offered; false while a response is arriving. */
+  /**
+   * Whether a prompt's own actions are offered; false while a response is
+   * arriving. An answer's row is not gated by it: what an answer offers is
+   * copying and reading, which a run in flight is no reason to withhold.
+   */
   canAct: boolean;
   /**
    * Whether this message opens its turn, and so wears the face, the name and the
@@ -166,9 +171,9 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <div
-      className={`msg ${message.role}${asking ? " calls-only" : ""}${canAct ? " acting" : ""}${
-        head ? "" : " headless"
-      }`}
+      className={`msg ${message.role}${asking ? " calls-only" : ""}${
+        message.role === "user" && canAct ? " acting" : ""
+      }${head ? "" : " headless"}`}
     >
       {/* The face of whoever wrote it, against the line their name sits on — the
           shape a channel draws a message in, so a thread and the feed read the
@@ -181,7 +186,49 @@ export const ChatMessage = memo(function ChatMessage({
         />
       )}
       <div className="bubble">
-        {head && <MessageHead who={who} when={when} />}
+        {/* A prompt's own first line carries the head and the three things the
+            prompt offers — copy it, ask again, rewrite it — at its right-hand
+            end, where the corner is empty: the pill is a control on the line, not
+            something hung over the words below it. It is hidden rather than
+            absent, so the line stays the height it is with the pointer in the
+            message or out of it, and the words start under the line rather than
+            under the pill.
+            
+            An answer's head is the same line without the pill: what an answer
+            offers acts on the words, so it stands under them. */}
+        {message.role === "user" ? (
+          <div className="msg-head-row">
+            {head && <MessageHead who={who} when={when} />}
+            <RowMenu>
+              <button
+                className="btn btn--quiet btn--icon-sm"
+                title="Copy message"
+                aria-label="Copy message"
+                onClick={() => copy(content)}
+              >
+                {copied ? <Check /> : <Copy />}
+              </button>
+              <button
+                className="btn btn--quiet btn--icon-sm"
+                title="Regenerate response"
+                aria-label="Regenerate response"
+                onClick={() => onRegenerate(index)}
+              >
+                <RefreshCw />
+              </button>
+              <button
+                className="btn btn--quiet btn--icon-sm"
+                title="Edit message"
+                aria-label="Edit message"
+                onClick={() => onEdit(index)}
+              >
+                <Pencil />
+              </button>
+            </RowMenu>
+          </div>
+        ) : (
+          head && <MessageHead who={who} when={when} />
+        )}
         {thought && (
           <Thinking text={thought.text} waitMs={thought.waitMs} thinkingMs={thought.thinkingMs} />
         )}
@@ -197,7 +244,7 @@ export const ChatMessage = memo(function ChatMessage({
               </div>
             )}
             {folded && (
-              <button className="msg-more" onClick={() => setOpen((was) => !was)}>
+              <button className="btn btn--bare msg-more" onClick={() => setOpen((was) => !was)}>
                 {open ? "Show less" : "Show more"}
               </button>
             )}
@@ -233,61 +280,31 @@ export const ChatMessage = memo(function ChatMessage({
             })}
           </ul>
         )}
-        {/* What the message offers, at the very end of it — under the calls, not
-            over them.
+        {/* What an answer offers, at the very end of it — under the calls, not
+            over them. A prompt's own three are the pill on its head line, above.
             
-            The row keeps its place in the flow whether or not a pointer is in
-            the message: a row taken out of it would be drawn over whatever
-            follows, and a prompt's would cover the first calls of the turn it
-            asked for, leaving rows that cannot be pressed. It is hidden rather
-            than absent, so the buttons are not there to be clicked until the
-            message is under the pointer, and the transcript is the same height
-            either way. */}
-        {message.role === "user" ? (
-          <div className="msg-actions">
-            <button
-              className="msg-action"
-              title="Copy message"
-              aria-label="Copy message"
-              onClick={() => copy(content)}
-            >
-              {copied ? <Check /> : <Copy />}
-            </button>
-            <button
-              className="msg-action"
-              title="Regenerate response"
-              aria-label="Regenerate response"
-              onClick={() => onRegenerate(index)}
-            >
-              <RefreshCw />
-            </button>
-            <button
-              className="msg-action"
-              title="Edit message"
-              aria-label="Edit message"
-              onClick={() => onEdit(index)}
-            >
-              <Pencil />
-            </button>
-          </div>
-        ) : (
-          // An answer's own two options, in the same row beneath it that a
-          // prompt's take: the message, and what the response used — which is a
-          // tip rather than a click, the icon being what there is to hover. An
-          // answer that only called tools offers nothing: there is no text of
-          // its own to copy, and what the call cost is the row's own business —
-          // the message there is the calls under it.
+            The row keeps its place in the flow whether or not a pointer is in the
+            message: a row taken out of it would be drawn over whatever follows.
+            It is hidden rather than absent, so the buttons are not there to be
+            clicked until the message is under the pointer, and the transcript is
+            the same height either way. */}
+        {message.role !== "user" &&
+          // An answer's own two options: the message, and what the response used
+          // — which is a tip rather than a click, the icon being what there is to
+          // hover. An answer that only called tools offers nothing: there is no
+          // text of its own to copy, and what the call cost is the row's own
+          // business — the message there is the calls under it.
           content !== "" && (
             <div className="msg-actions">
               <Hint label="Copy message">
-                <button className="msg-action" aria-label="Copy message" onClick={() => copy(content)}>
+                <button className="btn btn--quiet btn--icon-sm msg-action" aria-label="Copy message" onClick={() => copy(content)}>
                   {copied ? <Check /> : <Copy />}
                 </button>
               </Hint>
               {usage && (
                 <Hint label={consumption(usage)}>
                   <span
-                    className="msg-action usage"
+                    className="btn btn--quiet btn--icon-sm msg-action usage"
                     role="img"
                     aria-label={`Token usage: ${consumption(usage)}`}
                   >
@@ -296,8 +313,7 @@ export const ChatMessage = memo(function ChatMessage({
                 </Hint>
               )}
             </div>
-          )
-        )}
+          )}
       </div>
     </div>
   );

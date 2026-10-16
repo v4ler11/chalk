@@ -27,7 +27,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::mcp;
-use crate::settings::AppConfig;
+use crate::settings::{self, AppConfig};
 use crate::types::chat::Usage;
 use crate::types::chat_message::{Content, Message, Part};
 use crate::{assembled, log, one_round, AppState, Round, WireCall};
@@ -468,6 +468,14 @@ impl Run {
             state.pushed = None;
         }
         self.persist(app);
+        // The transcript has a message in it now, and the window is told so here
+        // rather than a round later: a window that is holding the answer as the
+        // partial it watched arrive reads the run again the moment the round
+        // moves, and finds the same text as a message. Left until the next move,
+        // it would draw as live for as long as the calls a round asked for take —
+        // which is a whole answer, and the calls under it, missing from the
+        // thread until they are done.
+        self.emit_changed(app);
         self.emit_partial(app, None);
     }
 
@@ -1232,7 +1240,7 @@ pub(crate) async fn run_start(
             let born = store.save(
                 None,
                 &title_from(&content),
-                model.as_deref().unwrap_or_else(|| first_model(&config)),
+                model.as_deref().unwrap_or_else(|| settings::default_model(&config)),
                 reasoning.as_deref().unwrap_or(""),
                 servers.as_deref(),
                 &json!([prompt]),
@@ -1250,9 +1258,9 @@ pub(crate) async fn run_start(
     {
         let mut held = run.state.lock();
         // A row written before there were models to hold still has a turn to make
-        // in it, and it is asked with the head of the settings' list.
+        // in it, and it is asked with the model the settings start new chats from.
         if held.model.is_empty() {
-            held.model = first_model(&config).to_string();
+            held.model = settings::default_model(&config).to_string();
         }
     }
     state.runs.put(run.clone());
@@ -1262,17 +1270,6 @@ pub(crate) async fn run_start(
         drive(app, driving).await
     }));
     Ok(Started { chat: run.chat })
-}
-
-/// The model a chat with none starts from: the head of the settings' list, and a
-/// row someone left empty in there is not one to ask a provider for.
-fn first_model(config: &AppConfig) -> &str {
-    config
-        .models
-        .iter()
-        .find(|model| !model.trim().is_empty())
-        .map(String::as_str)
-        .unwrap_or("")
 }
 
 /// Stops the turn: whatever arrived stays as the answer, and the request in

@@ -4,6 +4,7 @@ import App from "./App";
 import { LogsApp } from "./LogsApp";
 import { installLogCapture } from "./logs";
 import { installLinks } from "./links";
+import { installTheme } from "./theme";
 import "katex/dist/katex.min.css";
 import "@fontsource-variable/space-grotesk";
 import "@fontsource-variable/dm-sans";
@@ -19,6 +20,11 @@ if (view === "logs") installLogCapture();
 
 // Neither window is a browser: a link in one is the system's to open.
 installLinks();
+
+// The scheme is worn before anything is drawn in it, here rather than in a
+// component: it is the window's, not a view's, and both windows wear the one
+// setting — the log window included.
+installTheme();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

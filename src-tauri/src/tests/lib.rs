@@ -258,7 +258,9 @@ fn only_openrouter_is_told_where_the_prefix_ends() {
         endpoint: String::new(),
         api_key: "sk-1".into(),
         models: vec!["a/model".into()],
+        default_model: "a/model".into(),
         system_prompt: "Be brief.".into(),
+        gateways: Vec::new(),
     };
     let custom = AppConfig {
         provider: settings::CUSTOM.into(),
@@ -434,44 +436,39 @@ fn the_body_carries_the_level_where_the_provider_reads_it() {
 /// The response cache is OpenRouter's alone, so the header that asks for it
 /// goes to OpenRouter and nowhere else: another gateway was given the URL
 /// for a reason, and a header it does not know is not part of the request
-/// it was written to receive.
+/// it was written to receive. Which gateway a request is for is the URL's
+/// to say, not the app's provider's name.
 #[test]
 fn the_response_cache_is_asked_for_only_at_openrouter() {
-    let sent = |provider: &str, endpoint: &str| {
-        let config = AppConfig {
-            name: String::new(),
-            provider: provider.into(),
-            endpoint: endpoint.into(),
-            api_key: "sk-1".into(),
-            models: vec!["a/model".into()],
-            system_prompt: String::new(),
-        };
+    let sent = |url: &str| {
         with_cache(
             reqwest::Client::new().post("http://example.com/v1/chat/completions"),
-            &config,
+            url,
         )
         .build()
         .unwrap()
     };
 
-    let openrouter = sent(settings::OPENROUTER, "");
+    // OpenRouter's own endpoint, spelled either way.
+    for url in [settings::OPENROUTER_URL, "https://openrouter.ai/api/v1/"] {
+        assert_eq!(
+            sent(url).headers().get("x-openrouter-cache").unwrap(),
+            "true"
+        );
+    }
     assert_eq!(
-        openrouter.headers().get("x-openrouter-cache").unwrap(),
-        "true"
-    );
-    assert_eq!(
-        openrouter.url().as_str(),
+        sent(settings::OPENROUTER_URL).url().as_str(),
         "http://example.com/v1/chat/completions",
         "the header does not move the request"
     );
 
-    // Even pointed at OpenRouter's own endpoint, a custom provider is taken
-    // at its word: what the app knows about OpenRouter hangs off its name.
-    assert!(sent(settings::CUSTOM, settings::OPENROUTER_URL)
+    // Another gateway's URL is not OpenRouter's, whatever the app's own
+    // provider is: the request goes where it was written to go.
+    assert!(sent("http://localhost:11434/v1")
         .headers()
         .get("x-openrouter-cache")
         .is_none());
-    assert!(sent(settings::CUSTOM, "http://localhost:11434/v1")
+    assert!(sent("https://api.anthropic.com/v1")
         .headers()
         .get("x-openrouter-cache")
         .is_none());
@@ -689,23 +686,23 @@ fn a_live_provider_streams_the_calls_the_reader_expects() {
 fn a_live_conversation_is_served_from_the_prompt_cache() {
     let settings = settings::load().expect("the settings file");
     let model = settings.models.first().cloned().expect("a model");
-    let url = format!(
-        "{}/chat/completions",
-        settings::endpoint(&settings.provider, &settings.endpoint).trim_end_matches('/')
-    );
     let client = reqwest::Client::new();
     let mut config = AppConfig::from(&settings);
     config.system_prompt = config.system_prompt.replace("@{{TODAY}}", "");
 
     let turn = |messages: &[Message]| {
+        // Where the model is asked is resolved exactly as the app resolves it:
+        // the live test goes to the same gateway, with the same key.
+        let (_, base, key) = settings::gateway_for(&config, &model);
+        let url = format!("{}/chat/completions", base.trim_end_matches('/'));
         let mut asked = messages.to_vec();
         assembled(&config, &[], &mut asked);
         let mut post = completion(model.clone(), asked, "none".into(), None);
-        if is_openrouter(&config) {
+        if settings::is_openrouter_url(&base) {
             post.session_id = session_name(&post.messages);
         }
         tauri::async_runtime::block_on(async {
-            let resp = with_cache(client.post(&url).bearer_auth(&settings.api_key), &config)
+            let resp = with_cache(client.post(&url).bearer_auth(key), &base)
                 .json(&post)
                 .send()
                 .await
@@ -766,24 +763,24 @@ fn a_live_conversation_is_served_from_the_prompt_cache() {
 #[ignore = "spends a request against the configured provider"]
 fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
     let settings = settings::load().expect("the settings file");
-    // Nothing to ask a gateway that is not OpenRouter: the header is not
-    // its own, and the verdict is not one it reports.
-    if settings.provider.trim() != settings::OPENROUTER {
-        eprintln!("the settings are not pointed at OpenRouter; nothing asked");
-        return;
-    }
     let config = AppConfig::from(&settings);
     let model = settings.models.first().cloned().expect("a model");
+    // Where the model is asked is resolved as the app resolves it, and the
+    // resolved URL is what says whether OpenRouter is being asked at all.
+    let (_, base, key) = settings::gateway_for(&config, &model);
+    // Nothing to ask a gateway that is not OpenRouter: the header is not
+    // its own, and the verdict is not one it reports.
+    if !settings::is_openrouter_url(&base) {
+        eprintln!("the model is not asked of OpenRouter; nothing asked");
+        return;
+    }
     let asked = vec![serde_json::from_value::<Message>(json!({
         "role": "user",
         "content": "Say hello in one word."
     }))
     .unwrap()];
     let post = completion(model, asked, "none".into(), None);
-    let url = format!(
-        "{}/chat/completions",
-        settings::endpoint(&config.provider, &config.endpoint).trim_end_matches('/')
-    );
+    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
 
     let statuses = tauri::async_runtime::block_on(async {
         let mut statuses = Vec::new();
@@ -792,10 +789,8 @@ fn a_live_openrouter_answers_a_repeated_request_from_its_cache() {
         // two misses.
         for _ in 0..2 {
             let resp = with_cache(
-                reqwest::Client::new()
-                    .post(&url)
-                    .bearer_auth(&settings.api_key),
-                &config,
+                reqwest::Client::new().post(&url).bearer_auth(key),
+                &base,
             )
             .json(&post)
             .send()

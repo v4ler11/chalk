@@ -76,7 +76,7 @@ export function ToolCall({ name, args, result }: Props) {
                 itself carries no server, so there is nothing to chip and the
                 head is the tool. */}
             {server !== "" && (
-              <span className="tool-call-chip">
+              <span className="chip">
                 <Plug />
                 {server}
               </span>

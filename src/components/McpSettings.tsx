@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Globe, Plus, Terminal } from "lucide-react";
 import * as api from "../api";
 import type { McpReport, McpServer } from "../types";
 import { useSaved } from "../useSaved";
@@ -111,6 +112,18 @@ function toServer(draft: Draft): McpServer {
       };
 }
 
+/** The ID a name is given while it is still the name's own: the name in the one
+    word the protocol wants, lowercased, with everything that is not a letter or
+    a digit standing in as the hyphen between words. The design says so under the
+    two fields — the ID follows the name until it is changed by hand. */
+function slug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 /** Why the list cannot be written, or `""` when it can. */
 function problem(list: Draft[]): string {
   const seen = new Set<string>();
@@ -198,6 +211,9 @@ export function McpSettings() {
   // file yet.
   const [from, setFrom] = useState<number | null>(null);
   const [error, setError] = useState("");
+  /** Whether the open draft's ID is still the name's own: true for a server that
+   *  is not in the file yet, until the ID is typed into by hand. */
+  const [followId, setFollowId] = useState(false);
   // Set by a save and cleared by its own timer: a receipt for what just
   // happened, not a state the page is in.
   const { saved, flash } = useSaved();
@@ -222,12 +238,14 @@ export function McpSettings() {
       });
   }, []);
 
-  /** Opens one server of `list` for editing. */
+  /** Opens one server of `list` for editing. Its ID is its own: a server in the
+      file has been named already, and the name does not get to rename it. */
   function show(list: Draft[], at: number) {
     const server = list[at];
     if (!server) return;
     setDraft(server);
     setFrom(at);
+    setFollowId(false);
     setResult(null);
   }
 
@@ -236,11 +254,25 @@ export function McpSettings() {
     setDraft((d) => (d ? ({ ...d, ...next } as Draft) : d));
   }
 
+  /** Types into the name, carrying it into the ID for as long as the ID is the
+      name's own. */
+  function setName(name: string) {
+    patch(followId ? { name, id: slug(name) } : { name });
+  }
+
+  /** Types into the ID: from here it is the reader's, whatever the name does. */
+  function setId(id: string) {
+    setFollowId(false);
+    patch({ id });
+  }
+
   /** Switches the open server's transport. The two variants share no field, so
-      the new one starts empty rather than wearing the old one's leftovers. */
+      the new one starts empty rather than wearing the old one's leftovers; the
+      one already chosen is not switched to, since that would be the same thing
+      as clearing it. */
   function setType(type: Draft["type"]) {
     setDraft((d) => {
-      if (!d) return d;
+      if (!d || d.type === type) return d;
       const base: DraftBase = {
         id: d.id,
         name: d.name,
@@ -256,11 +288,13 @@ export function McpSettings() {
     setResult(null);
   }
 
-  /** Starts a server that is not in the file: it is listed once it is saved. */
+  /** Starts a server that is not in the file: it is listed once it is saved. The
+      form is empty, the name included, so the fields are the design's own
+      placeholders; the ID follows the name until it is typed into. */
   function add() {
     setDraft({
       id: "",
-      name: "New server",
+      name: "",
       enabled: true,
       // The file's own defaults, so a server started here is the server the file
       // would have made: it runs its tools as the model asks, and its tools are
@@ -273,6 +307,7 @@ export function McpSettings() {
       headers: [],
     });
     setFrom(null);
+    setFollowId(true);
     setResult(null);
   }
 
@@ -357,6 +392,8 @@ export function McpSettings() {
         ))}
       </div>
 
+      <div className="mcp-divider" />
+
       <div className="mcp-detail">
         {error !== "" && <p className="notice">{error}</p>}
 
@@ -368,91 +405,72 @@ export function McpSettings() {
           </p>
         ) : (
           <>
-            <Checkbox
-              checked={draft.enabled}
-              label="Enabled"
-              onChange={(enabled) => patch({ enabled })}
-            />
+            {/* How the server is reached: the two transports as the cards that
+                choose between them, then the field the chosen one is addressed
+                by. */}
+            <section className="mcp-section">
+              <div className="mcp-head-row">
+                <div className="mcp-section-head">
+                  <h3 className="mcp-section-title">Connection</h3>
+                  <p className="mcp-section-sub">How Chalk reaches this server.</p>
+                </div>
 
-            <Checkbox
-              checked={draft.lazy}
-              label="Import lazily"
-              onChange={(lazy) => patch({ lazy })}
-            />
-            <p className="settings-note">
-              Its tools are held back until the model asks for them with{" "}
-              <code>load_lazy_mcp</code>; until then all it is given is the name and the
-              description below.
-            </p>
-
-            <div className="settings">
-              <Field label="Type">
-                <select value={draft.type} onChange={(e) => setType(e.target.value as Draft["type"])}>
-                  <option value="http">HTTP Server (http)</option>
-                  <option value="stdio">stdio Server (stdio)</option>
-                </select>
-              </Field>
-
-              <div className="settings-row">
-                <Field label="Name">
-                  <input
-                    type="text"
-                    value={draft.name}
-                    placeholder="What the list calls it"
-                    onChange={(e) => patch({ name: e.target.value })}
-                  />
-                </Field>
-                <Field label="ID">
-                  <input
-                    type="text"
-                    value={draft.id}
-                    placeholder="github, filesystem, …"
-                    spellCheck={false}
-                    onChange={(e) => patch({ id: e.target.value })}
-                  />
-                </Field>
+                {/* What writes the server, on the form's own first line rather
+                    than at the foot of a column that scrolls: a form is read from
+                    the top, and the one control that ends it is the one that
+                    should not have to be found by scrolling to the end of it. It
+                    writes the whole server — the details and the behaviour as
+                    much as the connection — which is why it heads the form rather
+                    than belonging to this section or that. The receipt stands
+                    beside it, where the press was, and before it rather than
+                    after: the button holds the form's own right-hand edge, so the
+                    word coming and going moves nothing. */}
+                <div className="mcp-footer">
+                  {saved && <span className="saved">Saved</span>}
+                  <button className="btn btn--primary" onClick={save} disabled={busy}>
+                    {from === null ? "Add server" : "Save"}
+                  </button>
+                </div>
               </div>
-              <p className="settings-note">
-                Names the server in tool names — <code>&lt;id&gt;__&lt;tool&gt;</code> — so it is
-                one word.
-              </p>
 
-              <Field label="Description">
-                <input
-                  type="text"
-                  value={draft.description}
-                  placeholder="What it holds, in the model's own words"
-                  onChange={(e) => patch({ description: e.target.value })}
+              <div className="mcp-types">
+                <TransportCard
+                  icon={<Globe />}
+                  title="Remote server"
+                  badge="HTTP"
+                  text="Chalk connects to a URL. For hosted services you sign in to."
+                  example="e.g. Linear, GitHub, Notion"
+                  chosen={draft.type === "http"}
+                  onChoose={() => setType("http")}
                 />
-              </Field>
-              <p className="settings-note">
-                What the model reads where a lazy server's tools would be, and what it has to
-                decide by when it is loading one.
-              </p>
+                <TransportCard
+                  icon={<Terminal />}
+                  title="Local program"
+                  badge="stdio"
+                  text="Chalk starts a command on this computer and talks to it."
+                  example="e.g. Filesystem, Git, a script of your own"
+                  chosen={draft.type === "stdio"}
+                  onChoose={() => setType("stdio")}
+                />
+              </div>
 
               {draft.type === "http" ? (
-                <>
-                  <Field label="URL">
-                    <input
-                      type="text"
-                      value={draft.url}
-                      placeholder="https://example.com/mcp"
-                      spellCheck={false}
-                      onChange={(e) => patch({ url: e.target.value })}
-                    />
-                  </Field>
-                  <KeyValueList
-                    label="HTTP headers"
-                    noun="header"
-                    rows={draft.headers}
-                    onChange={(headers) => patch({ headers })}
+                <Field label="Server URL">
+                  <input
+                    type="text"
+                    className="input"
+                    value={draft.url}
+                    placeholder="https://example.com/mcp"
+                    spellCheck={false}
+                    onChange={(e) => patch({ url: e.target.value })}
                   />
-                </>
+                </Field>
               ) : (
                 <>
                   <Field label="Command">
                     <input
                       type="text"
+                      className="input"
                       value={draft.command}
                       placeholder="npx"
                       spellCheck={false}
@@ -461,6 +479,7 @@ export function McpSettings() {
                   </Field>
                   <Field label="Args">
                     <textarea
+                      className="input input--area"
                       rows={3}
                       value={draft.args}
                       placeholder="One argument per line"
@@ -468,32 +487,107 @@ export function McpSettings() {
                       onChange={(e) => patch({ args: e.target.value })}
                     />
                   </Field>
+                </>
+              )}
+            </section>
+
+            {/* What the server is handed with every message, and the one place
+                the connection is tried from. */}
+            <section className="mcp-section">
+              {draft.type === "http" ? (
+                <div className="mcp-kv-block">
+                  <KeyValueList
+                    label="HTTP headers"
+                    noun="header"
+                    rows={draft.headers}
+                    onChange={(headers) => patch({ headers })}
+                  />
+                  <p className="settings-note">
+                    Optional. Most servers that need a sign-in take an Authorization
+                    header.
+                  </p>
+                </div>
+              ) : (
+                <div className="mcp-kv-block">
                   <KeyValueList
                     label="Environment"
                     noun="variable"
                     rows={draft.env}
                     onChange={(env) => patch({ env })}
                   />
-                </>
+                  <p className="settings-note">
+                    Optional. What the program is handed as its environment.
+                  </p>
+                </div>
               )}
-            </div>
 
-            {result &&
-              (result.report ? (
-                <Report report={result.report} />
-              ) : (
-                <p className="notice">{result.error}</p>
-              ))}
+              <ConnectionTest draft={draft} busy={busy} result={result} onTest={test} />
+            </section>
 
-            <div className="mcp-actions">
-              <button className="mcp-primary" onClick={save} disabled={busy}>
-                Save
-              </button>
-              <button className="mcp-secondary" onClick={test} disabled={busy}>
-                Test server
-              </button>
-              {saved && <span className="saved">Saved</span>}
-            </div>
+            <div className="mcp-rule" />
+
+            {/* What the server is called, and what the model is told about it. */}
+            <section className="mcp-section">
+              <h3 className="mcp-section-title">Details</h3>
+
+              <div className="settings-row">
+                <Field label="Name">
+                  <input
+                    type="text"
+                    className="input"
+                    value={draft.name}
+                    placeholder="Linear, Local files, …"
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </Field>
+                <Field label="ID">
+                  <input
+                    type="text"
+                    className="input"
+                    value={draft.id}
+                    placeholder="linear"
+                    spellCheck={false}
+                    onChange={(e) => setId(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <p className="settings-note">
+                The ID prefixes this server's tools — <code>id__tool</code> — so it is one
+                word. It follows the name until you change it.
+              </p>
+
+              <Field label="Description">
+                <input
+                  type="text"
+                  className="input"
+                  value={draft.description}
+                  placeholder="What it holds, in the model's own words"
+                  onChange={(e) => patch({ description: e.target.value })}
+                />
+              </Field>
+              <p className="settings-note">
+                Tells the model what this server is for. A lazy server needs one: it is
+                all the model sees until it loads the tools.
+              </p>
+            </section>
+
+            <div className="mcp-rule" />
+
+            {/* How the server behaves: whether it is offered at all, and whether
+                its tools wait for the model to ask for them. */}
+            <section className="mcp-section">
+              <h3 className="mcp-section-title">Behaviour</h3>
+              <Checkbox
+                checked={draft.enabled}
+                label="Enabled"
+                onChange={(enabled) => patch({ enabled })}
+              />
+              <Checkbox
+                checked={draft.lazy}
+                label="Import lazily"
+                onChange={(lazy) => patch({ lazy })}
+              />
+            </section>
           </>
         )}
       </div>
@@ -521,18 +615,21 @@ function KeyValueList({
   return (
     <div className="mcp-kv">
       <div className="mcp-kv-head">
-        <span className="settings-label">{label}</span>
-        <AddButton
-          className="mcp-kv-add"
+        <span className="field-label">{label}</span>
+        <button
+          className="btn btn--subtle btn--icon-sm"
           title={`Add ${noun}`}
-          ariaLabel={`Add ${noun}`}
+          aria-label={`Add ${noun}`}
           onClick={() => onChange([...rows, { key: "", value: "" }])}
-        />
+        >
+          <Plus />
+        </button>
       </div>
       {rows.map((row, i) => (
         <div className="mcp-kv-row" key={i}>
           <input
             type="text"
+            className="input"
             value={row.key}
             placeholder="Name"
             spellCheck={false}
@@ -541,6 +638,7 @@ function KeyValueList({
           />
           <input
             type="text"
+            className="input"
             value={row.value}
             placeholder="Value"
             spellCheck={false}
@@ -550,7 +648,7 @@ function KeyValueList({
             }
           />
           <IconButton
-            className="mcp-kv-remove"
+            className="btn btn--quiet btn--icon btn--stretch"
             title={`Remove ${row.key || "this row"}`}
             ariaLabel={`Remove ${row.key || "this row"}`}
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
@@ -561,30 +659,123 @@ function KeyValueList({
   );
 }
 
-/** What a server answered when it was asked what it offers. */
-function Report({ report }: { report: McpReport }) {
+/**
+ * One of the two transports, drawn as the card that chooses it: the mark, what
+ * the transport is, what it does, and who it is for. The one in force is ruled
+ * in the page's own ink rather than the hairline, since a fill would make it
+ * another kind of surface.
+ */
+function TransportCard({
+  icon,
+  title,
+  badge,
+  text,
+  example,
+  chosen,
+  onChoose,
+}: {
+  icon: ReactNode;
+  title: string;
+  /** The word the protocol knows the transport by, written where ids are. */
+  badge: string;
+  text: string;
+  example: string;
+  chosen: boolean;
+  onChoose: () => void;
+}) {
   return (
-    <div className="mcp-report">
-      <div className="mcp-report-head">
-        <span className="mcp-report-name">
-          {report.serverName}
-          {report.serverVersion && ` ${report.serverVersion}`}
+    <button className={chosen ? "mcp-type on" : "mcp-type"} aria-pressed={chosen} onClick={onChoose}>
+      <span className="mcp-type-icon">{icon}</span>
+      <span className="mcp-type-body">
+        <span className="mcp-type-head">
+          <span className="mcp-type-title">{title}</span>
+          <span className="mcp-type-badge">{badge}</span>
         </span>
-        <span className="mcp-report-protocol">protocol {report.protocol}</span>
+        <span className="mcp-type-text">{text}</span>
+        <span className="mcp-type-eg">{example}</span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The connection, tried where it is written: the state the server is in —
+ * nothing to try it with yet, ready, being asked, answered, refused — the
+ * button that asks it, and, under both, what it answered with.
+ */
+function ConnectionTest({
+  draft,
+  busy,
+  result,
+  onTest,
+}: {
+  draft: Draft;
+  busy: boolean;
+  result: { report?: McpReport; error?: string } | null;
+  onTest: () => void;
+}) {
+  // What there is to reach: the URL of an HTTP server, the command of one run
+  // here. With neither, there is nothing to try.
+  const address = draft.type === "http" ? draft.url.trim() : draft.command.trim();
+  const report = result?.report;
+
+  let state = "";
+  let title: string;
+  let sub: string;
+  if (address === "") {
+    title = "Not ready to test";
+    sub =
+      draft.type === "http"
+        ? "Add a server URL to test the connection."
+        : "Add a command to test the connection.";
+  } else if (busy) {
+    title = "Asking the server…";
+    sub = "Waiting for it to answer.";
+  } else if (result?.error) {
+    state = " bad";
+    title = "The server did not answer";
+    sub = result.error;
+  } else if (report) {
+    state = " ok";
+    const tools = report.tools.length;
+    title =
+      [report.serverName, report.serverVersion].filter(Boolean).join(" ") ||
+      "The server answered";
+    sub = `${tools} ${tools === 1 ? "tool" : "tools"} · protocol ${report.protocol}`;
+  } else {
+    title = "Ready to test";
+    sub = address;
+  }
+
+  return (
+    <div className="mcp-test">
+      <div className="mcp-test-row">
+        <div className="mcp-test-status">
+          <span className={`mcp-test-dot${state}`} aria-hidden="true" />
+          <div className="mcp-test-text">
+            <span className="mcp-test-title">{title}</span>
+            <span className="mcp-test-sub">{sub}</span>
+          </div>
+        </div>
+        <button className="btn btn--secondary" disabled={address === "" || busy} onClick={onTest}>
+          Test connection
+        </button>
       </div>
-      {report.tools.length === 0 ? (
-        <p className="mcp-empty">The server offers no tools.</p>
-      ) : (
-        <ul className="mcp-tools">
-          {report.tools.map((tool) => (
-            <li className="mcp-tool" key={tool.name}>
-              <span className="mcp-tool-title">{tool.title || tool.name}</span>
-              <span className="mcp-tool-name">{tool.name}</span>
-              {tool.description && <p className="mcp-tool-desc">{tool.description}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
+
+      {report &&
+        (report.tools.length === 0 ? (
+          <p className="mcp-empty">The server offers no tools.</p>
+        ) : (
+          <ul className="mcp-tools">
+            {report.tools.map((tool) => (
+              <li className="mcp-tool" key={tool.name}>
+                <span className="mcp-tool-title">{tool.title || tool.name}</span>
+                <span className="mcp-tool-name">{tool.name}</span>
+                {tool.description && <p className="mcp-tool-desc">{tool.description}</p>}
+              </li>
+            ))}
+          </ul>
+        ))}
     </div>
   );
 }

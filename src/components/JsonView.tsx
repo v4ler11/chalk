@@ -257,8 +257,8 @@ export function JsonView({ tab, chat, costs }: Props) {
           <pre className="json-pre">{body}</pre>
         )}
       </div>
-      <button className="json-copy" onClick={() => copy(text)} aria-label="Copy JSON">
-        {copied ? <Check className="icon" /> : <Copy className="icon" />}
+      <button className="btn btn--subtle btn--tonal json-copy" onClick={() => copy(text)} aria-label="Copy JSON">
+        {copied ? <Check /> : <Copy />}
         <span>{copied ? "Copied" : "Copy"}</span>
       </button>
     </div>

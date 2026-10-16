@@ -129,8 +129,13 @@ fn carried_over(app: &tauri::AppHandle) -> Option<Settings> {
         provider,
         endpoint,
         api_key: old.api_key,
+        // The one model it had is both what a chat starts from and the only
+        // thing to choose.
+        default_model: old.model.clone(),
         models: vec![old.model],
         system_prompt: String::new(),
+        // The old file had nowhere to name a gateway either: none.
+        gateways: Vec::new(),
     })
 }
 
@@ -708,9 +713,11 @@ fn is_openrouter(config: &AppConfig) -> bool {
 /// for five minutes without reaching a model, which is free and immediate. The
 /// gateway's verdict comes back on `X-OpenRouter-Cache-Status`, which
 /// [`stream_chat`] keeps with the response's usage. No other gateway has this,
-/// so nothing is sent anywhere else.
-fn with_cache(request: reqwest::RequestBuilder, config: &AppConfig) -> reqwest::RequestBuilder {
-    if is_openrouter(config) {
+/// so nothing is sent anywhere else — and which gateway a request is for is
+/// read from the URL it is going to, since a model routed to another gateway by
+/// its id goes there whatever the app's own provider is.
+fn with_cache(request: reqwest::RequestBuilder, url: &str) -> reqwest::RequestBuilder {
+    if settings::is_openrouter_url(url) {
         request.header("X-OpenRouter-Cache", "true")
     } else {
         request
@@ -799,10 +806,16 @@ pub(crate) async fn one_round(
     run: &runs::Run,
 ) -> Round {
     let client = app.state::<AppState>().client.clone();
-    let url = format!(
-        "{}/chat/completions",
-        settings::endpoint(&config.provider, &config.endpoint).trim_end_matches('/')
-    );
+    // Where this model is asked depends on the model itself: a gateway named by
+    // its id's first segment is asked of that gateway, with that gateway's key,
+    // and everything else is asked of the app's own provider as before.
+    let (gateway, base, key) = settings::gateway_for(&config, &model);
+    let url = format!("{}/chat/completions", base.trim_end_matches('/'));
+    // OpenRouter is the one gateway that is told about its own cache and about
+    // the conversation it is meant to pin, and which gateway this is comes from
+    // where the request is going rather than from the app's own provider: a
+    // model routed elsewhere by its id is elsewhere.
+    let openrouter = settings::is_openrouter_url(&base);
     // The names, not only the count: whether a particular tool is being offered
     // is the thing worth being able to check, and a count cannot say.
     let offered = tools
@@ -820,7 +833,7 @@ pub(crate) async fn one_round(
     // OpenRouter's sticky routing is what keeps a provider's prompt cache warm
     // between one prompt and the next, and it is the conversation's own key that
     // pins it. Only OpenRouter has one, and only OpenRouter is told.
-    if is_openrouter(&config) {
+    if openrouter {
         post.session_id = session_name(&post.messages);
     }
 
@@ -828,7 +841,7 @@ pub(crate) async fn one_round(
         &app,
         "info",
         format!(
-            "POST {url} (model={}, messages={}, reasoning={}, tools=[{offered}], cache={})",
+            "POST {url} (gateway={gateway}, model={}, messages={}, reasoning={}, tools=[{offered}], cache={})",
             post.model,
             post.messages.len(),
             // Read back off the body itself, so the line names what was sent.
@@ -836,11 +849,11 @@ pub(crate) async fn one_round(
                 .as_ref()
                 .and_then(|config| config.effort.as_deref())
                 .unwrap_or("off"),
-            if is_openrouter(&config) { "on" } else { "off" },
+            if openrouter { "on" } else { "off" },
         ),
     );
 
-    let request = with_cache(client.post(&url).bearer_auth(&config.api_key), &config);
+    let request = with_cache(client.post(&url).bearer_auth(key), &base);
     let resp = match request.json(&post).send().await {
         Ok(resp) => resp,
         Err(e) => {

@@ -22,7 +22,9 @@ fn settings_round_trip_through_a_file() {
         endpoint: "https://api.groq.com/openai/v1".into(),
         api_key: "sk-1".into(),
         models: vec!["llama-3.3-70b".into(), "mixtral-8x7b".into()],
+        default_model: "mixtral-8x7b".into(),
         system_prompt: "Answer in one line.".into(),
+        gateways: Vec::new(),
     };
     write_to(&path, &settings).unwrap();
     assert_eq!(read(&path).unwrap(), settings);
@@ -61,6 +63,63 @@ fn an_empty_model_list_falls_back_to_the_default() {
     let path = temp("no-models");
     std::fs::write(&path, "provider: openrouter\napi_key: sk-1\nmodels: []\n").unwrap();
     assert_eq!(read(&path).unwrap().models, defaults().models);
+    let _ = std::fs::remove_file(&path);
+}
+
+/// The model a new chat starts from is a key of its own, and a file written
+/// before it existed is read as the head of the list — the answer the app gave
+/// when the head was all it had.
+#[test]
+fn a_file_without_a_default_reads_as_the_head_of_the_list() {
+    let path = temp("no-default");
+    std::fs::write(
+        &path,
+        "provider: openrouter\napi_key: sk-1\nmodels:\n  - a/one\n  - b/two\n",
+    )
+    .unwrap();
+    let settings = read(&path).unwrap();
+    assert_eq!(settings.default_model, "a/one");
+    let config = AppConfig::from(&settings);
+    assert_eq!(default_model(&config), "a/one");
+    let _ = std::fs::remove_file(&path);
+}
+
+/// A default is a model, not a place: the list keeps the order it was written
+/// in, and the default is the model named wherever it stands in it.
+#[test]
+fn a_default_is_the_model_named_rather_than_the_head_of_the_list() {
+    let path = temp("default-named");
+    std::fs::write(
+        &path,
+        "provider: openrouter\napi_key: sk-1\nmodels:\n  - a/one\n  - b/two\ndefault_model: b/two\n",
+    )
+    .unwrap();
+    let settings = read(&path).unwrap();
+    assert_eq!(settings.models, vec!["a/one".to_string(), "b/two".into()]);
+    assert_eq!(default_model(&AppConfig::from(&settings)), "b/two");
+    let _ = std::fs::remove_file(&path);
+}
+
+/// A default left behind by a removal — by hand in the file, or by a save the
+/// app made before it could know better — falls to the head of the list rather
+/// than being asked of a provider that does not serve it.
+#[test]
+fn a_default_that_is_not_in_the_list_is_the_head() {
+    let path = temp("default-gone");
+    std::fs::write(
+        &path,
+        "provider: openrouter\napi_key: sk-1\nmodels:\n  - a/one\n  - b/two\ndefault_model: gone/model\n",
+    )
+    .unwrap();
+    assert_eq!(read(&path).unwrap().default_model, "a/one");
+
+    // And the same on the wire, where a window may hold a default the list has
+    // moved on from between two saves.
+    let config = AppConfig {
+        default_model: "gone/model".into(),
+        ..AppConfig::from(&defaults())
+    };
+    assert_eq!(default_model(&config), defaults().models[0]);
     let _ = std::fs::remove_file(&path);
 }
 
@@ -192,6 +251,104 @@ fn the_endpoint_is_the_one_the_provider_names() {
     assert_eq!(endpoint(CUSTOM, ""), "");
 }
 
+/// A model whose id leads with the name of a configured gateway is asked of
+/// that gateway, with that gateway's own key: the key is the gateway's, not
+/// the app's, which is the whole reason for naming it.
+#[test]
+fn a_model_is_asked_of_the_gateway_its_id_names() {
+    let config = AppConfig {
+        gateways: vec![AppGateway {
+            id: "anthropic".into(),
+            endpoint: "https://api.anthropic.com/v1".into(),
+            api_key: "sk-ant-1".into(),
+        }],
+        ..AppConfig::from(&defaults())
+    };
+    let (name, url, key) = gateway_for(&config, "anthropic/claude-sonnet-4.5");
+    assert_eq!(name, "anthropic");
+    assert_eq!(url, "https://api.anthropic.com/v1");
+    assert_eq!(key, "sk-ant-1");
+}
+
+/// A prefix that names no configured gateway is not a gateway: OpenRouter's
+/// own vendor-prefixed ids look exactly like one, and they belong to the
+/// app's own provider.
+#[test]
+fn a_prefix_that_names_no_gateway_goes_to_the_apps_own_provider() {
+    let config = AppConfig::from(&defaults());
+    let (name, url, key) = gateway_for(&config, "anthropic/claude-sonnet-4.5");
+    assert_eq!(name, OPENROUTER);
+    assert_eq!(url, OPENROUTER_URL);
+    assert_eq!(key, "");
+}
+
+/// A gateway whose name the app knows needs no endpoint written down: the
+/// name is where its requests go.
+#[test]
+fn a_gateway_the_app_knows_needs_no_endpoint() {
+    let config = AppConfig {
+        gateways: vec![AppGateway {
+            id: "deepseek".into(),
+            endpoint: String::new(),
+            api_key: "sk-ds-1".into(),
+        }],
+        ..AppConfig::from(&defaults())
+    };
+    let (_, url, key) = gateway_for(&config, "deepseek/deepseek-chat");
+    assert_eq!(url, "https://api.deepseek.com/v1");
+    assert_eq!(key, "sk-ds-1");
+}
+
+/// The names that are enough on their own: each service's OpenAI-compatible
+/// root, which is the one shape this app speaks. The Add provider screen offers
+/// these as pills, and a model's id may lead with one without anything else
+/// being written.
+#[test]
+fn the_names_the_app_knows_are_the_urls_it_holds() {
+    assert_eq!(
+        known("google"),
+        Some("https://generativelanguage.googleapis.com/v1beta/openai")
+    );
+    assert_eq!(known("mistral"), Some("https://api.mistral.ai/v1"));
+    assert_eq!(known("xai"), Some("https://api.x.ai/v1"));
+    // Anthropic's own API is not this shape, so its name is not one of them: a
+    // gateway called `anthropic` must be told where to send, which is what a
+    // proxy or a gateway that speaks this shape is for.
+    assert_eq!(known("anthropic"), None);
+    assert_eq!(known("meta"), None);
+}
+
+/// The gateways are part of the file like anything else: what was written is
+/// read back, and a file from before they existed is a file with none.
+#[test]
+fn gateways_survive_a_round_trip() {
+    let path = temp("gateways");
+    let settings = Settings {
+        gateways: vec![Gateway {
+            id: "anthropic".into(),
+            endpoint: "https://api.anthropic.com/v1".into(),
+            api_key: "sk-ant-1".into(),
+        }],
+        ..defaults()
+    };
+    write_to(&path, &settings).unwrap();
+    assert_eq!(read(&path).unwrap().gateways, settings.gateways);
+    let _ = std::fs::remove_file(&path);
+
+    let old = temp("no-gateways");
+    std::fs::write(&old, "provider: openrouter\napi_key: sk-1\nmodels: []\n").unwrap();
+    assert!(read(&old).unwrap().gateways.is_empty());
+    let _ = std::fs::remove_file(&old);
+}
+
+/// OpenRouter's URL is OpenRouter however it is spelled, and no other URL is.
+#[test]
+fn only_openrouters_own_url_is_openrouters() {
+    assert!(is_openrouter_url(OPENROUTER_URL));
+    assert!(is_openrouter_url("https://openrouter.ai/api/v1/"));
+    assert!(!is_openrouter_url("https://api.anthropic.com/v1"));
+}
+
 #[test]
 fn the_config_crosses_to_the_frontend_in_its_own_spelling() {
     let settings = Settings {
@@ -200,12 +357,14 @@ fn the_config_crosses_to_the_frontend_in_its_own_spelling() {
         endpoint: String::new(),
         api_key: "sk-1".into(),
         models: vec!["some/model".into()],
+        default_model: "some/model".into(),
         system_prompt: "Be brief.".into(),
+        gateways: Vec::new(),
     };
     let config = AppConfig::from(&settings);
     assert_eq!(
         serde_json::to_string(&config).unwrap(),
-        r#"{"name":"Valerii","provider":"openrouter","endpoint":"","apiKey":"sk-1","models":["some/model"],"systemPrompt":"Be brief."}"#
+        r#"{"name":"Valerii","provider":"openrouter","endpoint":"","apiKey":"sk-1","models":["some/model"],"defaultModel":"some/model","systemPrompt":"Be brief.","gateways":[]}"#
     );
     assert_eq!(Settings::from(&config), settings);
 }

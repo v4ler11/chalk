@@ -16,8 +16,12 @@ import { useLayoutEffect, type RefObject } from "react";
  *
  * It is measured in the render that mounts the bar, before the browser has
  * painted anything, and followed after that by a resize report. A report lands a
- * frame after the growth it reports, and what that costs is the air under the
- * last line for that one frame: the content itself is never covered by it.
+ * frame after the growth it reports, and what that costs is the room under the
+ * last line for that one frame: the pane's scroller still ends where the shorter
+ * bar did, so the bar's own top edge may sit over the last line's air until the
+ * report lands. The content itself is never re-laid-out by any of it — the room
+ * is taken under the scroller, not inside it — so a line of the draft cannot
+ * move or re-wrap a message.
  */
 export function useComposerRoom(bar: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {

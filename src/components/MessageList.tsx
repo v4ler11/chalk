@@ -197,17 +197,26 @@ export function MessageList({
    *
    * A reply is something said rather than a step in a turn, which is the count
    * the feed's row already shows and the count the store keeps: the person's own
-   * messages and the model's answers, with the tool results left out. It is drawn
-   * under the message that opened the thread, which is where a reader looking for
-   * what came of it starts reading, and a thread whose turn said nothing under it
-   * has no seam to draw.
+   * messages and the answers the model actually wrote, with the tool results left
+   * out — and with a round that only called a tool left out too, since that is a
+   * step between two of the model's own messages rather than a thing said, and a
+   * turn that loaded a server, ran a tool and then answered has said one thing,
+   * not five. `contentText` is what "said" means on this side of the wire, and
+   * the backend's `spoken` reads the transcript the same way. It is drawn under
+   * the message that opened the thread, which is where a reader looking for what
+   * came of it starts reading, and a thread whose turn said nothing under it has
+   * no seam to draw.
    */
   const opening = messages.findIndex((message) => message.role === "user");
   const replies =
     opening < 0
       ? 0
-      : messages.filter((m, i) => i > opening && (m.role === "user" || m.role === "assistant"))
-          .length;
+      : messages.filter(
+          (m, i) =>
+            i > opening &&
+            (m.role === "user" ||
+              (m.role === "assistant" && contentText(m.content).trim() !== "")),
+        ).length;
 
   /**
    * What one message's calls were answered with, in the order it asked for them.

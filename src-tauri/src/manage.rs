@@ -16,6 +16,7 @@ use std::time::Instant;
 use serde_json::{json, Value};
 
 use crate::mcp;
+use crate::settings;
 use crate::{apply_config, apply_servers, AppConfig, AppState};
 
 /// Whether this call is one of the app's own, rather than a server's.
@@ -208,7 +209,13 @@ pub(crate) async fn call(
     };
 
     let done = match name {
-        "models_list" => Ok(models_answer(&state.config.lock().models)),
+        "models_list" => {
+            let config = state.config.lock();
+            Ok(models_answer(
+                &config.models,
+                settings::default_model(&config),
+            ))
+        }
         "model_add" => add_model(app, state, &args),
         "model_remove" => remove_model(app, state, &args),
         "mcp_list" => Ok(servers_answer(&declared()?)),
@@ -251,23 +258,24 @@ fn wanted(args: &Value, key: &str) -> Result<String, String> {
 
 // ------------------------------------------------------------------- models
 
-/// The models, in the order they are offered, as the model is told them.
-fn models_answer(models: &[String]) -> String {
-    let starts = models.first().cloned().unwrap_or_default();
+/// The models, in the order they are offered, as the model is told them, and the
+/// one a new chat starts from — which is a model of its own rather than the head
+/// of that list, so that choosing one is not a way of showing it first.
+fn models_answer(models: &[String], starts: &str) -> String {
     format!(
-        "The models are, in the order a new chat follows them:\n{}\nA new chat starts from \"{starts}\".",
+        "The models are, in the order the picker shows them:\n{}\nA new chat starts from \"{starts}\".",
         serde_json::to_string(models).unwrap_or_else(|_| "[]".to_string())
     )
 }
 
 /// Adds one model — at the end, unless a place is given — answering with the
 /// list as it now stands.
-fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String> {
+fn model_added(models: &mut Vec<String>, starts: &str, args: &Value) -> Result<String, String> {
     let model = wanted(args, "model")?;
     if let Some(place) = models.iter().position(|known| known == &model) {
         return Err(format!(
             "\"{model}\" is already a model, at place {place}. {}",
-            models_answer(models)
+            models_answer(models, starts)
         ));
     }
     let position = match args.get("position") {
@@ -288,7 +296,7 @@ fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String>
             return Err(format!(
                 "There is no place {place}: the list holds {} model(s). {}",
                 models.len(),
-                models_answer(models)
+                models_answer(models, starts)
             ))
         }
         None => {
@@ -296,7 +304,7 @@ fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String>
             format!("\"{model}\" was added at the end.")
         }
     };
-    Ok(format!("{added}\n{}", models_answer(models)))
+    Ok(format!("{added}\n{}", models_answer(models, starts)))
 }
 
 /// Removes one model by its id. The last one stays: a chat needs a model to ask.
@@ -304,12 +312,17 @@ fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String>
 /// Which mistake the caller made is worked out before it is answered: a model
 /// that is not there is said so even when the list holds only one, since that is
 /// what was asked about.
-fn model_removed(models: &mut Vec<String>, args: &Value) -> Result<String, String> {
+fn model_removed(models: &mut Vec<String>, starts: &str, args: &Value) -> Result<String, String> {
     let model = wanted(args, "model")?;
     let place = models
         .iter()
         .position(|known| known == &model)
-        .ok_or_else(|| format!("\"{model}\" is not one of the models. {}", models_answer(models)))?;
+        .ok_or_else(|| {
+            format!(
+                "\"{model}\" is not one of the models. {}",
+                models_answer(models, starts)
+            )
+        })?;
     if models.len() <= 1 {
         return Err(format!(
             "\"{model}\" is the only model, and the list cannot be emptied: a chat needs \
@@ -319,23 +332,41 @@ fn model_removed(models: &mut Vec<String>, args: &Value) -> Result<String, Strin
     models.remove(place);
     Ok(format!(
         "\"{model}\" was removed.\n{}",
-        models_answer(models)
+        models_answer(models, starts)
     ))
 }
 
 fn add_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Result<String, String> {
     let config = state.config.lock().clone();
     let mut models = config.models.clone();
-    let said = model_added(&mut models, args)?;
+    let said = model_added(&mut models, settings::default_model(&config), args)?;
     apply_config(app, state, AppConfig { models, ..config })?;
     Ok(said)
 }
 
 fn remove_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Result<String, String> {
     let config = state.config.lock().clone();
+    let gone = wanted(args, "model")?;
     let mut models = config.models.clone();
-    let said = model_removed(&mut models, args)?;
-    apply_config(app, state, AppConfig { models, ..config })?;
+    let starts = settings::default_model(&config);
+    let said = model_removed(&mut models, starts, args)?;
+    // A default that named the model that just went is the head of the list
+    // now, which is what every reader would resolve it to anyway: written down
+    // rather than left dangling, so the file says what the app does.
+    let default_model = if starts == gone {
+        models.first().cloned().unwrap_or_default()
+    } else {
+        config.default_model.clone()
+    };
+    apply_config(
+        app,
+        state,
+        AppConfig {
+            models,
+            default_model,
+            ..config
+        },
+    )?;
     Ok(said)
 }
 

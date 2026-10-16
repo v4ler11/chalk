@@ -27,11 +27,11 @@ export function ToolApproval({ calls, onRun, onDecline }: Props) {
           {calls.length === 1 ? "Run this tool?" : `Run these ${calls.length} tools?`}
         </span>
         <div className="tool-approval-actions">
-          <button className="tool-approval-run" onClick={onRun}>
+          <button className="btn btn--primary btn--sm" onClick={onRun}>
             <Play />
             Run
           </button>
-          <button className="tool-approval-decline" onClick={onDecline}>
+          <button className="btn btn--secondary btn--sm" onClick={onDecline}>
             <X />
             Decline
           </button>

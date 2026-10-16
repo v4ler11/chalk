@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Plus, X } from "lucide-react";
 
 /**
@@ -28,9 +28,8 @@ export function Field({
 
 /**
  * The button that starts a new row of a list: the dashed pill under the models
- * and under the servers, and the small `+` beside the label of a header list.
- * The page's own class gives it its place and its shape; the caption is left
- * off where the button is only the icon.
+ * and under the servers. The page's own class gives it its place; the caption
+ * is left off where the button is only the icon.
  */
 export function AddButton({
   className,
@@ -49,7 +48,7 @@ export function AddButton({
 }) {
   return (
     <button
-      className={`add-button ${className}`}
+      className={`btn btn--dashed ${className}`}
       title={title}
       aria-label={ariaLabel}
       onClick={onClick}
@@ -107,10 +106,62 @@ export function Checkbox({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="mcp-check">
+    <label className="check">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className="mcp-check-box" aria-hidden="true">{checked && <Check />}</span>
+      <span className="check-box" aria-hidden="true">{checked && <Check />}</span>
       <span>{label}</span>
     </label>
+  );
+}
+
+/** Characters of a secret left in the clear while the field is not focused. */
+const VISIBLE = 5;
+
+/**
+ * A secret's field: a key, a token, anything the page holds but does not show.
+ *
+ * The value is in the clear while the field has the caret, so it can be read and
+ * corrected, and masked the rest of the time: its first five characters, then
+ * one asterisk per character after them. A `type="password"` field is not used
+ * for the mask — WebKit takes that glyph from the font, and no CSS keyword makes
+ * it an asterisk (`-webkit-text-security` offers disc, circle and square only) —
+ * so the mask is simply what the field holds while it is away from the caret.
+ *
+ * It is a control of the library rather than of a page because two pages hold
+ * the same key: the General page, where requests are pointed, and the Models
+ * page, where the models it pays for are listed.
+ */
+export function SecretInput({
+  value,
+  onChange,
+  label = "API key",
+  placeholder = "sk-...",
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  /** What the field is announced as, where a page holds more than one secret. */
+  label?: string;
+  /** Shown while there is no key: the design's own example of one. */
+  placeholder?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const masked = `${value.slice(0, VISIBLE)}${"*".repeat(Math.max(0, value.length - VISIBLE))}`;
+
+  return (
+    <input
+      type="text"
+      className="input"
+      value={focused ? value : masked}
+      placeholder={placeholder}
+      // Held read-only away from the caret, so the mask can never be written
+      // back as the key by a stray edit.
+      readOnly={!focused}
+      autoComplete="off"
+      spellCheck={false}
+      aria-label={label}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }

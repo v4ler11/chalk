@@ -310,18 +310,28 @@ export function useConversation({ config, servers, failures, setError, setFollow
    * It takes the pane the way the settings and the JSON view do, so the feed is
    * still under it and a chat opened from the list comes back to a channel that
    * never moved.
+   *
+   * The row is also the way *out* of a thread opened from the list: a thread is
+   * drawn over the pane the row holds, so pressing the row again comes to the
+   * pins rather than to the thread they were opened from — the list the row names
+   * is what the row must show. What is over the pane is given up with it.
    */
-  const showPins = useCallback((on: boolean) => {
-    setPinsView(on);
-    if (on) {
+  const showPins = useCallback(
+    (on: boolean) => {
+      setPinsView(on);
+      if (!on) return;
       setSettingsView(false);
-      setJsonView(false);
-    }
-  }, []);
+      backToChannel();
+    },
+    [backToChannel],
+  );
 
-  /** The sidebar's Channel row: the feed, with the list put away. */
+  /** The sidebar's Channel row: the feed, with the list put away and the
+   *  settings left if they were up — the row names a pane, and the pane it names
+   *  is the one that shows. */
   const showChannel = useCallback(() => {
     setPinsView(false);
+    setSettingsView(false);
     backToChannel();
   }, [backToChannel]);
 

@@ -4,6 +4,8 @@
  * the one the file had when it was one file.
  *
  *   base          the palette, the reset, and the window's own box
+ *   components    the controls every feature presses: buttons, pills, fields,
+ *                 menus — a feature styles its own surfaces, not these
  *   shell         the window's chrome, and the chat panel's column
  *   sidebar       the window's own column, and the views there are to look at
  *   row           the delete control at the end of a list row
@@ -15,6 +17,7 @@
  *   dark          the OS dark scheme's overrides, which touch nothing else
  */
 @import "./styles/base.css";
+@import "./styles/components.css";
 @import "./styles/shell.css";
 @import "./styles/sidebar.css";
 @import "./styles/row.css";

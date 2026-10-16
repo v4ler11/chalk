@@ -86,7 +86,7 @@ export function ServersMenu({
         return (
           <button
             key={server.id}
-            className="menu-server"
+            className="menu-option menu-server"
             aria-pressed={offered.includes(server.id)}
             onClick={() => toggle(server.id)}
           >
@@ -103,7 +103,7 @@ export function ServersMenu({
       {enabled.length === 0 && (
         <p className="menu-note">No servers are enabled. Add one in the settings.</p>
       )}
-      <button className="menu-refresh" disabled={reading} onClick={onRefresh}>
+      <button className="btn btn--subtle menu-refresh" disabled={reading} onClick={onRefresh}>
         <RefreshCw className={reading ? "spinning" : undefined} />
         Refresh tools
       </button>

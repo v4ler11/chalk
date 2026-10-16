@@ -105,6 +105,26 @@ export function ChatPane({
   // The composer floats over the transcript, and the transcript's foot keeps its
   // room: the typing that grows the composer does not move the transcript.
   useComposerRoom(footer);
+
+  // What this chat has cost, as the composer's bar reads it: the prices of the
+  // whole transcript summed, and what the newest message among them added. The
+  // answer still arriving is one of those messages — it is being paid for as it
+  // streams — so its usage counts the moment the provider reports it. A message
+  // that reported no usage is left out of the sum rather than counted as free,
+  // which is what a transcript written before the app kept usage is.
+  let total = 0;
+  let latest = 0;
+  for (const message of messages) {
+    const cost = message.usage?.cost;
+    if (cost == null) continue;
+    total += cost;
+    latest = cost;
+  }
+  const arriving = pending?.usage?.cost;
+  if (arriving != null) {
+    total += arriving;
+    latest = arriving;
+  }
   return (
     <>
       {/* What the thread is written on. The sheet covers the pane, the strip
@@ -145,6 +165,7 @@ export function ChatPane({
           model={model}
           models={models}
           onModel={onModel}
+          cost={{ total, latest }}
           reasoning={reasoning}
           onReasoning={onReasoning}
           editingText={editingText}

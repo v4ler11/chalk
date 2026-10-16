@@ -25,9 +25,13 @@
      top padding rather than the scroller's, so that a divider pinned to the top
      of what is scrolled is at the top of the pane and not under that strip. */
   /* The foot of the feed: the room the composer floating over it takes (its own
-     height) and the air under the last thread. What the composer grows by comes
-     out of this room, so the feed itself never moves while a draft is typed. */
-  padding: 0 24px calc(var(--composer-h, 0px) + 24px);
+     height) and the air under the last thread. It is a margin rather than the
+     padding it used to be — padding belongs to the scrollport, and a scrollport
+     that reaches the pane's foot has the platform's scrollbar cut off behind the
+     bar — so the feed ends where the composer begins, and what the composer
+     grows by still comes out of this room rather than out of the feed. */
+  padding: 0 24px 24px;
+  margin-bottom: var(--composer-h, 0px);
   /* The centred column stays centred when the platform draws a classic
      scrollbar, which takes width from this box alone. */
   scrollbar-gutter: stable both-edges;
@@ -91,28 +95,6 @@
   height: 40px;
 }
 
-/* The pill: the period in the app's own voice, a step louder than a row's own
-   time since it is what the reader looks for while scrolling, on the panel's own
-   colour, which is what it masks the feed behind it with. */
-.channel-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.channel-pill:hover {
-  border-color: var(--text-muted);
-}
-
 /* One thread. Flat, like a channel message and not a card: the pointer lifts it
    with a tint rather than a border, and an open or confirming row keeps the open
    chat's treatment. */
@@ -129,20 +111,15 @@
 /* What a row offers while the pointer is in it, at its own top-right corner: pin
    the thread, or delete it. The corner is empty — the face and the words are at
    the row's left — and the menu is taken out of the flow, so the feed is the same
-   height whether or not it is drawn. */
-.row-menu {
+   height whether or not it is drawn. It names the row it hangs in rather than
+   wearing `.row-menu` alone, since this sheet is imported by the row itself and
+   so is in the bundle *before* the library's `.menu`, whose fixed placement is
+   what a menu standing in a row has to overrule. */
+.channel-row .row-menu {
   position: absolute;
   top: 6px;
   right: 10px;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background-color: var(--bg);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
   opacity: 0;
   visibility: hidden;
   transition: opacity 120ms ease;
@@ -158,61 +135,10 @@
   visibility: visible;
 }
 
-.row-menu-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.row-menu-action:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
 /* The pin that is already on the thread: the colour says which way the press
    goes, so the two readings of one button are told apart before it is pressed. */
 .row-menu-action.on {
   color: var(--pin);
-}
-
-.row-menu-action svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* The question the bin asks, in the menu's own place: two answers rather than an
-   icon of the thing about to be removed. */
-.row-menu-word {
-  padding: 5px 9px;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.row-menu-word:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.row-menu-word.danger {
-  color: var(--danger);
-}
-
-.row-menu-word.danger:hover {
-  background-color: var(--danger-bg);
 }
 
 /* The pin, on the line the name is on rather than on one of its own: a row's
@@ -220,8 +146,6 @@
    what is under it. */
 .pin-mark {
   flex: none;
-  width: 13px;
-  height: 13px;
   color: var(--pin);
   transform: translateY(1px);
 }
@@ -230,8 +154,12 @@
   background-color: var(--sidebar-active);
 }
 
+/* Under the pointer the tint is there at once rather than fading up: swept down
+   the feed, what the pointer is on has to read before it has moved on. Leaving
+   still takes the fade, which is what the row's own transition is there for. */
 .channel-row:hover {
   background-color: var(--row-hover);
+  transition: none;
 }
 
 /* A pinned thread: the block a channel gives one — a ground of its own and a rule

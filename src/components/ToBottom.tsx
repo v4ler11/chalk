@@ -8,7 +8,7 @@ import { ArrowDown } from "lucide-react";
 export function ToBottom({ onClick }: { onClick: () => void }) {
   return (
     <button
-      className="to-bottom"
+      className="btn btn--subtle btn--icon btn--round btn--surface to-bottom"
       onClick={onClick}
       aria-label="Scroll to the latest"
       title="Scroll to the latest"

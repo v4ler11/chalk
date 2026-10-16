@@ -162,7 +162,7 @@ function FeedDivider({
   return (
     <div className="channel-divider">
       <button
-        className="channel-pill"
+        className="btn btn--pill"
         title={`Back to ${label}`}
         onClick={(event) => onJump(event.currentTarget.closest<HTMLElement>(".channel-group"))}
       >

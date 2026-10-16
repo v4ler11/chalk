@@ -8,7 +8,10 @@
      growing into another line changes the composer's own box and nothing else:
      the feed or the transcript behind it is never pushed up or laid out again.
      The pane keeps the room for it — `--composer-h`, set by `useComposerRoom` —
-     and the bar's own colour is what stops what passes under it showing through. */
+     and that room is a margin under the pane's scroller rather than padding
+     inside it, so the scrollport, and the platform's scrollbar with it, ends
+     where the bar begins. The bar's own colour is what it draws over the pane's
+     ground: in a thread the sheet behind it does that instead. */
   position: absolute;
   left: 0;
   right: 0;
@@ -17,8 +20,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 24px 8px;
+  gap: 3px;
+  /* Closer to the window's own edge than the bar's head is to the pane above it:
+     the row that ends the bar is a line of small controls, and the air it keeps
+     under them is what separates them from the window's corner rather than from
+     the transcript. */
+  padding: 6px 24px 4px;
   /* The transcript reserves a scrollbar gutter at both edges; the bar reserves
      the same, so the two keep one centre and one measure. */
   overflow: hidden;
@@ -42,48 +49,21 @@
   gap: 6px;
 }
 
-.composer-editing-label svg {
-  width: 13px;
-  height: 13px;
-}
-
-.composer-editing-cancel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background-color: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.composer-editing-cancel:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.composer-editing-cancel svg {
-  width: 13px;
-  height: 13px;
-}
-
-/* The bar takes the window's measure, and its own parts grow a little with it:
-   the same ramp carries the type, the padding, the paperclip and the button, so
-   a wide window gets a composer in proportion rather than a small one adrift in
-   a wide bar. */
+/* The card is the box the prompt is written in and nothing else: the field with
+   the shortcut and the button that sends it. It takes the bar's own measure, and
+   its parts grow a little with it — the same ramp carries the type, the padding,
+   the paperclip and the button, so a wide window gets a composer in proportion
+   rather than a small one adrift in a wide bar. The card is as tall as the send
+   button standing in it, which is the taller of the two things in the row. */
 .composer {
   display: flex;
   flex-direction: column;
   gap: 6px;
   width: 100%;
   max-width: var(--content-w);
-  padding: calc(8px + var(--composer-grow) * 1.5) calc(12px + var(--composer-grow) * 2);
+  padding: calc(7px + var(--composer-grow)) calc(12px + var(--composer-grow));
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: calc(11px + var(--composer-grow));
   background-color: var(--input-bg);
 }
 
@@ -155,61 +135,86 @@
   font-weight: 600;
 }
 
-.attachment-remove {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background-color: rgba(20, 20, 20, 0.62);
-  color: #fff;
-  cursor: pointer;
+/* The draft's box: the field with the room the shortcut and the button need at
+   its right end, and the box the draft scrolls in. The box is the scroller
+   rather than the field inside it — a `textarea` is the platform's own scroller
+   and rubber-bands past its end in the webview, while a box of ours ends hard
+   the way the transcript does — and it takes the card's whole width, so the
+   card's only scrollbar runs at the card's right edge rather than stopping
+   short of the button. The draft grows to its own height inside it, up to the
+   limit below; past that this box scrolls under the words. */
+.composer-draft {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  /* The gutter is reserved so a classic scrollbar does not move the wrap when
+     the draft outgrows the box. */
+  scrollbar-gutter: stable;
 }
 
-.attachment-remove:hover {
-  background-color: rgba(20, 20, 20, 0.85);
-}
-
-.attachment-remove svg {
-  width: 10px;
-  height: 10px;
-}
-
+/* The field itself: the whole box it is written in — a field left to itself is
+   twenty columns wide, whichever box it is put in — two lines at rest, never a
+   resize handle, and no scroll of its own: it is as tall as what is written in
+   it, set from the render, and the box around it is what scrolls. */
 .composer textarea {
+  display: block;
   width: 100%;
   min-height: 22px;
-  max-height: 140px;
-  padding: 0;
-  border: none;
-  outline: none;
-  resize: none;
-  background-color: transparent;
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  /* The draft is the chat's own words on their way in, so it is set at the
-     chat's own size rather than at a size of the composer's own. */
-  font-size: var(--chat-text);
-  line-height: 1.5;
+  overflow: hidden;
 }
 
-.composer textarea::placeholder {
+/* The field's box and what sends it share the row's one cell: the draft is the
+   box, and the shortcut and the button stand on the row's floor at its right
+   end, over the strip the draft's own padding keeps them. Sharing the cell
+   rather than splitting it is what lets the draft reach the card's right edge
+   while the button still sits at the draft's last line — the corner a one-line
+   draft starts it in, and the corner it stays in as the draft grows upward. The
+   button is out of the flow, so the row is only as tall as the draft: its floor
+   is the button's own height, which is what a one-line draft is. */
+.composer-row {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: var(--send-btn);
+}
+
+.composer-row > * {
+  grid-area: 1 / 1;
+}
+
+.composer-row textarea {
+  min-width: 0;
+  padding-right: calc(var(--send-w, 0px) + 10px);
+}
+
+.composer-send {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* What the shortcut is, written where it is used: beside the button it stands
+   for, in the app's own grey, since a placeholder is the first thing a draft
+   erases and this is what is wanted before one is typed as well as after. */
+.composer-hint {
+  font-size: calc(12px + var(--composer-grow));
   color: var(--text-muted);
 }
 
-.composer textarea:disabled {
-  opacity: 0.6;
-}
-
-.composer-actions {
+/* The row under the card: what the message is sent as, rather than the text of
+   it — what is attached and what is asked for on the left, what it has cost and
+   what it is being sent with on the right. It stands on the bar's own ground at
+   the card's measure, and keeps the height the send button's row had. */
+.composer-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  max-width: var(--content-w);
+  height: calc(26px + var(--composer-grow) * 2);
 }
 
 .composer-tools {
@@ -217,11 +222,6 @@
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
-}
-
-.composer-tools svg {
-  width: calc(13px + var(--composer-grow));
-  height: calc(13px + var(--composer-grow));
 }
 
 /* The composer's tips are the rail's, drawn over each control rather than under
@@ -232,194 +232,30 @@
   bottom: calc(100% + 6px);
 }
 
-/* The paperclip: it opens the file panel for images, drawn at the weight the
-   static mark always had. */
-.composer-tool {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  background-color: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.composer-tool:hover {
-  color: var(--text-primary);
-}
-
-/* The reasoning control, beside the paperclip: the brain alone — in the tools'
-   own grey — while nothing is being asked for, and a pill while a level is, the
-   brain on its left and the level's letter and chevron on its right. The two
-   halves are two buttons: one gives the level up, the other opens the levels. */
-.reasoning-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 3px;
-  border-radius: 999px;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.reasoning-pill.on {
-  padding: 2px 5px 2px 4px;
-  background-color: var(--reasoning-bg);
-  color: var(--reasoning);
-}
-
-.reasoning-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 1px;
-  border: none;
-  border-radius: 999px;
-  background-color: transparent;
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-/* Off is the paperclip's own grey, brightening under the pointer. A level in
-   force keeps the pill's blue — the pill is a state, not a hint — and tints only
-   the half under the pointer, the two halves being the two buttons. */
-.reasoning-pill:not(.on) .reasoning-btn:hover {
-  color: var(--text-primary);
-}
-
-.reasoning-pill.on .reasoning-btn:hover {
-  background-color: var(--reasoning-divider);
-}
-
-.reasoning-pill.on .reasoning-btn:first-child {
-  border-radius: 999px 0 0 999px;
-}
-
-.reasoning-pill.on .reasoning-btn:last-child {
-  padding-left: 6px;
-  border-left: 1px solid var(--reasoning-divider);
-  border-radius: 0 999px 999px 0;
-}
-
-.reasoning-level {
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.reasoning-btn .reasoning-chevron {
-  width: 11px;
-  height: 11px;
-}
-
-/* The tools control, beside the reasoning control: the hammer alone while this
-   chat calls no server, and a pill of two while it calls any — the hammer that
-   opens the servers, and the count of what they offer, which is also the button
-   that gives them all up. The two controls are the same shape and wear the same
-   colour: both say what the chat is asking with, one level and one count. */
-.tools-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 3px;
-  border-radius: 999px;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.tools-pill.on {
-  padding: 2px 5px 2px 4px;
-  background-color: var(--reasoning-bg);
-  color: var(--reasoning);
-}
-
-.tools-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 1px;
-  border: none;
-  border-radius: 999px;
-  background-color: transparent;
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.tools-pill:not(.on) .tools-btn {
+/* What the chat has cost, and what its newest message added: a pair of numbers
+   in the app's monospace, read rather than pressed, and so written in the same
+   grey the row's own readouts are. */
+.composer-cost {
+  font-family: var(--font-mono);
+  font-size: calc(10px + var(--composer-grow));
   color: var(--text-muted);
-}
-
-.tools-pill:not(.on) .tools-btn:hover {
-  color: var(--text-primary);
-}
-
-.tools-pill.on .tools-btn:hover {
-  background-color: var(--reasoning-divider);
-}
-
-/* Only while both halves are there: with nothing called the pill is the hammer
-   alone, which no divider may cut in two. */
-.tools-pill.on .tools-btn:first-child {
-  border-radius: 999px 0 0 999px;
-}
-
-.tools-pill.on .tools-btn:last-child {
-  padding-left: 6px;
-  border-left: 1px solid var(--reasoning-divider);
-  border-radius: 0 999px 999px 0;
-}
-
-/* How many servers the chat calls, worn where the reasoning pill wears its
-   level's letter, and the chevron onto the list that switches them. */
-.tools-count {
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.tools-chevron {
-  width: 11px;
-  height: 11px;
 }
 
 .composer-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* The model in use, in the bar's right corner: no box around it, just the name
-   and a chevron, the way the rail used to name it. Choosing one is a per-chat
-   act, so it belongs beside the message being written, and the list it opens is
-   the one Settings writes. The cost sits between it and the send button, so the
-   chip stays where it is whether or not there is a cost to show. */
-.model-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 4px 6px;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: calc(12px + var(--composer-grow));
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.model-chip:hover {
-  color: var(--text-primary);
-}
-
-.model-chip .chevron {
-  flex: none;
-  width: 13px;
-  height: 13px;
+/* The model in use takes the bar's own ramp rather than the chip's own size: the
+   bar grows a little with the window, and its controls grow with it. It is
+   written as the cost beside it is — a fact about the message, in the font
+   numbers and model ids are read in — with the chevron that says it is also the
+   way to change it. */
+.composer-right .btn--chip {
+  font-family: var(--font-mono);
+  font-size: calc(10px + var(--composer-grow));
+  font-weight: 400;
 }
 
 .model-name {
@@ -447,35 +283,15 @@
   }
 }
 
+/* The composer's own size for it: the filled circle of the app's button, grown
+   with the bar — the one measure the row's floor is also cut to. */
 .send-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: calc(26px + var(--composer-grow) * 2);
-  height: calc(26px + var(--composer-grow) * 2);
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background-color: var(--accent);
-  color: var(--accent-contrast);
-  cursor: pointer;
+  width: var(--send-btn);
+  height: var(--send-btn);
 }
 
 .send-btn.swapping {
   animation: send-in 120ms ease-out;
-}
-
-.send-btn svg {
-  width: calc(13px + var(--composer-grow));
-  height: calc(13px + var(--composer-grow));
-}
-
-/* Held back while an image is still being prepared: it says so, and takes no
-   click, so a request cannot go out missing its picture. */
-.send-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 /* ------------------------------------------------------------ tool approval */
@@ -494,7 +310,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background-color: var(--sidebar);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-menu);
 }
 
 .tool-approval-head {
@@ -515,42 +331,6 @@
   gap: 6px;
 }
 
-.tool-approval-run,
-.tool-approval-decline {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-/* The one that does something is the one that is filled in. */
-.tool-approval-run {
-  background-color: var(--text-primary);
-  color: var(--bg);
-  border: 1px solid var(--text-primary);
-}
-
-.tool-approval-decline {
-  background-color: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-}
-
-.tool-approval-decline:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-.tool-approval-run svg,
-.tool-approval-decline svg {
-  width: 13px;
-  height: 13px;
-}
-
 .tool-approval-list {
   display: flex;
   flex-direction: column;
@@ -558,9 +338,11 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  /* Long argument lists scroll: the card is a prompt, not a page. */
+  /* Long argument lists scroll: the card is a prompt, not a page. Reaching
+     either end is a hard stop, as it is everywhere else in the app. */
   max-height: 200px;
   overflow: auto;
+  overscroll-behavior: none;
 }
 
 .tool-approval-list li {

@@ -5,6 +5,7 @@ import { lastReply } from "../clock";
 import { ASSISTANT, ASSISTANT_TINT, Avatar } from "./Avatar";
 import { ImageStrip } from "./ImageStrip";
 import { MessageHead } from "./MessageHead";
+import { RowMenu } from "./RowMenu";
 import { useDeleteQuestion } from "./RowDelete";
 import type { ChannelRow } from "../feed";
 // The row's own sheet, imported here rather than by the feed that draws it: two
@@ -206,20 +207,20 @@ export const ChannelRowItem = memo(
             that corner is empty, so the row is the same height whether or not it
             is drawn — and it is drawn for as long as the question is up, so the
             answer is there to give even once the pointer has moved. */}
-        <div className="row-menu">
+        <RowMenu>
           {asking ? (
             <>
-              <button className="row-menu-word danger" onClick={() => onDelete(row.chat)}>
+              <button className="btn btn--quiet btn--danger" onClick={() => onDelete(row.chat)}>
                 Delete
               </button>
-              <button className="row-menu-word" onClick={giveUp}>
+              <button className="btn btn--quiet" onClick={giveUp}>
                 Cancel
               </button>
             </>
           ) : (
             <>
               <button
-                className={`row-menu-action${isPinned ? " on" : ""}`}
+                className={`btn btn--quiet btn--icon-sm row-menu-action${isPinned ? " on" : ""}`}
                 title={isPinned ? `Unpin "${firstLine(row.root)}"` : `Pin "${firstLine(row.root)}"`}
                 aria-label={isPinned ? "Unpin thread" : "Pin thread"}
                 onClick={() => onPin(row.chat, !isPinned)}
@@ -227,7 +228,7 @@ export const ChannelRowItem = memo(
                 {isPinned ? <PinOff /> : <Pin />}
               </button>
               <button
-                className="row-menu-action"
+                className="btn btn--quiet btn--icon-sm row-menu-action"
                 title={`Delete "${firstLine(row.root)}"`}
                 aria-label="Delete thread"
                 onClick={ask}
@@ -236,7 +237,7 @@ export const ChannelRowItem = memo(
               </button>
             </>
           )}
-        </div>
+        </RowMenu>
       </div>
     );
   },

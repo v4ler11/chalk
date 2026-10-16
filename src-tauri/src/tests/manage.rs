@@ -49,12 +49,13 @@ fn every_offered_tool_is_one_that_owns_its_name() {
 fn a_model_is_added_once_and_where_it_was_asked_for() {
     let mut models = vec!["a/one".to_string()];
 
-    let said = model_added(&mut models, &args(json!({ "model": "b/two" }))).unwrap();
+    let said = model_added(&mut models, "a/one", &args(json!({ "model": "b/two" }))).unwrap();
     assert_eq!(models, vec!["a/one", "b/two"]);
     assert!(said.contains("at the end"), "{said}");
 
     let said = model_added(
         &mut models,
+        "a/one",
         &args(json!({ "model": "c/three", "position": 1 })),
     )
     .unwrap();
@@ -64,20 +65,39 @@ fn a_model_is_added_once_and_where_it_was_asked_for() {
     // Both halves of the answer name the list as it now stands.
     assert!(said.contains("c/three"), "{said}");
 
-    let refused = model_added(&mut models, &args(json!({ "model": "c/three" }))).unwrap_err();
+    let refused = model_added(&mut models, "a/one", &args(json!({ "model": "c/three" }))).unwrap_err();
     assert!(refused.contains("already a model, at place 1"), "{refused}");
     assert_eq!(models.len(), 3);
 
     let refused = model_added(
         &mut models,
+        "a/one",
         &args(json!({ "model": "d/four", "position": 9 })),
     )
     .unwrap_err();
     assert!(refused.contains("no place 9"), "{refused}");
     assert_eq!(models.len(), 3);
 
-    let refused = model_added(&mut models, &args(json!({ "model": "   " }))).unwrap_err();
+    let refused = model_added(&mut models, "a/one", &args(json!({ "model": "   " }))).unwrap_err();
     assert!(refused.contains("empty"), "{refused}");
+}
+
+/// What a new chat starts from is a model rather than a place: a model added
+/// above the default — or the default moved down the list by hand — leaves the
+/// default where it was, and the answer says which model that is.
+#[test]
+fn a_new_chat_starts_from_the_named_model_rather_than_the_head() {
+    let mut models = vec!["a/one".to_string(), "b/two".to_string()];
+
+    let said = model_added(
+        &mut models,
+        "b/two",
+        &args(json!({ "model": "c/three", "position": 0 })),
+    )
+    .unwrap();
+
+    assert_eq!(models, vec!["c/three", "a/one", "b/two"]);
+    assert!(said.contains("starts from \"b/two\""), "{said}");
 }
 
 /// The last model stays: the settings window cannot empty the list either,
@@ -85,16 +105,16 @@ fn a_model_is_added_once_and_where_it_was_asked_for() {
 #[test]
 fn the_last_model_is_not_removed() {
     let mut models = vec!["a/one".to_string()];
-    let refused = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap_err();
+    let refused = model_removed(&mut models, "a/one", &args(json!({ "model": "a/one" }))).unwrap_err();
     assert!(refused.contains("only model"), "{refused}");
     assert_eq!(models, vec!["a/one"]);
 
     let mut models = vec!["a/one".to_string(), "b/two".to_string()];
-    let said = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap();
+    let said = model_removed(&mut models, "b/two", &args(json!({ "model": "a/one" }))).unwrap();
     assert_eq!(models, vec!["b/two"]);
     assert!(said.contains("was removed"), "{said}");
 
-    let refused = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap_err();
+    let refused = model_removed(&mut models, "b/two", &args(json!({ "model": "a/one" }))).unwrap_err();
     assert!(refused.contains("is not one of the models"), "{refused}");
     assert!(refused.contains("b/two"), "{refused}");
 }

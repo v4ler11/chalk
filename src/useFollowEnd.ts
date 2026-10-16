@@ -224,6 +224,16 @@ export function useFollowEnd({
    * outside the slack — so it is read from the direction: growth leaves the
    * offset alone, the pin raises it, and only the reader lowers it. The slack
    * keeps a move too small to see from ending anything.
+   *
+   * The end is the end whoever took the view there, with one exception: content
+   * that *shrinks* under the view clamps an offset left past its own end up to the
+   * new one, and that leaves the view sitting at the end without the reader having
+   * asked for it. A stream ends in two reports and the answer is only drawn as a
+   * message in the second, so between them the transcript is shorter than it was
+   * and can be shorter than the view — a reader who had scrolled away would be
+   * following again, and the answer would land by pulling them down to it. A move
+   * upwards is therefore never an arrival at the end, whether it came from the
+   * reader's hand or from the layout's.
    */
   function onScroll() {
     const el = ref.current;
@@ -233,8 +243,13 @@ export function useFollowEnd({
     const previous = lastTop.current;
     lastTop.current = top;
     if (going.current) return;
+    if (top < previous) {
+      // Away from the end, and far enough for it to be read as a move: the reader
+      // is leaving the end, and the follow goes with them.
+      if (gap > MOVE_SLACK) report(false);
+      return;
+    }
     if (gap <= MOVE_SLACK) report(true);
-    else if (top < previous) report(false);
   }
 
   /** The ↓ button: the end, now, with any landing wheel dropped. */

@@ -60,14 +60,18 @@ export const CodeBlock = memo(function CodeBlock({
       <div className="code-head">
         {/* A fence with nothing on it is plain text, and says so. */}
         <span className="code-language">{language ?? "text"}</span>
+        {/* The icon alone, wearing the library's ghost button: no border until
+            the pointer is on it, since the head is a quiet bar and this is the
+            one thing in it that does anything. What it does is said by the
+            tooltip and read out by its label, and what it did is the tick. */}
         <button
           type="button"
-          className="code-copy"
+          className="btn btn--ghost btn--icon-sm"
           title="Copy code"
           aria-label="Copy code"
           onClick={() => copy(text.replace(/\n$/, ""))}
         >
-          {copied ? <Check className="icon" /> : <Copy className="icon" />}
+          {copied ? <Check /> : <Copy />}
         </button>
       </div>
       <pre {...rest}>{children}</pre>
