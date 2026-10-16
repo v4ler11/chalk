@@ -378,7 +378,9 @@ fn the_opening_prompt_is_not_one_of_the_users_replies() {
 
 /// A database written before there were models to hold, or a reasoning level
 /// to ask with: opening it has to add both columns, and the chats already in
-/// it keep their transcripts with nothing against them.
+/// it keep their transcripts with nothing against them. What the row cannot be
+/// asked, the backfill answers from what it does say: when it was made — the
+/// only moment recorded of it — and the prompt it was made of.
 #[test]
 fn a_v1_database_gains_the_later_columns() {
     let path = std::env::temp_dir().join(format!("chalk-store-v1-{}.db", std::process::id()));
@@ -406,6 +408,10 @@ fn a_v1_database_gains_the_later_columns() {
     assert_eq!(rows[0].title, "old chat");
     assert_eq!(rows[0].model, "");
     assert_eq!(rows[0].reasoning, "");
+    // Nothing says when the row was made, so the last write stands in for it,
+    // and the prompt it was made of is the one its transcript opens with.
+    assert_eq!(rows[0].created_at, 10);
+    assert_eq!(rows[0].root, "hi");
     let loaded = store.load(rows[0].id).unwrap().unwrap();
     assert_eq!(loaded.messages[0]["content"], "hi");
     // A chat written before the servers had a control has never chosen, so it
@@ -416,6 +422,150 @@ fn a_v1_database_gains_the_later_columns() {
     assert_eq!(rows[0].pinned_at, 0);
 
     drop(store);
+    cleanup();
+}
+
+/// A launch that died between a step's statements and the `user_version` that
+/// marks the step done leaves a file holding a column at the version before it.
+/// No version of this build writes such a file any more — the statements, the
+/// backfill and the bump are one transaction — but one written that way is still
+/// out there, and it must not be a file that never opens again: the step runs
+/// whole on the next launch, finds its own `ALTER` already done, and finishes
+/// the rest of itself, where refusing it would be a history with no other way in.
+#[test]
+fn a_step_a_crash_left_halfway_is_finished_rather_than_refused() {
+    let path =
+        std::env::temp_dir().join(format!("chalk-store-half-step-{}.db", std::process::id()));
+    let cleanup = || {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+    };
+    cleanup();
+
+    // A file as a crash left it, one row for each step: everything before that
+    // step written, the part of the step that had already run, and the version
+    // the file was left at. What a crash could leave behind is the step's first
+    // statement, or — for the step that also backfills — the whole of its
+    // statements with the backfill still to come, which is the pair of rows that
+    // share version 4. The chat is written after that part, so the column the
+    // step adds lands in it as the column's default, exactly as it does in a file
+    // where the chat was written first.
+    let halfway: [(i64, String, &str, &str); 7] = [
+        (0, String::new(), "", V1),
+        (1, String::from(V1), "", V2),
+        (2, format!("{V1}{V2}"), "", V3),
+        (3, format!("{V1}{V2}{V3}"), "", V4),
+        (4, format!("{V1}{V2}{V3}{V4}"), "", V5_COLUMNS),
+        (4, format!("{V1}{V2}{V3}{V4}{V5_COLUMNS}"), "", ""),
+        (5, format!("{V1}{V2}{V3}{V4}{V5_COLUMNS}"), V5_BACKFILL, V6),
+    ];
+
+    for (version, written, backfilled, interrupted) in halfway {
+        cleanup();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(&written).unwrap();
+            // The statement of the step that had already run, and nothing when
+            // the whole of the step ran and only the backfill is missing.
+            let half_run = interrupted.split(';').next().unwrap_or("");
+            conn.execute_batch(half_run).unwrap();
+            conn.execute(
+                "INSERT INTO chats (title, messages, updated_at) VALUES (?1, ?2, ?3)",
+                params!["old chat", r#"[{"role":"user","content":"letters"}]"#, 10],
+            )
+            .unwrap();
+            conn.execute_batch(backfilled).unwrap();
+            conn.pragma_update(None, "user_version", version).unwrap();
+        }
+
+        // Opens rather than failing on the column that is already there, and
+        // arrives where a file that was simply older arrives: every column a list
+        // is drawn from — the query is what says so, since it names them all —
+        // and the row the backfill was for.
+        let store = Store::open(&path).unwrap();
+        let rows = store.list().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "old chat");
+        assert_eq!(rows[0].created_at, 10);
+        assert_eq!(rows[0].root, "letters");
+        assert_eq!(rows[0].pinned_at, 0);
+        drop(store);
+
+        let conn = Connection::open(&path).unwrap();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 6, "the step finished rather than stopped beside it");
+    }
+
+    cleanup();
+}
+
+/// A step that cannot finish is not a step that half happened. The columns
+/// arrive with the rows filled in from what was already written, and a row whose
+/// transcript is not JSON at all is one the backfill cannot read: the step is
+/// refused whole — no column of it kept, the version where it was — and the
+/// failure is what `Store::open` answers with, which is a line in the log and a
+/// history the window says is unavailable. A version bumped over rows it never
+/// filled is a store with no step left to run and nothing that could repair it.
+#[test]
+fn a_backfill_that_cannot_read_a_row_refuses_the_whole_step() {
+    let path =
+        std::env::temp_dir().join(format!("chalk-store-unreadable-{}.db", std::process::id()));
+    let cleanup = || {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+    };
+    cleanup();
+
+    {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(&format!("{V1}{V2}{V3}{V4}")).unwrap();
+        // A transcript that is not JSON, which is the one thing a backfill that
+        // reads them cannot get past.
+        conn.execute(
+            "INSERT INTO chats (title, messages, updated_at) VALUES (?1, ?2, ?3)",
+            params!["unreadable", "a note, not a transcript", 10],
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 4).unwrap();
+    }
+
+    let refused = Store::open(&path)
+        .err()
+        .expect("a step that cannot finish does not open");
+    assert!(refused.contains("malformed JSON"), "{refused}");
+
+    // And it left nothing of itself: the columns it added were rolled back with
+    // the failure, and the version is the one the file was written at.
+    let conn = Connection::open(&path).unwrap();
+    let mut stmt = conn.prepare("PRAGMA table_info(chats)").unwrap();
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    drop(stmt);
+    assert_eq!(
+        columns,
+        [
+            "id",
+            "title",
+            "updated_at",
+            "messages",
+            "model",
+            "reasoning",
+            "servers"
+        ],
+        "a refused step keeps no column of itself"
+    );
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, 4);
+    drop(conn);
     cleanup();
 }
 

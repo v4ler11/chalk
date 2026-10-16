@@ -3,6 +3,7 @@ import { Check, ChevronDown, Copy, History, Wrench } from "lucide-react";
 import * as api from "../api";
 import { useCopy } from "../useCopy";
 import { groupTools } from "../lazy";
+import { useRuns } from "../useRuns";
 import { tokens, toolBytes } from "../tools";
 import type { NavSection } from "./SectionNav";
 import type { McpCost, RequestPreview } from "../types";
@@ -164,6 +165,27 @@ export function JsonView({ tab, chat, costs }: Props) {
   // the window's own idea of a request.
   const [preview, setPreview] = useState<RequestPreview | null>(null);
 
+  // What the open thread's run holds the request is assembled from: the
+  // transcript the messages come from, and the model, the reasoning level, the
+  // servers the chat offers and the ones this run loaded lazily, which the tools
+  // and the addendum come from. Any of them changing is a different request, and
+  // a pane still showing the request as it was before is not showing the request
+  // the model is given — a run committing an answer, a tool's result or a server
+  // loaded lazily is only the commonest way that happens, and `chat_set` while
+  // the pane is open is another.
+  //
+  // Read from the run's own store rather than handed down, since the window
+  // draws the transcript and the pane is what has to follow it. Each field is
+  // compared by identity, so the partial arriving — which replaces nothing else
+  // — is not a fetch, and a token in flight is not one either.
+  const run = useRuns().get(chat);
+  const held = run?.kind === "snapshot" ? run.snapshot : null;
+  const transcript = held?.messages;
+  const model = held?.model;
+  const reasoning = held?.reasoning;
+  const servers = held?.servers;
+  const loaded = held?.loaded;
+
   useEffect(() => {
     let alive = true;
     api
@@ -177,7 +199,7 @@ export function JsonView({ tab, chat, costs }: Props) {
     return () => {
       alive = false;
     };
-  }, [chat]);
+  }, [chat, transcript, model, reasoning, servers, loaded]);
 
   const messages = preview?.messages ?? NO_MESSAGES;
   const tools = preview?.tools ?? NO_TOOLS;

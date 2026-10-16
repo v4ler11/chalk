@@ -7,13 +7,13 @@ import { hashName } from "../hash";
  * The app has no pictures to draw — nobody uploads anything, and there is
  * nowhere to keep one — so the circle wears initials, which is what a channel
  * falls back to as well: two letters for a person, and the letters of a model's
- * name for the model that answered. The colour is derived rather than chosen,
- * the way a row's wave is, so the same person wears the same circle everywhere
- * and nothing has to remember it.
+ * name for the model that answered. The colour is derived rather than chosen, so
+ * the same person wears the same circle everywhere and nothing has to remember
+ * it.
  */
 
 /** The circles' colours: a wide spread, each dark enough for white letters. */
-const TINTS = ["#b4552a", "#3f63c9", "#2f8f5b", "#8a5cd6", "#a8813a", "#2f7f95"];
+const TINTS = ["#b4552a", "#3f63c9", "#2b8352", "#8a5cd6", "#8f6e31", "#2f7f95"];
 
 /**
  * The colour the assistant's mark wears.

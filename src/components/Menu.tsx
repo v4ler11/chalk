@@ -1,17 +1,38 @@
-import { useState, type AriaRole, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useState, type AriaRole, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
+
+// Every open menu's way out, so one can be given up from outside the component
+// that opened it. A menu hangs from its control, and a view change takes that
+// control off the pane with it: a `visibility` on the pane cannot reach a menu
+// drawn at the window's edge, so the menu is closed rather than left standing
+// over the pane that replaced its control.
+const closers = new Set<() => void>();
+
+/** Gives up every menu that is open, wherever it is drawn. */
+export function closeMenus() {
+  for (const close of closers) close();
+}
 
 /**
  * Which of a bar's menus is open, if any. Opening one gives up whichever other
  * was open, so no two are ever drawn at once; pressing the control that opened
  * a menu a second time gives that same one up, which is what a control that is
  * both the way in and the way out has to do.
+ *
+ * Its `close` is also what `closeMenus` reaches through, since the menu it
+ * gives up outlives its own bar as soon as the view moves.
  */
 export function useOpenMenu<K extends string>() {
   const [open, setOpen] = useState<K | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  useEffect(() => {
+    closers.add(close);
+    return () => {
+      closers.delete(close);
+    };
+  }, [close]);
   const toggle = (which: K) => setOpen((current) => (current === which ? null : which));
-  const close = () => setOpen(null);
   return { open, toggle, close };
 }
 

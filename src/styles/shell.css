@@ -220,12 +220,24 @@
 /* Off, the pane keeps its place and its layout — `visibility`, not
    `display: none`, which would leave a scroll container with a scrollable area
    of zero and bring it back at the top. It leaves the pointer's path at once and
-   is inert, and it goes out of sight at the *end* of a slide rather than at the
-   start: that is what keeps a pane in the picture while the other slides over it,
-   and while it slides away itself. */
+   is inert, and it goes out of sight at once too: a switch that slides nothing —
+   the feed for the pins, either of them for the settings — is a change of
+   `visibility` and of nothing else, and holding the pane in the picture for a
+   slide that is not happening would leave the rows that are drawn and the rows
+   that take the pointer disagreeing for as long as it took. */
 .pane.off {
   visibility: hidden;
   pointer-events: none;
+}
+
+/* The slides are the thread's, and this is who takes part in one: the pane
+   beneath it, which stays in the picture while the thread arrives over it, and
+   the thread's own, which stays while it slides away itself — leaving the view,
+   or standing under a mode that has taken the window over. Those two go out of
+   sight at the *end* of the slide rather than at the start, which is what keeps
+   them in the picture for it; every other off pane is gone at once. */
+.pane.thread.off,
+.pane-stack:has(> .pane.thread:not(.off)) > .pane.off {
   transition: visibility 0s linear 180ms;
 }
 

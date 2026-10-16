@@ -7,11 +7,10 @@ import {
 } from "react";
 import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
 import { period } from "../clock";
+import { MINUTE_MS, useTicker } from "../timer";
 import { useComposerRoom } from "../useComposerRoom";
 import { useFollowEnd } from "../useFollowEnd";
 import { ToBottom } from "./ToBottom";
-
-export type { ChannelRow } from "./ChannelRow";
 
 interface ChannelProps {
   /** The threads, oldest first: the feed draws them in that order. */
@@ -55,6 +54,10 @@ export function Channel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const footer = useRef<HTMLElement>(null);
   const [follow, setFollow] = useState(true);
+  // The clock the rows date themselves against: read once a minute rather than
+  // by each row at each draw, since what a row says only changes when the date
+  // does, and a row cannot redraw itself for a clock it does not hold.
+  const now = useTicker(true, MINUTE_MS);
   const pin = useFollowEnd({ ref: scrollRef, follow, onFollowChange: setFollow });
   // The composer floats over the feed, and the feed's foot keeps its room, so the
   // typing that grows the composer does not move the feed an inch.
@@ -66,9 +69,10 @@ export function Channel({
   /** The feed in stretches, one divider each: a row opens a new stretch when the
    *  period it belongs to is not the one before it. The rows arrive oldest
    *  first, so they are read in the order they are drawn in and no stretch has
-   *  to be looked up twice. */
+   *  to be looked up twice. The period is read against the same ticked `now` the
+   *  rows date themselves by, so the heading and the line under it turn the page
+   *  together. */
   const groups = useMemo(() => {
-    const now = Date.now();
     const stretches: { label: string; rows: ChannelRow[] }[] = [];
     for (const row of rows) {
       const label = period(row.createdAt, now);
@@ -77,7 +81,7 @@ export function Channel({
       else stretches.push({ label, rows: [row] });
     }
     return stretches;
-  }, [rows]);
+  }, [rows, now]);
 
   // The render that grew the feed is the one that pins it. A thread that arrived
   // re-attaches first: the reader may have scrolled up to read, but what is new
@@ -92,8 +96,8 @@ export function Channel({
 
   /** The divider: back to the start of the stretch it names. The section is
       taken to the top of what the feed shows, which is its content's own top
-      rather than its box's — the band above it is the strip the window's chrome
-      floats over — and the view stops following the end on the way: the reader
+      rather than its box's — the band above it is the list's own air under the
+      pane's bar — and the view stops following the end on the way: the reader
       asked for this place, not for the last thread. */
   function jumpTo(section: HTMLElement | null) {
     const el = scrollRef.current;
@@ -125,6 +129,7 @@ export function Channel({
                     key={row.chat}
                     row={row}
                     author={author}
+                    now={now}
                     onOpen={onOpen}
                     onDelete={onDelete}
                     onPin={onPin}

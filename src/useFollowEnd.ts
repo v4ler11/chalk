@@ -89,13 +89,15 @@ export function useFollowEnd({
       content arriving moves the view's contents under it, and the browser
       reports that as a scroll like any other. */
   const going = useRef(false);
-  /** The content's own height at the last pass, with the room kept at the view's
-      foot left out of it. What a pass follows is content, and nothing else is. */
+  /** The content's own height at the last pass: what the scroller holds, with the
+      scrollport's own padding left out of it. What a pass follows is content, and
+      nothing else is. */
   const seen = useRef(-1);
-  /** The room kept at the view's foot at the last pass. A pass reads the two
-      apart, since they are moved by different things: the content growing under
-      the view is what a pass follows, and the room moving under it — the composer
-      growing over the pane — is what a pass leaves alone. */
+  /** The room kept at the view's foot at the last pass, the composer's margin
+      under the scroller. A pass reads the two apart, since they are moved by
+      different things: the content growing under the view is what a pass follows,
+      and the room moving under it — the composer growing over the pane — is what a
+      pass leaves alone. */
   const kept = useRef(-1);
 
   // The state the caller holds is the one anyone outside the view writes — a
@@ -111,13 +113,6 @@ export function useFollowEnd({
     if (following.current === attached) return;
     following.current = attached;
     onFollowChange(attached);
-  }
-
-  /** The room the view's pane keeps at its foot: the space the composer floating
-   *  over it takes, plus the air under its last line. It is left out of the height
-   *  a pass follows, since it belongs to the composer rather than to the content. */
-  function room(el: HTMLElement) {
-    return parseFloat(getComputedStyle(el).paddingBottom) || 0;
   }
 
   /** One pass: holds the view at the end. */
@@ -143,15 +138,19 @@ export function useFollowEnd({
     // without changing a thing in it: taking the view to the pixel below for that
     // is the jump the reader never asked for, the one that reads as the feed
     // bouncing a moment after the composer grew. The two are told apart by reading
-    // the two facts apart — the height the content itself has, with that room left
-    // out of it, and the room itself. The room alone moving is the composer's
-    // doing, and the pass moves nothing. The content growing is followed. And
-    // neither moving is the pass that owes the reader the end, which none of the
-    // other rules would give it: a view sits within the move slack of its end with
-    // the follow still on, so nothing but this pass puts it back until the next
-    // thing grows.
-    const space = room(el);
-    const height = el.scrollHeight - space;
+    // the two facts apart — the height the content itself has, the scrollport's
+    // own padding left out of it, and the room itself, which the pane keeps as a
+    // margin under the scroller rather than padding inside it, so that a composer
+    // growing over the pane moves it and nothing of the content. The room alone
+    // moving is the composer's doing, and the pass moves nothing. The content
+    // growing is followed. And neither moving is the pass that owes the reader the
+    // end, which none of the other rules would give it: a view sits within the
+    // move slack of its end with the follow still on, so nothing but this pass puts
+    // it back until the next thing grows.
+    const style = getComputedStyle(el);
+    const space = parseFloat(style.marginBottom) || 0;
+    const height =
+      el.scrollHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
     const moved = space !== kept.current;
     const grew = height !== seen.current;
     kept.current = space;
@@ -196,17 +195,20 @@ export function useFollowEnd({
   // The view's own box changing height under it — a window resized — moves the end
   // of the view with it, and that end is not content either: a view that is
   // following goes back to it, in the frame the box changed rather than a pass
-  // later. The composer growing never reaches here: it is drawn over the pane and
-  // the pane keeps its room, so the box is the one thing a draft cannot move.
+  // later. What is recorded is the box the pane itself gives the view — its height
+  // with the room the composer floats over added back — and not the box alone: the
+  // room is a margin under the scroller and comes out of the pane, so a draft
+  // growing shrinks the box by exactly what it adds to the margin, and the pair is
+  // the one thing a draft cannot move.
   //
   // A box that *grows* needs nothing written: the browser clamps an offset left
   // past its own end as it lays the change out.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    let height = el.clientHeight;
+    let height = el.clientHeight + (parseFloat(getComputedStyle(el).marginBottom) || 0);
     const observer = new ResizeObserver(() => {
-      const now = el.clientHeight;
+      const now = el.clientHeight + (parseFloat(getComputedStyle(el).marginBottom) || 0);
       if (now === height) return;
       height = now;
       // A view the reader has taken, and a wheel still landing, are the reader's

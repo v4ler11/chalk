@@ -7,7 +7,7 @@ interface Props {
   /** The config as the window last read it: the draft starts from it, and is
    *  taken up again whenever the file changes under the page. */
   config: AppConfig;
-  /** Writes the draft, and answers with what the file now holds. */
+  /** Writes a config, and answers with what the file now holds. */
   save: (config: AppConfig) => Promise<AppConfig>;
   /** Takes up what was just written, so the window stops asking with the old one. */
   onSaved: (config: AppConfig) => void;
@@ -33,6 +33,24 @@ interface Props {
 const IDLE_MS = 700;
 
 /**
+ * The file as it is now, with the reader's own changes laid over it.
+ *
+ * A field is the reader's when the draft holds a different value for it than
+ * the file it started from; only those are taken, and every other field is left
+ * as the file has it. The file has other writers — the app's own tools among
+ * them — so a value the page never touched belongs to whoever last wrote it
+ * rather than to the copy the page read before they did.
+ */
+function merge(base: AppConfig, basis: AppConfig, draft: AppConfig): AppConfig {
+  const written = { ...base };
+  for (const key of Object.keys(draft) as (keyof AppConfig)[]) {
+    if (draft[key] === basis[key]) continue;
+    Object.assign(written, { [key]: draft[key] });
+  }
+  return written;
+}
+
+/**
  * The settings, standing in the chat's place in the window itself: the sections
  * and the form.
  *
@@ -40,7 +58,10 @@ const IDLE_MS = 700;
  * the reader has stopped, and at once when the window loses the focus or the
  * settings are left — because every field here is a fact about the file rather
  * than a form under review, and a reader who has said a thing has said it. What
- * is written is the whole draft, so the file is never half-true.
+ * is written is the file as it stands with the fields the reader changed laid
+ * over it, rather than the draft as a whole: the file has other writers — the
+ * app's own tools among them — and a draft sent whole would put back whatever
+ * they wrote while the page held an edit of its own.
  *
  * The draft is held apart from the file it came from. A write that fails is said
  * out loud and stays pending — the draft is behind the file until it lands — so
@@ -64,12 +85,16 @@ export function SettingsView({
   // Writes run one after another: two answers racing for one file would let the
   // older of them land last.
   const queue = useRef<Promise<void>>(Promise.resolve());
-  // What the way out has to write, read by a cleanup that is not a render.
-  const leaving = useRef({ draft, behind });
+  // What the page holds, for a write that is not a render: the draft the reader
+  // has, the file it started from, and the file as the window last read it. The
+  // last of the three moves under the page while the reader is typing — the
+  // app's own tools write the file too — and it is what a write lays the reader's
+  // changes over, so that what they did not touch is left as it now stands.
+  const held = useRef({ draft, file, latest: config });
 
   useEffect(() => {
-    leaving.current = { draft, behind };
-  }, [draft, behind]);
+    held.current = { draft, file, latest: config };
+  }, [draft, file, config]);
 
   // A config that changes under the page — the answer to a write of its own, or
   // the file edited by hand and read again — is taken up while the page has
@@ -80,8 +105,11 @@ export function SettingsView({
     setDraft(config);
   }, [config, draft, file]);
 
-  /** Writes one draft, and takes the file's answer up unless the page has moved on. */
-  const write = useCallback((sent: AppConfig) => {
+  /** Writes the reader's changes over the file as it now stands, and takes the
+      file's answer up unless the page has moved on. */
+  const write = useCallback((pending: AppConfig) => {
+    const { file: basis, latest: base } = held.current;
+    const sent = merge(base, basis, pending);
     queue.current = queue.current.then(async () => {
       try {
         const written = await save(sent);
@@ -90,7 +118,7 @@ export function SettingsView({
         onSaved(written);
         // The answer is the draft only while it is still the newest thing the
         // page holds; a newer draft is the next write's problem.
-        setDraft((current) => (current === sent ? written : current));
+        setDraft((current) => (current === pending ? written : current));
       } catch (e) {
         setError(String(e));
       }
@@ -125,13 +153,13 @@ export function SettingsView({
       // window rather than dropped: the reader made an edit, the file did not
       // take it, and the one place that can still say so is the pane the settings
       // were left for.
-      const { draft: last, behind: pending } = leaving.current;
-      if (!pending) return;
+      const { draft: last, file: basis, latest: base } = held.current;
+      if (last === basis) return;
       queue.current = queue.current.then(() =>
-        save(last).then(onSaved).catch((e) => onFailure?.(e)),
+        save(merge(base, basis, last)).then(onSaved).catch((e) => onFailure?.(e)),
       );
     },
-    // A cleanup is not a render: it reads what it needs from `leaving`, and the
+    // A cleanup is not a render: it reads what it needs from `held`, and the
     // two callbacks are the parent's own, stable across the page's life.
     [save, onSaved, onFailure],
   );

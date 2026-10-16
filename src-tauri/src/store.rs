@@ -72,10 +72,12 @@ ALTER TABLE chats ADD COLUMN root TEXT NOT NULL DEFAULT '';
 /// the last write is the best account of it, and their first prompt is in the
 /// transcript under a key the window writes.
 ///
-/// Run apart from the columns and without its failures raised: a database
-/// without the JSON functions still gets the columns, and a `root` left empty is
-/// a row the window draws by its title — which is the same prompt, cut to what a
-/// row holds.
+/// Run inside the step's own transaction and with its failures raised: a
+/// backfill that could not read a row would otherwise be a version claiming the
+/// row was filled when it was not, and no later launch has a step left to run.
+/// A row whose transcript does not yield a prompt is not that: its `root` is
+/// left empty, and an empty root is a row the window draws by its title — which
+/// is the same prompt, cut to what a row holds.
 const V5_BACKFILL: &str = "
 UPDATE chats SET created_at = updated_at WHERE created_at = 0;
 UPDATE chats SET root = COALESCE(
@@ -334,29 +336,22 @@ impl Store {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(err)?;
         if version < 1 {
-            conn.execute_batch(V1).map_err(err)?;
-            conn.pragma_update(None, "user_version", 1).map_err(err)?;
+            step(&conn, 1, V1, None)?;
         }
         if version < 2 {
-            conn.execute_batch(V2).map_err(err)?;
-            conn.pragma_update(None, "user_version", 2).map_err(err)?;
+            step(&conn, 2, V2, None)?;
         }
         if version < 3 {
-            conn.execute_batch(V3).map_err(err)?;
-            conn.pragma_update(None, "user_version", 3).map_err(err)?;
+            step(&conn, 3, V3, None)?;
         }
         if version < 4 {
-            conn.execute_batch(V4).map_err(err)?;
-            conn.pragma_update(None, "user_version", 4).map_err(err)?;
+            step(&conn, 4, V4, None)?;
         }
         if version < 5 {
-            conn.execute_batch(V5_COLUMNS).map_err(err)?;
-            let _ = conn.execute_batch(V5_BACKFILL);
-            conn.pragma_update(None, "user_version", 5).map_err(err)?;
+            step(&conn, 5, V5_COLUMNS, Some(V5_BACKFILL))?;
         }
         if version < 6 {
-            conn.execute_batch(V6).map_err(err)?;
-            conn.pragma_update(None, "user_version", 6).map_err(err)?;
+            step(&conn, 6, V6, None)?;
         }
         Ok(())
     }
@@ -550,6 +545,55 @@ impl Store {
             .map_err(err)?;
         Ok(())
     }
+}
+
+/// One step towards the current schema: the statements that make it up, whatever
+/// the step has to backfill, and the `user_version` that marks it done — all
+/// inside one transaction.
+///
+/// One transaction rather than a run of statements, because the version and the
+/// schema it names have to move together. `execute_batch` commits each statement
+/// as it goes, so a launch that died between a step's `ALTER TABLE` and its
+/// version bump used to leave a file at the old version with the new column
+/// already in it, and the step, re-run on every launch after that, failed on the
+/// column it had itself added — a store that never opens again, which is a
+/// history that is lost without being gone.
+///
+/// The statements run one at a time for the same reason: a batch stops at the
+/// first failure, and a step re-run over its own earlier work has to finish the
+/// rest of itself rather than stop beside it.
+fn step(
+    conn: &Connection,
+    version: i64,
+    schema: &str,
+    backfill: Option<&str>,
+) -> Result<(), String> {
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    for statement in schema.split(';') {
+        if let Err(e) = tx.execute_batch(statement) {
+            if !already_there(&e) {
+                return Err(err(e));
+            }
+        }
+    }
+    if let Some(backfill) = backfill {
+        tx.execute_batch(backfill).map_err(err)?;
+    }
+    tx.pragma_update(None, "user_version", version).map_err(err)?;
+    tx.commit().map_err(err)
+}
+
+/// Whether SQLite is refusing a statement of a step because what it adds is
+/// already in the file.
+///
+/// It says so in words, and that is the only place it says it: there is no error
+/// code for a column that is already there. Every table and column here is
+/// written by a step and by nothing else, so the only thing a step can find
+/// already there is its own earlier attempt — a version left behind by a launch
+/// that died between a step's statements and the bump that names them.
+fn already_there(e: &rusqlite::Error) -> bool {
+    let refusal = e.to_string();
+    refusal.contains("duplicate column name") || refusal.contains("already exists")
 }
 
 /// The store's errors are strings on their way to a log line and a failed

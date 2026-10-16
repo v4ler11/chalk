@@ -466,6 +466,13 @@ svg.lucide {
   font-size: 12px;
 }
 
+/* The mark in it — the Plug beside the server's name — at the size the chip's
+   own type is, as the pill's marks are at the pill's. */
+.chip svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* ------------------------------------------------------------------ fields */
 
 /* A field: its name above the control it names, which is how every form in the
@@ -675,20 +682,22 @@ svg.lucide {
   padding: 3px;
 }
 
-/* What stands in it is the smallest of the app's button sizes: the pill is a
-   row's own offer rather than a control in a bar, so the box comes down and the
-   mark with it — one size for the pill wherever it is worn, since it is one
+/* The smallest of the app's button sizes: the pill is a row's own offer rather
+   than a control in a bar, and the same pill stands under an answer, a quiet
+   offer below the words — one size wherever it is worn, since it is one
    component and its two corners must not come to disagree.
    
    Only the icon actions: the delete question is a pair of buttons with words on
    them, and words need the width they are written at. */
-.menu--row .btn--icon-sm {
+.menu--row .btn--icon-sm,
+.msg-actions .btn--icon-sm {
   width: 18px;
   height: 18px;
   border-radius: 5px;
 }
 
-.menu--row .btn--icon-sm svg.lucide {
+.menu--row .btn--icon-sm svg.lucide,
+.msg-actions .btn--icon-sm svg.lucide {
   width: 13px;
   height: 13px;
 }

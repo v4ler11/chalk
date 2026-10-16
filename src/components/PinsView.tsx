@@ -1,5 +1,6 @@
 import { Pin } from "lucide-react";
 import { ChannelRowItem, type ChannelRow } from "./ChannelRow";
+import { MINUTE_MS, useTicker } from "../timer";
 
 interface Props {
   /** The pinned threads, most recently pinned first, as the channel's own rows:
@@ -8,6 +9,9 @@ interface Props {
   /** What the app calls the person using it: a thread is what they posted, so the
    *  mark and the name a row wears are theirs. */
   author: string;
+  /** What the pane has to say about the last thing that failed, drawn where the
+   *  feed would draw it. */
+  error?: string;
   onOpen: (chat: number) => void;
   onDelete: (chat: number) => void;
   onPin: (chat: number, pinned: boolean) => void;
@@ -27,31 +31,42 @@ interface Props {
  * and the mark would be the pane repeating itself forty times. The pill is still
  * offered, since taking a pin off is what this list is for.
  */
-export function PinsView({ rows, author, onOpen, onDelete, onPin }: Props) {
+export function PinsView({ rows, author, error, onOpen, onDelete, onPin }: Props) {
+  // The same minute the channel ticks: the rows date themselves against it, and
+  // the pane reads it too so a row's own line follows the clock here as there.
+  const now = useTicker(true, MINUTE_MS);
+
   if (rows.length === 0) {
     return (
-      <div className="pins-empty">
-        <Pin />
-        <p className="json-note">
-          Nothing is pinned yet. Hover a thread in the channel and pin it, and it will be here.
-        </p>
-      </div>
+      <>
+        <div className="pins-empty">
+          <Pin />
+          <p className="json-note">
+            Nothing is pinned yet. Hover a thread in the channel and pin it, and it will be here.
+          </p>
+        </div>
+        {error != null && error !== "" && <div className="channel-error">Error: {error}</div>}
+      </>
     );
   }
 
   return (
-    <div className="channel-list">
-      {rows.map((row) => (
-        <ChannelRowItem
-          key={row.chat}
-          row={row}
-          author={author}
-          onOpen={onOpen}
-          onDelete={onDelete}
-          onPin={onPin}
-          markPinned={false}
-        />
-      ))}
-    </div>
+    <>
+      <div className="channel-list">
+        {rows.map((row) => (
+          <ChannelRowItem
+            key={row.chat}
+            row={row}
+            author={author}
+            now={now}
+            onOpen={onOpen}
+            onDelete={onDelete}
+            onPin={onPin}
+            markPinned={false}
+          />
+        ))}
+      </div>
+      {error != null && error !== "" && <div className="channel-error">Error: {error}</div>}
+    </>
   );
 }

@@ -34,6 +34,10 @@ let startPromise: Promise<void> | null = null;
 /** What the feed does when a run names a chat the store has not heard of. */
 let refreshChats: (() => void) | null = null;
 
+/** What the pins list does when a run moves: the same rows as the feed's, read
+ *  again for the moment under their counts, which the run does not carry. */
+let refreshPins: (() => void) | null = null;
+
 function emit() {
   view = new Map(entries);
   for (const listener of listeners) listener();
@@ -51,6 +55,12 @@ export function getRuns(): ReadonlyMap<number, RunEntry> {
  */
 export function setChatsRefresher(refresh: (() => void) | null) {
   refreshChats = refresh;
+}
+
+/** Registers what reads the pins list again when a run moves, beside the feed's
+ *  own refresher for the same reason. */
+export function setPinsRefresher(refresh: (() => void) | null) {
+  refreshPins = refresh;
 }
 
 /**
@@ -122,12 +132,15 @@ async function refresh(): Promise<void> {
  * never seen: what the run does not carry is the moment the thread was last
  * answered, which is what the row says under its count, and a thread answered
  * again would go on naming the first answer's time if the list were left alone.
+ * The pins list is those same rows from the other side, so it is read again with
+ * it.
  */
 function changed(summary: RunSummary) {
   const entry = entries.get(summary.chat);
   entries.set(summary.chat, merged(summary.chat, summary));
   if (entry?.kind === "snapshot") void loadRun(summary.chat).catch(() => {});
   refreshChats?.();
+  refreshPins?.();
   emit();
 }
 

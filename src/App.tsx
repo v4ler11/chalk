@@ -9,6 +9,7 @@ import { ChatNav } from "./components/ChatNav";
 import { ChatPane } from "./components/ChatPane";
 import { Composer } from "./components/Composer";
 import { JsonView, JSON_SECTIONS, type JsonTab } from "./components/JsonView";
+import { closeMenus } from "./components/Menu";
 import { SectionNav } from "./components/SectionNav";
 import { PinsView } from "./components/PinsView";
 import { SettingsView } from "./components/SettingsView";
@@ -35,7 +36,9 @@ function App() {
   const fail = useCallback((e: unknown) => setError(String(e)), []);
 
   // The composer's field. The channel and a thread each draw their own composer,
-  // but only one is ever mounted, so the caret can be handed to whichever is.
+  // and both stay mounted — the channel's hidden under a thread or a mode — so
+  // the caret is handed to whichever is on screen, and the spare below takes it
+  // while the channel's is put away.
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const { config, setConfig } = useConfig(fail);
@@ -108,7 +111,10 @@ function App() {
   // The window's shortcuts, beside the buttons that do the same thing. Escape is
   // the taken-over pane's own: it leaves the settings or the JSON view first,
   // and otherwise returns to the channel. ⌘J is the JSON view, and ⌘, the
-  // settings — the command the platform puts on that key.
+  // settings — the command the platform puts on that key. Every one of these
+  // moves the view, and a menu hangs from the control that opened it: `closeMenus`
+  // gives the open ones up so none is left standing over the pane that replaced
+  // its control.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       // A control that has already taken the key — the composer's Escape giving
@@ -118,12 +124,15 @@ function App() {
       if (event.key === "Escape") {
         if (conversation.settingsView) {
           event.preventDefault();
+          closeMenus();
           conversation.leaveSettings();
         } else if (conversation.jsonView) {
           event.preventDefault();
+          closeMenus();
           conversation.closeJson();
         } else if (threadOpen) {
           event.preventDefault();
+          closeMenus();
           conversation.backToChannel();
         }
         return;
@@ -133,9 +142,11 @@ function App() {
       if (key === "j" && threadOpen) {
         // The JSON view belongs to a thread: a channel has no request to show.
         event.preventDefault();
+        closeMenus();
         conversation.showJson(!conversation.jsonView);
       } else if (key === ",") {
         event.preventDefault();
+        closeMenus();
         conversation.toggleSettings();
       }
     }
@@ -159,9 +170,15 @@ function App() {
   const nav = (thread: boolean, mode?: { title: string; onClose: () => void }) => (
     <ChatNav
       thread={thread}
-      onBack={conversation.backToChannel}
+      onBack={() => {
+        closeMenus();
+        conversation.backToChannel();
+      }}
       jsonView={conversation.jsonView}
-      onJsonView={conversation.showJson}
+      onJsonView={(on) => {
+        closeMenus();
+        conversation.showJson(on);
+      }}
       {...mode}
     />
   );
@@ -182,9 +199,18 @@ function App() {
           view={
             conversation.settingsView ? "settings" : conversation.pinsView ? "pins" : "channel"
           }
-          onChannel={conversation.showChannel}
-          onPins={() => conversation.showPins(true)}
-          onSettings={conversation.toggleSettings}
+          onChannel={() => {
+            closeMenus();
+            conversation.showChannel();
+          }}
+          onPins={() => {
+            closeMenus();
+            conversation.showPins(true);
+          }}
+          onSettings={() => {
+            closeMenus();
+            conversation.toggleSettings();
+          }}
         />
 
         <main className="main">
@@ -199,7 +225,10 @@ function App() {
                 rows={conversation.rows}
                 author={conversation.author}
                 error={error}
-                onOpen={conversation.openThread}
+                onOpen={(chat) => {
+                  closeMenus();
+                  conversation.openThread(chat);
+                }}
                 onDelete={conversation.deleteChat}
                 onPin={conversation.pin}
                 composer={
@@ -250,7 +279,11 @@ function App() {
                   <PinsView
                     rows={conversation.pinRows}
                     author={conversation.author}
-                    onOpen={conversation.openThread}
+                    error={error}
+                    onOpen={(chat) => {
+                      closeMenus();
+                      conversation.openThread(chat);
+                    }}
                     onDelete={conversation.deleteChat}
                     onPin={conversation.pin}
                   />
@@ -316,7 +349,13 @@ function App() {
                 on this one. */}
             {conversation.settingsView ? (
               <div className="pane">
-                {nav(false, { title: "Settings", onClose: conversation.leaveSettings })}
+                {nav(false, {
+                  title: "Settings",
+                  onClose: () => {
+                    closeMenus();
+                    conversation.leaveSettings();
+                  },
+                })}
                 {config ? (
                   <SettingsView
                     config={config}
@@ -334,7 +373,13 @@ function App() {
               </div>
             ) : threadOpen && conversation.jsonView ? (
               <div className="pane">
-                {nav(false, { title: "JSON", onClose: conversation.closeJson })}
+                {nav(false, {
+                  title: "JSON",
+                  onClose: () => {
+                    closeMenus();
+                    conversation.closeJson();
+                  },
+                })}
                 <div className="settings-body">
                   <SectionNav
                     label="JSON sections"

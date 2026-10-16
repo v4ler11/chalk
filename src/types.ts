@@ -227,8 +227,19 @@ export interface UiMessage extends ChatMessage {
    * provider's prompt cache has to find to be able to reuse any of it.
    */
   sentAt?: number;
-  /** Wall-clock ms from sending the request to the model's first token. */
+  /** Wall-clock ms from the round's start to the model's first token. */
   waitMs?: number;
+  /**
+   * When the model's first token arrived, in epoch milliseconds: the moment the
+   * answer began speaking, which is what its head is timed with.
+   *
+   * Absolute, because `waitMs` is not enough to work it back: the wait runs from
+   * the round's start, and a round that waited for a place among the requests
+   * began later than the prompt was posted, so the sum lands that much before the
+   * moment the live row was showing. Absent on an answer written before the run
+   * kept it, which is headed from the wait instead.
+   */
+  firstTokenAt?: number;
   /** Wall-clock ms the model spent thinking: from that first token to the answer. */
   thinkingMs?: number;
   /**

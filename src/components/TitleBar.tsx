@@ -4,10 +4,10 @@ import { TrafficLights } from "./WindowControls";
  * The window's own title bar: the controls, drawn in the webview because the
  * window is frameless, and the region that drags it.
  *
- * It carries the window's own controls and nothing else. The settings moved to
- * the panel's three-dots and the way back to the feed to the bar a thread draws,
- * so that both travel with the pane each belongs to. The panel beneath reserves
- * the same strip, so the two read as one band.
+ * It carries the window's own controls and nothing else. The settings are the
+ * foot row of the window's own column and the way back to the feed is on the bar
+ * a thread draws, so that both travel with the column or the pane each belongs
+ * to. The panel beneath reserves the same strip, so the two read as one band.
  */
 export function TitleBar() {
   return (

@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
  * Whether the row this is used in is being removed.
  *
  * Escape gives the question up from wherever the keyboard is, the way it gives
- * up a rewrite in the composer and a rename in a row's own field.
+ * up a rewrite in the composer.
  */
 export function useDeleteQuestion() {
   const [asking, setAsking] = useState(false);

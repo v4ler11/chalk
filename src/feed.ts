@@ -12,6 +12,11 @@ export type ChannelRow = {
   chat: number;
   /** The message that opened the thread, as it was typed. */
   root: string;
+  /** What the row draws when `root` is empty — the prompt cut to what a row
+   *  holds — since a thread opened with pictures alone leaves `root` with no
+   *  words. Every row the panes build carries it; a row built by hand may leave
+   *  it off. */
+  title?: string;
   /** Unix time in ms the thread was opened, which orders the feed. */
   createdAt: number;
   /** How many messages the thread holds after its opening one. */
@@ -97,6 +102,7 @@ export function buildRows(
     .map((chat) => ({
       chat: chat.id,
       root: chat.root,
+      title: chat.title,
       createdAt: chat.createdAt,
       images: chat.images,
       model: chat.model,

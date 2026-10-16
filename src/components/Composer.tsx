@@ -189,12 +189,23 @@ export function Composer({
   // is still under its own cap, and the box then has nothing to scroll: the
   // field clips the lines past its end, out of reach until the next keystroke.
   // The height written is the field's own scroll height, taken from the box that
-  // carries it, and this is its one copy — both fits below read it.
+  // carries it, and this is its one copy — both fits below read it. The box is
+  // the thing that scrolls, so collapsing the field to take the measure collapses
+  // the box with it and the browser drops the box's offset back to its top; where
+  // the box was read is taken first and put back after, so a draft past the cap
+  // is left where the reader had it rather than thrown to its first line on the
+  // keystroke that re-measured it. A box read at its end goes back to its end —
+  // which is where typing at the end of a long draft leaves it, and what keeps
+  // the words that grew under the caret's eye.
   const fitDraft = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
+    const box = el.parentElement;
+    const top = box ? box.scrollTop : 0;
+    const atEnd = box ? box.scrollHeight - top - box.clientHeight < 1 : false;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
+    if (box) box.scrollTop = atEnd ? box.scrollHeight : top;
   }, [textareaRef]);
 
   useLayoutEffect(() => {
@@ -355,9 +366,12 @@ export function Composer({
             placeholder: the placeholder is the first thing a draft erases, and
             this is what the reader wants to know before they have typed
             anything — and after, while the button they would reach for the
-            mouse to press is already under their eye. */}
+            mouse to press is already under their eye. It stands only while the
+            field can take it: a run disables the field, and a disabled field
+            takes no key, so the chip leaves with the shortcut rather than
+            naming one that cannot fire beside the button that has become Stop. */}
         <div className="composer-send" ref={sendRef}>
-          <span className="composer-hint">{`${MOD}+Enter`}</span>
+          {!streaming && <span className="composer-hint">{`${MOD}+Enter`}</span>}
           {/* The button holds its place whether or not there is a draft — an
               empty one sends nothing — and the animation marks the swap between
               Send and Stop when the role changes, not the button's arrival. It
@@ -396,7 +410,7 @@ export function Composer({
         <div className="composer-tools">
           {/* Each tool names itself under the pointer: a tip of the app's own,
               since the window draws its own chrome and has no native ones. */}
-          <Hint label="Attach files">
+          <Hint label="Attach files" decorative>
             <button
               className="btn btn--bare"
               aria-label="Attach files"
@@ -422,7 +436,7 @@ export function Composer({
               turns into the pill. A level in force is a pill of two buttons:
               the brain gives the level up, and the level beside it opens the
               menu, which is also where off is. */}
-          <Hint label="Reasoning">
+          <Hint label="Reasoning" decorative>
             <div
               ref={levelRef}
               className={`pill${current.level === "" ? "" : " pill--on"}`}
@@ -458,7 +472,7 @@ export function Composer({
               list. Either way the choice is the chat's, written with it, so it
               is made here rather than in the settings, where the servers
               themselves are edited. */}
-          <Hint label="Tools">
+          <Hint label="Tools" decorative>
             <div ref={toolsRef} className={`pill${offered.length > 0 ? " pill--on" : ""}`}>
               {offered.length > 0 ? (
                 <button

@@ -137,8 +137,14 @@ button.mcp-row-name::after {
   transform: translateY(-50%);
 }
 
+/* The mark steps aside for the bin, and only where the bin itself is drawn: the
+   pointer on the row, the question up, or the keyboard having reached the bin —
+   the three conditions the shared sheet reveals the actions under. Focus on
+   anything else in the row, the name included, is not one of them: the mark and
+   the bin are one thing at a time, and a name reached by the keyboard would
+   otherwise leave the row wearing neither. */
 .mcp-row:hover .mcp-row-off,
-.mcp-row:focus-within .mcp-row-off,
+.mcp-row:has(.row-actions:focus-within) .mcp-row-off,
 .mcp-row.confirming .mcp-row-off {
   opacity: 0;
 }

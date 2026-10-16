@@ -1,11 +1,14 @@
 /* ---------------------------------------------------------------------- row */
 
-/* The end of a list row, where the row is removed: one drawing for every list
-   with rows worth removing, so the feed's threads and the settings' protocol
-   servers cannot come to disagree about it. A list says `row` on its rows; the
-   question the row asks is `RowDelete`'s. How a row dims while its question is
-   up belongs to the list that draws the words, which is why only the servers'
-   name is dimmed here and the feed's is dimmed in its own sheet. */
+/* The end of a list row, where the row is removed: what `RowDelete` draws for
+   the settings' two lists with rows worth removing — the protocol servers and
+   the models — one drawing between them, so the two cannot come to disagree
+   about it. The feed's threads are not one of them: a thread ends in a
+   `RowMenu`, drawn and dismissed in the channel's own sheet, and the two are
+   content to differ. A list says `row` on its rows; the question the row asks is
+   `RowDelete`'s. How a row dims while its question is up belongs to the list
+   that draws the words, which is why only the servers' name is dimmed here and
+   the models' is dimmed in their own sheet. */
 
 /* While the question is up the row's own words step back, dimmed rather than
    hidden, so the two answers read as the row's business. The name is clipped

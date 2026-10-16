@@ -136,7 +136,19 @@ export const ChatMessage = memo(function ChatMessage({
   useEffect(() => {
     const el = textRef.current;
     if (!el || open) return;
+    // The fold is a height the bubble lends the text rather than one the text
+    // has, so what the fold comes to is a question about the element's own box,
+    // and the render that drew the text is not the only thing that changes the
+    // answer: a window narrowed under a drawn prompt re-wraps it past the fold
+    // with nothing here to run again, and the rest of the prompt would sit
+    // behind the clamp with no control to open it. The box narrows with the
+    // bubble, so the box moving is what asks again — measured for the render in
+    // hand, and again for every change the observer reports after it. The pixel
+    // of slack is the round-off between the two numbers rather than content.
+    const observer = new ResizeObserver(() => setFolded(el.scrollHeight > el.clientHeight + 1));
+    observer.observe(el);
     setFolded(el.scrollHeight > el.clientHeight + 1);
+    return () => observer.disconnect();
   }, [content, open]);
 
   // What a tool answered is not something the model said: it is what came back

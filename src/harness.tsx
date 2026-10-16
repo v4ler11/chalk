@@ -17,6 +17,7 @@ import { SectionNav } from "./components/SectionNav";
 import { Sidebar } from "./components/Sidebar";
 import { ToolApproval } from "./components/ToolApproval";
 import { installTheme } from "./theme";
+import { MINUTE_MS, useTicker } from "./timer";
 import { settingsModel } from "./conversation";
 import type { ChannelRow } from "./feed";
 import { buildRows } from "./feed";
@@ -518,6 +519,10 @@ const ARRIVING: Usage = {
 function installBackend() {
   const state = {
     servers: MCP_SERVERS,
+    // The settings the window saved, which `get_config` answers from: a save has
+    // to leave the next read saying what was written, or a driver checking the
+    // write would be told the old value.
+    config: APP_CONFIG,
     // The store's history, which the reads below answer from and a pin and a
     // delete write to: a press has to leave the next read saying something else,
     // or the row and the pane it feeds would stand still.
@@ -565,9 +570,10 @@ function installBackend() {
         case "plugin:event|unlisten":
           return null;
         case "get_config":
-          return APP_CONFIG;
+          return state.config;
         case "save_config":
-          return args?.config;
+          state.config = (args?.config as AppConfig) ?? state.config;
+          return state.config;
         case "list_chats":
           return state.chats;
         case "list_pins":
@@ -591,9 +597,43 @@ function installBackend() {
           return summaries();
         case "run_state":
           return chat === undefined ? null : state.runs.get(chat) ?? null;
-        case "chat_set":
+        // What a thread is sent with next time: written into the row the reads
+        // above answer from and the run the open thread reads, since a chat with
+        // a run is read through the run — leave either out and the choice springs
+        // back on the next read. A thread that is answering is refused, the way
+        // Rust refuses it: its row is written whole by its run.
+        case "chat_set": {
+          const run = chat === undefined ? undefined : state.runs.get(chat);
+          if (run && (run.status === "running" || run.status === "awaiting")) {
+            throw new Error("this thread is still answering");
+          }
+          if (chat !== undefined) {
+            state.chats = state.chats.map((row) =>
+              row.id === chat
+                ? {
+                    ...row,
+                    model: (args?.model as string) ?? row.model,
+                    reasoning: (args?.reasoning as string) ?? row.reasoning,
+                  }
+                : row,
+            );
+          }
+          if (run && chat !== undefined) {
+            state.runs.set(chat, {
+              ...run,
+              model: (args?.model as string) ?? run.model,
+              reasoning: (args?.reasoning as string) ?? run.reasoning,
+              servers: args?.servers !== undefined ? (args.servers as string[] | null) : run.servers,
+            });
+            announce(chat);
+          }
           return null;
+        }
+        // Stop: whatever arrived stays as the answer — the held partial
+        // committed the way a finished turn commits it — so the row stops saying
+        // the thread is answering.
         case "run_stop":
+          if (chat !== undefined) commit(chat);
           return null;
         case "mcp_servers":
           return state.servers;
@@ -632,12 +672,55 @@ function installBackend() {
     if (summary) emit("run-changed", summary);
   }
 
+  /** The answer committed, as the backend reports it: the partial goes, the
+   *  message it became is in the transcript — with the usage it was reported
+   *  with, which is what keeps a settled answer's price on its own row, and the
+   *  moment its first token arrived, which is what heads it — and the summary
+   *  moves. A stop commits the same way, which is why it is not the driver's
+   *  alone. */
+  function commit(chat: number) {
+    const held = state.runs.get(chat);
+    const partial = held?.partial;
+    if (!held || !partial) return;
+    state.runs.set(chat, {
+      ...held,
+      status: "idle",
+      replies: held.replies + 1,
+      messages: [
+        ...held.messages,
+        {
+          role: "assistant",
+          content: partial.answer,
+          reasoning: partial.reasoning,
+          waitMs: 900,
+          thinkingMs: partial.thinkingMs ?? 0,
+          // The moment the run began speaking, absolute, written only when it
+          // did: the wait alone cannot work it back, since a round that queued
+          // for a place began later than the prompt was posted.
+          ...(partial.firstTokenAt != null ? { firstTokenAt: partial.firstTokenAt } : {}),
+          ...(partial.usage ? { usage: partial.usage } : {}),
+        },
+      ],
+      partial: null,
+    });
+    emit("run-delta", { chat, partial: null });
+    announce(chat);
+  }
+
   return {
     emit,
     asked: () => [...asked],
     listening: () => [...listeners.keys()],
-    config: APP_CONFIG,
-    chats: APP_CHATS,
+    /** The settings as the backend holds them: what a save wrote is what a
+     *  driver reads back here. */
+    get config() {
+      return state.config;
+    },
+    /** The history as the store holds it: the same rows a pin, a delete or a
+     *  settings write leaves behind, since the reads answer from them. */
+    get chats() {
+      return state.chats;
+    },
     snapshot: (chat: number) => state.runs.get(chat) ?? null,
     /** One report, as an arriving stream makes it: the answer so far, and what
      *  the provider has reported about it — the usage is what a run carries from
@@ -666,34 +749,7 @@ function installBackend() {
       if (starting) announce(chat);
       emit("run-delta", { chat, partial: state.runs.get(chat)?.partial ?? null });
     },
-    /** The answer committed, as the backend reports it: the partial goes, the
-     *  message it became is in the transcript — with the usage it was reported
-     *  with, which is what keeps a settled answer's price on its own row — and
-     *  the summary moves. */
-    commit: (chat: number) => {
-      const held = state.runs.get(chat);
-      const partial = held?.partial;
-      if (!held || !partial) return;
-      state.runs.set(chat, {
-        ...held,
-        status: "idle",
-        replies: held.replies + 1,
-        messages: [
-          ...held.messages,
-          {
-            role: "assistant",
-            content: partial.answer,
-            reasoning: partial.reasoning,
-            waitMs: 900,
-            thinkingMs: partial.thinkingMs ?? 0,
-            ...(partial.usage ? { usage: partial.usage } : {}),
-          },
-        ],
-        partial: null,
-      });
-      emit("run-delta", { chat, partial: null });
-      announce(chat);
-    },
+    commit,
     /** A turn that failed: the partial is dropped with nothing committed in its
      *  place, which takes a whole answer out of the thread at once. */
     fail: (chat: number, message = "the provider refused the request") => {
@@ -721,6 +777,10 @@ function Harness() {
   // list it opens can both be looked at.
   const [pinsOpen, setPinsOpen] = useState(false);
   const [config, setConfig] = useState<AppConfig>(() => ({ ...APP_CONFIG }));
+  // The moment the feed's rows date themselves against, off the pane's own
+  // minute ticker: a row reads the clock through this rather than by itself, or
+  // it would say "today" past midnight and never be redrawn.
+  const now = useTicker(true, MINUTE_MS);
 
   Object.assign(window, { events: () => events });
   Object.assign(window, { setEditing });
@@ -798,6 +858,7 @@ function Harness() {
                 key={row.chat}
                 row={row}
                 author="valerii"
+                now={now}
                 onOpen={(chat) => setEvents((e) => [...e, `open ${chat}`])}
                 onDelete={(chat) => setEvents((e) => [...e, `delete ${chat}`])}
                 onPin={(chat, pinned) => {

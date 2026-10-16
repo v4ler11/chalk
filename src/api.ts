@@ -24,7 +24,7 @@ import type { LogEntry } from "./logs";
 export const getConfig = () => invoke<AppConfig>("get_config");
 export const saveConfig = (config: AppConfig) => invoke<AppConfig>("save_config", { config });
 
-/** The history, most recently written first. */
+/** The history, most recently made first. */
 export const listChats = () => invoke<ChatSummary[]>("list_chats");
 /** The pictures a chat's opening prompt was posted with, as the data URLs they
  *  were sent as. Asked for by the rows that have any, when they are drawn. */

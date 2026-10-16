@@ -1,8 +1,7 @@
 /**
- * FNV-1a over a name, for the two things the app derives from one rather than
- * storing: the colour of a face, and the shape of a conversation's wave. A name
- * always maps to the same number, so the same person wears the same circle
- * everywhere, and a row keeps its shape across renders.
+ * FNV-1a over a name, for the one thing the app derives from one rather than
+ * storing: the colour of a face. A name always maps to the same number, so the
+ * same person wears the same circle everywhere.
  */
 export function hashName(text: string): number {
   let hash = 2166136261;

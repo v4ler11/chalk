@@ -32,6 +32,13 @@ function firstLine(text: string): string {
  */
 const pictures = new Map<number, string[]>();
 
+/** Drops a thread's kept pictures when the thread goes: a reader who has
+ *  scrolled past a row with pictures in it would otherwise hold those data URLs
+ *  for the window's life, long after the thread itself is gone. */
+export function forgetPictures(chat: number): void {
+  pictures.delete(chat);
+}
+
 /** The pictures a row draws, read on the first draw that has a count to read. */
 function usePictures(chat: number, count: number): string[] {
   const [images, setImages] = useState<string[]>(() => pictures.get(chat) ?? []);
@@ -82,6 +89,11 @@ interface Props {
   row: ChannelRow;
   /** What the channel calls the person whose prompt this is. */
   author: string;
+  /** The moment the row reads its times against, off a ticker in the pane: the
+   *  date a row says is read from the clock, so a row left reading `Date.now()`
+   *  itself would say "today" past midnight and never be redrawn to say
+   *  otherwise — its own fields have not moved. */
+  now: number;
   onOpen: (chat: number) => void;
   onDelete: (chat: number) => void;
   /** Pins the thread this row is, or takes the pin off it. */
@@ -108,16 +120,21 @@ interface Props {
  * own words where the message is — so the row that is about to go is the one
  * asking, and a pointer that wanders off it leaves a question still legible.
  *
- * Memoized on the row's own fields: the window hands a fresh rows array, and
- * fresh row objects, on every run event, so the default shallow compare would
- * redraw the whole feed for one thread's status. A row draws nothing but those
- * fields, so a row whose fields are unchanged is left alone.
+ * Memoized on the row's own fields and the clock it is handed: the window gives
+ * a fresh rows array, and fresh row objects, on every run event, so the default
+ * shallow compare would redraw the whole feed for one thread's status. A row
+ * draws nothing but those fields and that `now`, so a row whose fields are
+ * unchanged is left alone until the minute it dates itself by moves.
  */
 export const ChannelRowItem = memo(
-  function ChannelRowItem({ row, author, onOpen, onDelete, onPin, markPinned = true }: Props) {
+  function ChannelRowItem({ row, author, now, onOpen, onDelete, onPin, markPinned = true }: Props) {
     const { asking, ask, giveUp } = useDeleteQuestion();
     const status = statusLine(row);
     const images = usePictures(row.chat, row.images);
+    // The words the row is named by: the prompt it was opened with, or — when
+    // that was pictures alone and left `root` with no words — the title the
+    // list keeps of it, so the row is not a blank line with an empty tooltip.
+    const shown = row.root !== "" ? row.root : row.title ?? "";
     // Whether the thread is pinned, which the pill reads; and whether that is
     // drawn, which the pane the row is in decides.
     const isPinned = row.pinnedAt > 0;
@@ -127,7 +144,6 @@ export const ChannelRowItem = memo(
     // is thinking, waiting on the user or failed is saying something else, and
     // neither is said beside that.
     const answered = status.tone === "replies";
-    const now = Date.now();
     // A row being removed wears the open thread's treatment, so the question
     // reads as the row's own and not as a stray line in the feed.
     const lit = row.active || asking;
@@ -164,7 +180,7 @@ export const ChannelRowItem = memo(
               it keeps. Asking a row anything moves nothing in it. */}
           <div className="channel-message">
             <button className="channel-open" onClick={() => onOpen(row.chat)}>
-              <span className="channel-root">{row.root}</span>
+              <span className="channel-root">{shown}</span>
             </button>
             {asking && <span className="channel-ask">Delete this thread?</span>}
           </div>
@@ -221,7 +237,7 @@ export const ChannelRowItem = memo(
             <>
               <button
                 className={`btn btn--quiet btn--icon-sm row-menu-action${isPinned ? " on" : ""}`}
-                title={isPinned ? `Unpin "${firstLine(row.root)}"` : `Pin "${firstLine(row.root)}"`}
+                title={isPinned ? `Unpin "${firstLine(shown)}"` : `Pin "${firstLine(shown)}"`}
                 aria-label={isPinned ? "Unpin thread" : "Pin thread"}
                 onClick={() => onPin(row.chat, !isPinned)}
               >
@@ -229,7 +245,7 @@ export const ChannelRowItem = memo(
               </button>
               <button
                 className="btn btn--quiet btn--icon-sm row-menu-action"
-                title={`Delete "${firstLine(row.root)}"`}
+                title={`Delete "${firstLine(shown)}"`}
                 aria-label="Delete thread"
                 onClick={ask}
               >
@@ -242,8 +258,10 @@ export const ChannelRowItem = memo(
     );
   },
   (before, after) =>
+    before.now === after.now &&
     before.row.chat === after.row.chat &&
     before.row.root === after.row.root &&
+    before.row.title === after.row.title &&
     before.row.createdAt === after.row.createdAt &&
     before.row.replies === after.row.replies &&
     before.row.mine === after.row.mine &&

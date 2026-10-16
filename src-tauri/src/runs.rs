@@ -54,9 +54,9 @@ pub(crate) const LOAD_TOOL_NAME: &str = "load_lazy_mcp";
 /// done in silence, so the model can say why it wanted it or answer without it.
 pub(crate) const DECLINED: &str = "The user declined to run this tool.";
 
-/// Where a chat's turn stands. `Idle` is also where a run that finished sits:
-/// what it did is in the transcript, and how many answers it left there is what
-/// a list counts.
+/// Where a chat's turn stands. `Idle` is also where a chat the backend is not
+/// answering stands: what it did is in the transcript, and how many answers it
+/// left there is what a list counts.
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum Status {
@@ -216,9 +216,8 @@ impl Runs {
         self.runs.lock().insert(run.chat, run);
     }
 
-    /// Every run there is, going or finished — a finished one is kept so that
-    /// the transcript it holds is the one its chat is read from until the
-    /// window's next write.
+    /// Every run there is, which is the ones with a turn to answer for: a run
+    /// whose turn is over has been let go, and what it did is its row.
     fn all(&self) -> Vec<Arc<Run>> {
         let mut runs: Vec<Arc<Run>> = self.runs.lock().values().cloned().collect();
         runs.sort_by_key(|run| run.chat);
@@ -226,7 +225,9 @@ impl Runs {
     }
 
     /// Drops a chat's run, stopping it if it is going: a chat that is no longer
-    /// there has nothing left to answer.
+    /// there has nothing left to answer, and a turn that is over has nothing
+    /// left to hold — what it did is in its row by now, and a run kept for it is
+    /// its whole transcript kept for the life of the process.
     pub(crate) fn forget(&self, chat: i64) {
         if let Some(run) = self.runs.lock().remove(&chat) {
             run.abort();
@@ -432,53 +433,24 @@ impl Run {
         }
     }
 
-    /// Commits whatever arrived as a message, in the shape the transcript holds:
-    /// an answer that only asked for tools is a message with no text, committed
-    /// for its calls rather than skipped for its emptiness, because the request
-    /// that follows carries it and a call no message holds is a transcript the
-    /// provider refuses.
-    fn commit(&self, app: &AppHandle, calls: Vec<WireCall>) {
+    /// Commits whatever arrived as a message, in the shape the transcript holds.
+    ///
+    /// Answers whether the response was this call's to settle, which is what makes
+    /// a stop running beside it single-winner: one of the two finds the response
+    /// and the other finds it gone, and whoever takes it decides the round — the
+    /// loser stops rather than go on with calls no message holds. A response that
+    /// says nothing at all is taken and leaves nothing behind.
+    fn commit(&self, app: &AppHandle, calls: Vec<WireCall>) -> bool {
         {
             let mut state = self.state.lock();
             let Some(partial) = state.partial.take() else {
-                return;
+                return false;
             };
-            let ended = now();
-            let first = partial.first_token_at.unwrap_or(ended);
-            let mut message = Map::new();
-            message.insert("role".into(), json!("assistant"));
-            if !partial.answer.is_empty() || calls.is_empty() {
-                message.insert("content".into(), json!(partial.answer));
-            }
-            if !partial.reasoning.is_empty() {
-                message.insert("reasoning".into(), json!(partial.reasoning));
-            }
-            // The wait is the model's silence before its first token; the
-            // thinking runs from there to the answer, or to the end if it never
-            // answered.
-            message.insert("waitMs".into(), json!(first - partial.started_at));
-            message.insert(
-                "thinkingMs".into(),
-                json!(partial.thinking_ms.unwrap_or(ended - first)),
-            );
-            if let Some(usage) = &partial.usage {
-                message.insert("usage".into(), json!(usage));
-            }
-            if !calls.is_empty() {
-                message.insert(
-                    "tool_calls".into(),
-                    json!(calls
-                        .iter()
-                        .map(|call| json!({
-                            "type": "function",
-                            "id": call.id,
-                            "function": { "name": call.name, "arguments": call.arguments },
-                        }))
-                        .collect::<Vec<Value>>()),
-                );
-            }
-            state.messages.push(Value::Object(message));
             state.pushed = None;
+            let Some(message) = as_message(&partial, &calls, now()) else {
+                return true;
+            };
+            state.messages.push(message);
         }
         self.persist(app);
         // The transcript has a message in it now, and the window is told so here
@@ -490,6 +462,7 @@ impl Run {
         // thread until they are done.
         self.emit_changed(app);
         self.emit_partial(app, None);
+        true
     }
 
     /// Runs the calls and writes what they answered into the transcript.
@@ -502,12 +475,22 @@ impl Run {
         self.emit_changed(app);
     }
 
-    /// The turn is over and the answer is in.
-    fn finish_turn(&self, app: &AppHandle) {
+    /// The turn is over: the run is idle, nothing is waiting on the user, and it
+    /// leaves the map. What it did is in its row by now, and a run kept for a turn
+    /// that is over is that chat's whole transcript — the prompt images riding it
+    /// among them — held for the life of the process.
+    fn end_turn(&self, runs: &Runs) {
         let mut state = self.state.lock();
         state.status = Status::Idle;
         state.awaiting.clear();
         drop(state);
+        runs.forget(self.chat);
+    }
+
+    /// The turn is over and the answer is in, and the windows are told: the chat
+    /// reads as its row again, which is what one opened on it is read through.
+    fn finish_turn(&self, app: &AppHandle) {
+        self.end_turn(&app.state::<AppState>().runs);
         self.emit_changed(app);
         self.emit_partial(app, None);
     }
@@ -555,6 +538,13 @@ impl Run {
     /// change of its model both have to wait for.
     fn busy(&self) -> bool {
         matches!(self.state.lock().status, Status::Running | Status::Awaiting)
+    }
+
+    /// Whether the chat has calls nobody has answered, which is the one thing a
+    /// read keeps a run for: `run_allow` and `run_decline` are commands that find
+    /// the run to answer them with.
+    fn holding_calls(&self) -> bool {
+        !self.state.lock().awaiting.is_empty()
     }
 
     /// Writes the transcript out. The title, the model, the level and the servers
@@ -631,7 +621,7 @@ impl Run {
             &loaded,
             &failed,
         ));
-        let lazy = lazy_prompt(&listing.tools, &servers, chosen.as_deref(), &failed);
+        let lazy = lazy_prompt(&listing.tools, &servers, chosen.as_deref(), &loaded, &failed);
         (offers, lazy)
     }
 
@@ -683,6 +673,12 @@ impl Run {
 /// chat the backend is not working on reads that row through the same shape it
 /// reads a run with, so there is one way to open a thread rather than two.
 ///
+/// What it makes for a read is let go unless the row left calls nobody answered:
+/// those are the run's to hold, since allowing or declining them is a command that
+/// has to find it, where a chat with nothing waiting would otherwise keep its
+/// whole transcript — the prompt images riding it among them — in the map for the
+/// life of the process.
+///
 /// `None` when the chat is gone, which is a row deleted under a window that
 /// still had it listed.
 pub(crate) fn ensure(state: &AppState, chat: i64) -> Result<Option<Arc<Run>>, String> {
@@ -695,7 +691,9 @@ pub(crate) fn ensure(state: &AppState, chat: i64) -> Result<Option<Arc<Run>>, St
     };
     let run = Run::new(chat);
     run.adopt(record);
-    state.runs.put(run.clone());
+    if run.holding_calls() {
+        state.runs.put(run.clone());
+    }
     Ok(Some(run))
 }
 
@@ -928,9 +926,10 @@ fn lazy_prompt(
     tools: &[mcp::ToolOffer],
     servers: &[mcp::Server],
     chosen: Option<&[String]>,
+    loaded: &[String],
     failed: &[String],
 ) -> Vec<mcp::Lazy> {
-    waiting(servers, chosen, failed, &[])
+    waiting(servers, chosen, failed, loaded)
         .iter()
         .map(|server| mcp::Lazy {
             name: label(server),
@@ -989,6 +988,60 @@ fn title_from(content: &Content) -> String {
     }
 }
 
+/// The message a partial becomes, in the shape the transcript holds it, or `None`
+/// for a response that says nothing at all: a stop during the model's silent wait
+/// has no words, no reasoning and no calls in it to leave behind, and an assistant
+/// message holding an empty content is one every later request would carry.
+///
+/// An answer that only asked for tools is a message with no text, committed for
+/// its calls rather than skipped for its emptiness, because the request that
+/// follows carries it and a call no message holds is a transcript the provider
+/// refuses.
+fn as_message(partial: &Partial, calls: &[WireCall], ended: i64) -> Option<Value> {
+    if partial.answer.is_empty() && partial.reasoning.is_empty() && calls.is_empty() {
+        return None;
+    }
+    let first = partial.first_token_at.unwrap_or(ended);
+    let mut message = Map::new();
+    message.insert("role".into(), json!("assistant"));
+    if !partial.answer.is_empty() || calls.is_empty() {
+        message.insert("content".into(), json!(partial.answer));
+    }
+    if !partial.reasoning.is_empty() {
+        message.insert("reasoning".into(), json!(partial.reasoning));
+    }
+    // The wait is the model's silence before its first token; the thinking runs
+    // from there to the answer, or to the end if it never answered.
+    message.insert("waitMs".into(), json!(first - partial.started_at));
+    // The moment it began speaking, absolute, and written only when it did: a head
+    // is timed from it, and the wait alone cannot work it back, since a round that
+    // queued for a place began later than the prompt was posted.
+    if let Some(first_token_at) = partial.first_token_at {
+        message.insert("firstTokenAt".into(), json!(first_token_at));
+    }
+    message.insert(
+        "thinkingMs".into(),
+        json!(partial.thinking_ms.unwrap_or(ended - first)),
+    );
+    if let Some(usage) = &partial.usage {
+        message.insert("usage".into(), json!(usage));
+    }
+    if !calls.is_empty() {
+        message.insert(
+            "tool_calls".into(),
+            json!(calls
+                .iter()
+                .map(|call| json!({
+                    "type": "function",
+                    "id": call.id,
+                    "function": { "name": call.name, "arguments": call.arguments },
+                }))
+                .collect::<Vec<Value>>()),
+        );
+    }
+    Some(Value::Object(message))
+}
+
 /// One tool result, in the shape the transcript holds it: a tool's own failure
 /// and the user's refusal travel as text, because the completions shape has no
 /// error flag for a result.
@@ -1000,6 +1053,14 @@ fn tool_message(call: &WireCall, text: String, ms: u64) -> Value {
         "content": text,
         "ms": ms,
     })
+}
+
+/// One call's answer when it could not be run at all: the provider refused it, or
+/// the task it was running in never came back. Spelled once because a call with no
+/// message answering it is a request the provider refuses, so every path that
+/// cannot answer one has to say so instead.
+fn could_not_run(call: &WireCall, why: &str, ms: u64) -> Value {
+    tool_message(call, format!("The tool could not be run: {why}"), ms)
 }
 
 /* --------------------------------------------------------------- the turn */
@@ -1051,7 +1112,13 @@ async fn drive(app: AppHandle, run: Arc<Run>) {
         let calls = round.calls;
         // The answer that asked for the calls is committed before they are run:
         // a result answers a call, and the call lives in that message.
-        run.commit(&app, calls.clone());
+        //
+        // Whoever takes the partial decides the round: a stop that got there first
+        // has ended the turn with what arrived, so a round whose calls were
+        // dropped must not go on and run them.
+        if !run.commit(&app, calls.clone()) {
+            return;
+        }
         if calls.is_empty() {
             run.finish_turn(&app);
             return;
@@ -1087,21 +1154,37 @@ async fn resume(app: AppHandle, run: Arc<Run>, wake: Wake) {
 
 /// Runs the calls, in parallel: each is a question asked somewhere else, and one
 /// slow tool should not hold up the rest of the answer.
+///
+/// Every call comes back answered, and one whose own task did not come back is
+/// answered as a call that could not be run: the round's calls and the messages
+/// answering them are what the request that follows carries, and a call with no
+/// message is a request the provider refuses.
 async fn answer(app: &AppHandle, run: &Arc<Run>, calls: &[WireCall]) -> Vec<Value> {
     let mut handles = Vec::new();
     for call in calls {
         let app = app.clone();
         let run = run.clone();
         let call = call.clone();
-        handles.push(tauri::async_runtime::spawn(async move {
-            call_tool(&app, &run, &call).await
-        }));
+        handles.push((
+            call.clone(),
+            Instant::now(),
+            tauri::async_runtime::spawn(async move {
+                call_tool(&app, &run, &call).await
+            }),
+        ));
     }
     let mut answers = Vec::new();
-    for handle in handles {
+    for (call, started, handle) in handles {
         match handle.await {
             Ok(answer) => answers.push(answer),
-            Err(e) => log(app, "error", format!("a tool call did not come back: {e}")),
+            Err(e) => {
+                log(app, "error", format!("a tool call did not come back: {e}"));
+                answers.push(could_not_run(
+                    &call,
+                    &e.to_string(),
+                    started.elapsed().as_millis() as u64,
+                ));
+            }
         }
     }
     answers
@@ -1156,11 +1239,7 @@ async fn call_tool(app: &AppHandle, run: &Arc<Run>, call: &WireCall) -> Value {
             };
             tool_message(call, said, result.ms)
         }
-        Err(e) => tool_message(
-            call,
-            format!("The tool could not be run: {e}"),
-            started.elapsed().as_millis() as u64,
-        ),
+        Err(e) => could_not_run(call, &e, started.elapsed().as_millis() as u64),
     }
 }
 
@@ -1301,7 +1380,11 @@ pub(crate) fn run_stop(app: AppHandle, state: State<'_, AppState>, chat: i64) {
         return;
     };
     run.abort();
-    run.commit(&app, Vec::new());
+    // What arrived is committed as the answer this turn stopped on, and the turn
+    // ends whether or not the run's own commit got to the partial first: a task
+    // whose request has just been dropped is not one to leave the ending to, and
+    // the calls it took are in the message it wrote.
+    let _ = run.commit(&app, Vec::new());
     run.finish_turn(&app);
     log(&app, "info", format!("run {chat} stopped"));
 }
@@ -1346,18 +1429,45 @@ pub(crate) fn run_state(state: State<'_, AppState>, chat: i64) -> Result<Option<
     Ok(ensure(&state, chat)?.map(|run| run.snapshot()))
 }
 
-/// Every run there is, for a list to draw against. A run that has finished is
-/// answered too: it is where the chat's transcript was left, and what a window
-/// opened on it reads.
+/// Every run there is, for a list to draw against: the turns that are going and
+/// the ones waiting on the user. A chat whose turn is over has no run — what it
+/// did is its row, and a window opens it the way it opens any other.
 #[tauri::command]
 pub(crate) fn runs_state(state: State<'_, AppState>) -> Vec<Summary> {
     state.runs.all().iter().map(|run| run.summary()).collect()
+}
+
+/// The servers a change asks a row to hold, out of the value the window sent: a
+/// key it left out is no change, a `null` is a chat that has never chosen — which
+/// is not the same as one that chose none — and a list is the choice. A value
+/// that is none of the three is refused rather than guessed at.
+fn chosen_servers(
+    sent: Option<&Value>,
+    held: Option<Vec<String>>,
+) -> Result<Option<Vec<String>>, String> {
+    match sent {
+        None => Ok(held),
+        Some(Value::Null) => Ok(None),
+        Some(Value::Array(ids)) => Ok(Some(
+            ids.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect(),
+        )),
+        Some(_) => Err("servers must be a list of ids or null".to_string()),
+    }
 }
 
 /// Changes what a chat is sent with next time: its model, its reasoning level,
 /// or the servers it offers. A key that is absent is left as it was, and a
 /// `servers` of `null` is a chat that has never chosen, which offers every
 /// enabled server rather than none.
+///
+/// The servers are read out of the request body rather than taken as an argument,
+/// because Tauri hands over a key that was left out and one written `null` as the
+/// same `None`: which of the two a window sent is the whole of what its servers
+/// control has to say, and the body is the one place the difference is still
+/// there. Every other key is an argument like any other command's.
 ///
 /// Refused while the chat is answering, because the row is written whole: a
 /// write of a model into a row whose transcript another writer is halfway
@@ -1373,7 +1483,7 @@ pub(crate) fn chat_set(
     chat: i64,
     model: Option<String>,
     reasoning: Option<String>,
-    servers: Option<Option<Vec<String>>>,
+    request: tauri::ipc::Request<'_>,
 ) -> Result<(), String> {
     if state.runs.get(chat).map(|run| run.busy()).unwrap_or(false) {
         return Err("this thread is still answering".to_string());
@@ -1382,7 +1492,13 @@ pub(crate) fn chat_set(
     let record = store.load(chat)?.ok_or("that thread is gone")?;
     let model = model.unwrap_or(record.model);
     let reasoning = reasoning.unwrap_or(record.reasoning);
-    let servers = servers.unwrap_or(record.servers);
+    let servers = match request.body() {
+        tauri::ipc::InvokeBody::Json(sent) => chosen_servers(sent.get("servers"), record.servers)?,
+        // The window sends JSON; a body of bytes is not one it can have sent.
+        tauri::ipc::InvokeBody::Raw(_) => {
+            return Err("changing a chat expects a JSON body".to_string())
+        }
+    };
     // The row keeps the time it already had: what the channel says about a
     // thread — when it was last answered — is about its messages, and a change
     // of level or of servers is not one. `now` is what a save carries, so the

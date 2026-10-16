@@ -20,10 +20,10 @@
   /* Nothing chains out of the feed to the window, and the panel itself does not
      rubber-band. */
   overscroll-behavior: none;
-  /* The window's chrome floats over the panel's top-left corner, wearing the
-     panel's own colour; what keeps the first thread clear of it is the list's own
-     top padding rather than the scroller's, so that a divider pinned to the top
-     of what is scrolled is at the top of the pane and not under that strip. */
+  /* The pane's own bar stands above the feed in the flow; what keeps the first
+     thread clear of it is the list's own top padding rather than the scroller's,
+     so that a divider pinned to the top of what is scrolled is at the top of the
+     pane and not under that bar. */
   /* The foot of the feed: the room the composer floating over it takes (its own
      height) and the air under the last thread. It is a margin rather than the
      padding it used to be — padding belongs to the scrollport, and a scrollport
@@ -47,9 +47,10 @@
 .channel-list {
   width: 100%;
   max-width: var(--content-w);
-  /* The strip the window's chrome floats over, reserved where it costs the pin
-     nothing. */
-  padding-top: calc(var(--titlebar) + 20px);
+  /* The pane draws its own bar above the feed, in the flow and of the same
+     height the window's chrome once floated over, so the list has only to keep
+     its own air off it and not the strip as well. */
+  padding-top: 20px;
   display: flex;
   flex-direction: column;
 }
@@ -84,7 +85,9 @@
 /* The divider: the band between two stretches of the feed, with the pill in the
    middle of it. The pill is pinned to the top of the pane, so the threads of its
    stretch scroll under it and it names the stretch they belong to. The band
-   itself is clear, so what passes behind the pill is the feed's own words. */
+   itself is clear, so what passes behind the pill is the feed's own words — and
+   being clear and full width it must not catch the clicks meant for those words,
+   so it is out of hit testing and the pill alone is put back in. */
 .channel-divider {
   position: sticky;
   top: 0;
@@ -93,6 +96,11 @@
   align-items: center;
   justify-content: center;
   height: 40px;
+  pointer-events: none;
+}
+
+.channel-divider .btn {
+  pointer-events: auto;
 }
 
 /* One thread. Flat, like a channel message and not a card: the pointer lifts it
@@ -204,9 +212,9 @@
   gap: 2px;
 }
 
-/* The whole row is the click target: the button stretches over it, its padding
-   and its wave included and under the actions, so a click anywhere on a thread
-   opens it, not just the words. */
+/* The whole row is the click target: the button's `::after` below reaches past
+   the words to the row's own edges — its padding included and the actions under
+   it — so a click anywhere on a thread opens it, not just the words. */
 .channel-open {
   display: block;
   width: 100%;

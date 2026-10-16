@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Globe, Plus, Terminal } from "lucide-react";
 import * as api from "../api";
 import type { McpReport, McpServer } from "../types";
@@ -229,16 +229,24 @@ export function McpSettings() {
   /** Whether the open draft's ID is still the name's own: true for a server that
    *  is not in the file yet, until the ID is typed into by hand. */
   const [followId, setFollowId] = useState(false);
-  // Set by a save and cleared by its own timer: a receipt for what just
-  // happened, not a state the page is in.
-  const { saved, flash } = useSaved();
+  // Set by a save and cleared by its own timer, or by the reader's next move: a
+  // receipt for what just happened, not a state the page is in.
+  const { saved, flash, clear } = useSaved();
   // Whether the file is being written: a save and a removal both land here, and
   // the form's own button is held for as long as that lasts.
   const [busy, setBusy] = useState(false);
-  // Whether the open server is being asked what it offers. The test keeps a flag
-  // of its own rather than sharing the page's busy: a save or a removal asks no
-  // server, and the one line that announces a question is drawn from this.
-  const [testing, setTesting] = useState(false);
+  // The address the open server is being asked at, if it is being asked at all.
+  // The test keeps a state of its own rather than sharing the page's busy: a
+  // save or a removal asks no server, and the one line that announces a question
+  // is drawn from this. It is the address rather than a flag because the form can
+  // be moved to another server while a question is out, and a flag would mark
+  // whichever server the page happened to hold — holding a button that was never
+  // pressed until a question about another address came back.
+  const [asked, setAsked] = useState<string | null>(null);
+  // The address of the newest question, which the answers read: a second server
+  // can be asked while a first is still out, and the answer that belongs to the
+  // form in hand is the newest one rather than whichever came back last.
+  const asking = useRef<string | null>(null);
   // What the last test answered, and the address it was asked with. Selecting
   // another server leaves it behind rather than showing one server's tools under
   // another's name; the address travels inside it so that a form which has moved
@@ -270,11 +278,16 @@ export function McpSettings() {
     setFrom(at);
     setFollowId(false);
     setResult(null);
+    // The receipt belongs to the form it was pressed in: another server's form
+    // has not just been saved, whatever the last one did.
+    clear();
   }
 
   /** Rewrites the open draft; nothing is written until Save. */
   function patch(next: Partial<Draft>) {
     setDraft((d) => (d ? ({ ...d, ...next } as Draft) : d));
+    // What the receipt says stops being true the moment anything is typed.
+    clear();
   }
 
   /** Types into the name, carrying it into the ID for as long as the ID is the
@@ -311,6 +324,7 @@ export function McpSettings() {
         : { ...base, type: "stdio", command: "", args: "", env: [] },
     );
     setResult(null);
+    clear();
   }
 
   /** Starts a server that is not in the file: it is listed once it is saved. The
@@ -334,6 +348,7 @@ export function McpSettings() {
     setFrom(null);
     setFollowId(true);
     setResult(null);
+    clear();
   }
 
   /** Removes a server from the file, there and then. */
@@ -390,13 +405,21 @@ export function McpSettings() {
       there. */
   async function test(address: string) {
     if (!draft) return;
-    setTesting(true);
+    asking.current = address;
+    setAsked(address);
     try {
-      setResult({ address, report: await api.mcpTest(toServer(draft)) });
+      const report = await api.mcpTest(toServer(draft));
+      if (asking.current === address) setResult({ address, report });
     } catch (e) {
-      setResult({ address, error: String(e) });
+      if (asking.current === address) setResult({ address, error: String(e) });
     } finally {
-      setTesting(false);
+      // Only this address's own question is given up: another server's test may
+      // have been started while this one was out, and its answer is the one the
+      // box is waiting on.
+      if (asking.current === address) {
+        asking.current = null;
+        setAsked(null);
+      }
     }
   }
 
@@ -550,7 +573,12 @@ export function McpSettings() {
                 </div>
               )}
 
-              <ConnectionTest draft={draft} testing={testing} result={result} onTest={test} />
+              <ConnectionTest
+                draft={draft}
+                testing={asked === (draft.type === "http" ? draft.url.trim() : draft.command.trim())}
+                result={result}
+                onTest={test}
+              />
             </section>
 
             <div className="mcp-rule" />

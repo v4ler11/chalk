@@ -572,13 +572,17 @@
   height: 27px;
   padding-top: 5px;
   box-sizing: border-box;
-  visibility: hidden;
+  visibility: visible;
+  pointer-events: none;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 
-/* Hidden rather than absent: a row that is not offered takes no click and no
-   place in the tab order, and one that is, is drawn under the pointer.
+/* The row is drawn rather than taken away: it stands in the flow with only its
+   paint held back, so its buttons take a turn of the tab order while it is not
+   under the pointer — which is what makes the `:focus-within` clause below more
+   than a second way in — while the row's own box stays click-through, so nothing
+   undrawn takes a click.
    
    An answer's row is offered whenever the answer is there: a run in flight is
    another message's business, and copying an answer is reading rather than
@@ -588,24 +592,14 @@
    has it while its thread is idle, an answer never needs it. */
 .msg.assistant .bubble:hover .msg-actions,
 .msg.assistant .msg-actions:focus-within {
-  visibility: visible;
   opacity: 1;
 }
 
-/* The row's own two, smaller than the app's smallest button kind: they are a
-   quiet offer under a message rather than a control in a bar, so the box comes
-   down and the mark with it. The row itself keeps the height it reserves — that
-   is what holds the transcript still under the pointer, and what stands in for
-   the gap under the message. */
-.msg-actions .btn--icon-sm {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-}
-
-.msg-actions .btn--icon-sm svg.lucide {
-  width: 13px;
-  height: 13px;
+/* And the buttons take their clicks back once the row is drawn, or while the
+   caret is inside one of them — the row's own box stays click-through. */
+.msg.assistant .bubble:hover .msg-actions .btn,
+.msg.assistant .msg-actions:focus-within .btn {
+  pointer-events: auto;
 }
 
 /* A message action's tip hangs over the message rather than under the row, at

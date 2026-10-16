@@ -470,13 +470,18 @@ function AddModel({
   const [written, setWritten] = useState("");
   const typed = written.trim();
   const prefix = tab === OWN ? "" : tab + "/";
-  // What is typed is the model's own name unless it already carries the name of
-  // a gateway the app has — only that segment is one a request reads as the way
-  // to reach the model, and only then is the field given an id whole. A model
-  // whose own name holds a slash carries no gateway: `Qwen/Qwen2.5-7B-Instruct`
-  // and `library/llama3.2` are ordinary names for a server of the reader's own,
-  // so they take the tab's prefix like the short case.
-  const carried = gateways.some((g) => g.id === leadsWith(typed));
+  // What is typed is the model's own name unless it is already written with the
+  // tab's own gateway before it, which is the one gateway it is headed for: only
+  // then is the field given an id whole as it stands. A name that leads with
+  // another gateway's word is still this tab's model of that name — `openai/gpt-oss-120b`
+  // typed on Groq's tab is Groq's model of that name, and filing it under
+  // OpenAI's tab instead would ask a service the reader never named. A model
+  // whose own name holds a slash carries no gateway at all:
+  // `Qwen/Qwen2.5-7B-Instruct` and `library/llama3.2` are ordinary names for a
+  // server of the reader's own, so they take the tab's prefix like the short case
+  // — as does `openai/...`, which is how a gateway's own spelling of another's
+  // model stays expressible.
+  const carried = leadsWith(typed) === tab;
   const id = typed === "" || prefix === "" || carried ? typed : prefix + typed;
   const clash = tab === OWN ? ownProblem(id, gateways) : "";
   const why = clash || problem(id, models);

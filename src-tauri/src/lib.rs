@@ -282,7 +282,7 @@ fn get_logs(state: State<'_, AppState>) -> Vec<LogEntry> {
     state.logger.snapshot()
 }
 
-/// The chat history, most recently written first.
+/// The chat history, most recently made first.
 #[tauri::command]
 fn list_chats(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Vec<ChatSummary>, String> {
     history(&app, "could not list the chats", history_store(&state).and_then(|store| store.list()))
@@ -1022,11 +1022,21 @@ pub fn run() {
             mcp_tools,
             manage_tools
         ])
-        // Closing the window is not closing the app. The runs are the backend's
-        // now, and a turn halfway through does not depend on a window being there
-        // to watch it, so the window hides: the webview stays alive with it, the
-        // answer goes on arriving into it, and the dock is how it comes back.
+        // Closing the window is not closing the app on macOS. The runs are the
+        // backend's now, and a turn halfway through does not depend on a window
+        // being there to watch it, so the window hides: the webview stays alive
+        // with it, the answer goes on arriving into it, and the dock is how it
+        // comes back.
+        //
+        // The dock is the whole of the way back, and it is a macOS thing: Reopen
+        // is a macOS event, the build carries no tray, and elsewhere a window
+        // hidden this way would be a process with nothing on screen, no way to
+        // reach it and no way to quit it. There, the close goes through, and the
+        // app ends with its window.
         .on_window_event(|window, event| {
+            if !cfg!(target_os = "macos") {
+                return;
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
                     api.prevent_close();

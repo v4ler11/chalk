@@ -148,13 +148,14 @@ export function MessageList({
    * instead would leave every call standing above the name of whoever asked for
    * it.
    *
-   * A prompt carries the time it was sent. An answer does not — what it has is
-   * what it waited, from the request to its first token — so the round that opens
-   * a turn is marked with the moment the model began speaking, the prompt's own
-   * time plus that wait, which is also the moment the live row is marked with
-   * while it arrives. A message written before the app kept either is headed with
-   * its name and no time, rather than with a time worked out from what it does
-   * not say.
+   * A prompt carries the time it was sent. An answer carries the moment its
+   * first token arrived, which the run writes down when it commits the answer —
+   * the same moment the live row was marked with while it arrived. An answer
+   * written before the run kept that moment is timed from the wait it reports
+   * instead: the prompt's own time plus it, which is right for a round that asked
+   * as soon as it was posted and early for one that queued first. A message
+   * written before either was kept is headed with its name and no time, rather
+   * than with a time worked out from what it does not say.
    */
   const heads = useMemo(() => {
     const where = new Set<UiMessage>();
@@ -174,7 +175,10 @@ export function MessageList({
       if (message.role !== "assistant" || !opening) continue;
       opening = false;
       where.add(message);
-      if (written != null && message.waitMs != null) when.set(message, written + message.waitMs);
+      const spoke =
+        message.firstTokenAt ??
+        (written != null && message.waitMs != null ? written + message.waitMs : undefined);
+      if (spoke != null) when.set(message, spoke);
     }
     return { where, when };
   }, [messages]);

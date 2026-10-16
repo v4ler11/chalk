@@ -16,7 +16,8 @@ import * as api from "./api";
 import { buildRows, type ChannelRow } from "./feed";
 import { unreachableServers } from "./lazy";
 import { defaultModel } from "./conversation";
-import { forget, loadRun, setChatsRefresher } from "./runs";
+import { forget, loadRun, setChatsRefresher, setPinsRefresher } from "./runs";
+import { forgetPictures } from "./components/ChannelRow";
 import { useRuns } from "./useRuns";
 import type { JsonTab } from "./components/JsonView";
 
@@ -114,8 +115,10 @@ export function useConversation({ config, servers, failures, setError, setFollow
   // beside every prompt it holds.
   const author = (config?.name ?? "").trim() || "You";
   // A prompt's actions are offered while its thread is not answering: a run that
-  // is only queued still counts as answering, so its transcript is left alone.
-  const canAct = thread !== null && status !== "running" && config !== null;
+  // is only queued still counts as answering, and one parked on the user's
+  // approval is the run's move too — a rewrite asked for there is one the
+  // backend refuses, so it is not offered.
+  const canAct = thread !== null && status !== "running" && status !== "awaiting" && config !== null;
 
   // A server the open thread calls and nobody can reach is worth saying: its
   // tools are absent from the request, and an absence is not a reason.
@@ -155,7 +158,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
   /** Reports a backend failure without letting it escape the callback. */
   const fail = useCallback((e: unknown) => actions.current.setError(String(e)), []);
 
-  /** Re-reads the history, which a post, a rename or a delete leaves stale. */
+  /** Re-reads the history, which a post or a delete leaves stale. */
   const refreshChats = useCallback(async () => {
     try {
       setChats(await api.listChats());
@@ -191,6 +194,16 @@ export function useConversation({ config, servers, failures, setError, setFollow
     if (pinsView) void refreshPins();
   }, [pinsView, refreshPins]);
 
+  // The pins rows carry the same moment the feed's rows do, so a run moving is
+  // read into them too: without this a pinned row goes on naming the previous
+  // answer's time under a count that has already moved.
+  useEffect(() => {
+    setPinsRefresher(() => {
+      void refreshPins();
+    });
+    return () => setPinsRefresher(null);
+  }, [refreshPins]);
+
   // The caret belongs in the composer: the window opens on the feed to write
   // into it, and a thread is opened to reach for its composer too. The same ref
   // is the field whichever composer is mounted, and while the JSON view or the
@@ -209,8 +222,13 @@ export function useConversation({ config, servers, failures, setError, setFollow
     setComposeReasoning(asReasoningLevel(chats[0].reasoning));
   }, [chats]);
   const primedChosen = useRef(false);
+  // Whether the channel composer's own Tools menu was used. The window opens on
+  // the channel, so that menu is reachable before any thread has been opened, and
+  // the primed servers are only a guess at what the next post wants — a real
+  // choice there must not be replaced by the first thread's.
+  const choseServers = useRef(false);
   useEffect(() => {
-    if (primedChosen.current || !snapshot) return;
+    if (primedChosen.current || choseServers.current || !snapshot) return;
     primedChosen.current = true;
     setComposeChosen(snapshot.servers);
   }, [snapshot]);
@@ -246,8 +264,10 @@ export function useConversation({ config, servers, failures, setError, setFollow
   );
   const setChosen = useCallback(
     (ids: string[] | null) => {
-      if (live.current.thread === null) setComposeChosen(ids);
-      else change({ servers: ids });
+      if (live.current.thread === null) {
+        choseServers.current = true;
+        setComposeChosen(ids);
+      } else change({ servers: ids });
     },
     [change],
   );
@@ -289,8 +309,19 @@ export function useConversation({ config, servers, failures, setError, setFollow
     setEditing(null);
     actions.current.setFollow(true);
     actions.current.setError("");
-    setView({ kind: "thread", chat });
-    void loadRun(chat).catch((e) => actions.current.setError(String(e)));
+    void loadRun(chat)
+      .then((snapshot) => {
+        if (!snapshot) {
+          // Deleted while it was listed; drop the row from both lists and say so,
+          // rather than opening a thread with nothing under it.
+          setChats((all) => all.filter((row) => row.id !== chat));
+          setPins((all) => all.filter((row) => row.id !== chat));
+          actions.current.setError("That chat is gone.");
+          return;
+        }
+        setView({ kind: "thread", chat });
+      })
+      .catch((e) => actions.current.setError(String(e)));
   }, []);
 
   /**
@@ -334,14 +365,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     setSettingsView(false);
     backToChannel();
   }, [backToChannel]);
-
-  /** Goes to a pinned thread, which is the channel's own way of opening one. */
-  const openPin = useCallback(
-    (pin: ChatSummary) => {
-      openThread(pin.id);
-    },
-    [openThread],
-  );
 
   /**
    * Pins a thread of the feed, or takes the pin off it.
@@ -423,6 +446,7 @@ export function useConversation({ config, servers, failures, setError, setFollow
       try {
         await api.deleteChat(id);
         forget(id);
+        forgetPictures(id);
         setChats((all) => all.filter((chat) => chat.id !== id));
         // The pins list is the same rows seen from the other side, and it keeps
         // the deleted thread for as long as it stayed pinned. Nothing re-reads
@@ -479,7 +503,6 @@ export function useConversation({ config, servers, failures, setError, setFollow
     pinRows,
     showPins,
     showChannel,
-    openPin,
     pin,
     rows,
     messages,

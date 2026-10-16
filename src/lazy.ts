@@ -12,14 +12,12 @@ import type { McpFailure, McpServer, McpTool } from "./types";
 
 /**
  * What the import state is read against: the servers as `mcp.json` declares
- * them, the ones this chat calls, the ids it has loaded, and the ones that could
- * not be reached — a server nobody can reach cannot be loaded either.
+ * them, the ones this chat calls, and the ids it has loaded.
  */
 interface LazyState {
   servers: McpServer[];
   chosen: string[] | null;
   loaded: string[];
-  failed: string[];
 }
 
 /** The servers that are switched on at all: one not started has nothing to call. */
@@ -45,21 +43,18 @@ export function offeredServers(declared: McpServer[], chosen: string[] | null): 
 }
 
 /**
- * The lazily imported servers this chat calls and can reach: the ones it has
- * still to load, and the ones it has already loaded.
+ * The lazily imported servers this chat calls: the ones it has still to load,
+ * and the ones it has already loaded.
  */
-function lazyHere({ servers, chosen, failed }: LazyState): McpServer[] {
+function lazyHere({ servers, chosen }: LazyState): McpServer[] {
   const here = new Set(offeredServers(servers, chosen));
-  return servers.filter(
-    (server) => server.lazy && server.enabled && here.has(server.id) && !failed.includes(server.id),
-  );
+  return servers.filter((server) => server.lazy && server.enabled && here.has(server.id));
 }
 
 /**
- * The lazy servers this chat has still to load: the ones a failure on them is
- * not worth saying about, since none of what they hold is in the request yet.
+ * The lazily imported servers this chat calls that it has still to load.
  */
-export function waiting(state: LazyState): McpServer[] {
+function waiting(state: LazyState): McpServer[] {
   const open = new Set(state.loaded);
   return lazyHere(state).filter((server) => !open.has(server.id));
 }
@@ -78,11 +73,7 @@ export function unreachableServers(
   loaded: string[],
   failures: McpFailure[],
 ): string {
-  const unloaded = new Set(
-    waiting({ servers, chosen, loaded, failed: failures.map((failure) => failure.server) }).map(
-      (server) => server.id,
-    ),
-  );
+  const unloaded = new Set(waiting({ servers, chosen, loaded }).map((server) => server.id));
   return failures
     .filter((failure) => !unloaded.has(failure.server))
     .filter((failure) => offeredServers(servers, chosen).includes(failure.server))

@@ -3,17 +3,28 @@ import { useEffect, useState } from "react";
 /** How often the displayed timers are refreshed. Tenths are shown, so they tick at tenths. */
 const TICK_MS = 100;
 
-/** Wall-clock ms, re-read on a timer while `active`. */
-export function useTicker(active: boolean): number {
+/** A minute in ms: enough for a clock read only to date the rows — a thread
+ *  answered at 23:50 says "today" until midnight and "Yesterday" after it, so
+ *  the tick has to land inside the minute the day rolls over, and nothing a row
+ *  says changes between one minute and the next. */
+export const MINUTE_MS = 60_000;
+
+/** Wall-clock ms, re-read on a timer while `active`, once every `period`.
+ *
+ *  The default is the tenths the streaming timers are shown at; a pane that only
+ *  dates its rows passes a minute, so its clock moves when the date does rather
+ *  than ten times a second.
+ */
+export function useTicker(active: boolean, period: number = TICK_MS): number {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!active) return;
     // Sample immediately: `now` is stale from an earlier render otherwise.
     setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), TICK_MS);
+    const id = setInterval(() => setNow(Date.now()), period);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, period]);
 
   return now;
 }
