@@ -12,7 +12,7 @@ const MAX_SIDE = 1600;
 /** JPEG quality used for a rescaled image. */
 const QUALITY = 0.85;
 
-export type AttachmentStatus = "processing" | "ready" | "error";
+type AttachmentStatus = "processing" | "ready" | "error";
 
 export interface Attachment {
   id: string;

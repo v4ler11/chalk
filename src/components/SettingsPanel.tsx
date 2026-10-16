@@ -1,19 +1,22 @@
 import { useState, type ReactNode } from "react";
-import { FileText, Plug, Plus, Settings2, X } from "lucide-react";
+import { Cpu, FileText, Plug, Settings2 } from "lucide-react";
 import type { AppConfig } from "../types";
+import { Field } from "./Controls";
 import { McpSettings } from "./McpSettings";
+import { ModelsSettings } from "./ModelsSettings";
 import { SectionNav } from "./SectionNav";
+import { setTheme, useTheme } from "../theme";
 
 interface Props {
   config: AppConfig;
   onChange: (patch: Partial<AppConfig>) => void;
-  onSave: () => void;
-  /** Set by a save, cleared by the next edit. */
-  saved?: boolean;
   /** Shown above the form, when the window has something to report. */
   notice?: ReactNode;
   /** Opens the log window; the button for it sits at the foot of the tabs. */
   onOpenLogs?: () => void;
+  /** The section a page opens on, where it is not the first: the harness's own
+   *  way in, so a page can be looked at without being driven to it. */
+  initialTab?: TabId;
 }
 
 /**
@@ -22,79 +25,35 @@ interface Props {
  */
 const TABS = [
   { id: "general", label: "General", icon: Settings2 },
+  { id: "models", label: "Models", icon: Cpu },
   { id: "customization", label: "Customization", icon: FileText },
   { id: "mcp", label: "MCP", icon: Plug },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+export type TabId = (typeof TABS)[number]["id"];
 
 /**
- * Where OpenRouter's name sends requests. The backend is what really holds it —
- * and what turns its response cache on — so this is the same URL written out
- * for the page to name, not a second source of it.
- */
-const OPENROUTER_URL = "https://openrouter.ai/api/v1";
-
-/** The two providers the selector offers, in the order it lists them. */
-const PROVIDERS = [
-  { id: "openrouter", label: "OpenRouter" },
-  { id: "custom", label: "Custom" },
-] as const;
-
-/** Characters of the key left in the clear while the field is not focused. */
-const VISIBLE = 5;
-
-/**
- * The API key's field.
+ * What the window may wear, in the order the control lists it: the two schemes
+ * by name, then the desktop's own answer to which of them to wear.
  *
- * The key is shown while the field has the caret, so it can be read and
- * corrected, and masked the rest of the time: its first five characters, then
- * one asterisk per character after them. A `type="password"` field is not used
- * for the mask — WebKit takes that glyph from the font, and no CSS keyword makes
- * it an asterisk (`-webkit-text-security` offers disc, circle and square only) —
- * so the mask is simply what the field holds while it is away from the caret.
+ * The three are the same kind of thing — a choice, not a setting of the file the
+ * settings write — which is why they are one control rather than a switch
+ * and a checkbox beside it.
  */
-function SecretInput({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  const [focused, setFocused] = useState(false);
-  const masked = `${value.slice(0, VISIBLE)}${"*".repeat(Math.max(0, value.length - VISIBLE))}`;
-
-  return (
-    <input
-      type="text"
-      className="secret"
-      value={focused ? value : masked}
-      // Held read-only away from the caret, so the mask can never be written
-      // back as the key by a stray edit.
-      readOnly={!focused}
-      autoComplete="off"
-      spellCheck={false}
-      aria-label="API key"
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
+const THEMES = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "system", label: "System" },
+] as const;
 
 export function SettingsPanel({
   config,
   onChange,
-  onSave,
-  saved = false,
   notice,
   onOpenLogs,
+  initialTab = "general",
 }: Props) {
-  const [tab, setTab] = useState<TabId>("general");
-
-  /** Replaces the whole list, which is what every edit to it amounts to. */
-  function change(models: string[]) {
-    onChange({ models });
-  }
-
-  /** Rewrites one model in place, leaving the order — and so the default — alone. */
-  function replace(index: number, value: string) {
-    change(config.models.map((name, i) => (i === index ? value : name)));
-  }
+  const [tab, setTab] = useState<TabId>(initialTab);
 
   return (
     <>
@@ -107,122 +66,94 @@ export function SettingsPanel({
         // the foot of the list, where the app's own sidebar keeps Settings.
         footer={
           onOpenLogs && (
-            <button className="settings-open-logs" onClick={onOpenLogs}>
+            <button className="nav-row" onClick={onOpenLogs}>
               Logs
             </button>
           )
         }
       />
 
-      <div className="settings-main">
+      <div className={`settings-main${tab === "mcp" ? " settings-main--mcp" : ""}`}>
         {notice}
 
         {/* The MCP page is not part of the config form: it edits `mcp.json`,
-            and keeps its own actions, so the window's Save is not drawn with
-            it. */}
+            and keeps its own actions — it is a list of servers, added to and
+            tried one at a time, rather than fields about this window. Every
+            other page writes itself as it is edited: a config is a fact about
+            the file, not a form under review, so there is no Save under any of
+            them. It is also the one page that brings its own columns, and so
+            its own frame: the servers are a list of the settings' own kind,
+            read beside the sections, and they stand as those stand — which is
+            what `settings-main--mcp` says. */}
         {tab === "mcp" ? (
           <McpSettings />
+        ) : tab === "general" ? (
+          <GeneralTab config={config} onChange={onChange} />
+        ) : tab === "models" ? (
+          <ModelsSettings config={config} onChange={onChange} />
         ) : (
-          <>
-            {tab === "general" ? (
-              <GeneralTab config={config} onChange={onChange} change={change} replace={replace} />
-            ) : (
-              <CustomizationTab config={config} onChange={onChange} />
-            )}
-
-            <div className="settings-actions">
-              <button onClick={onSave}>Save</button>
-              {saved && <span className="settings-saved">Saved</span>}
-            </div>
-          </>
+          <CustomizationTab config={config} onChange={onChange} />
         )}
       </div>
     </>
   );
 }
 
-/** Where requests go, what they are sent with, and which model they ask for. */
+/**
+ * Who is posting, and the scheme the window wears — the one control here that
+ * the settings file does not hold.
+ *
+ * What requests go to and what they are sent with used to stand here, beside
+ * the key: they are the models' page now, where each gateway — the app's own
+ * provider among them, its first tab — holds its own key, so there is one place
+ * a key is written and one answer to where a model is asked for.
+ */
 function GeneralTab({
   config,
   onChange,
-  change,
-  replace,
 }: {
   config: AppConfig;
   onChange: (patch: Partial<AppConfig>) => void;
-  change: (models: string[]) => void;
-  replace: (index: number, value: string) => void;
 }) {
+  // Read from the window rather than from the config: the scheme is not one of
+  // the fields this form is a draft of, so it is not the page's to hold.
+  const theme = useTheme();
+
   return (
     <div className="settings">
-      <label>
-        <span>Provider</span>
-        <select
-          value={config.provider}
-          onChange={(e) => onChange({ provider: e.target.value })}
-        >
-          {PROVIDERS.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {/* Where a custom provider is, and — for OpenRouter — where it is going
-          anyway, said out loud: the cache that comes with it is worth knowing
-          about, since it is what makes a repeated request free. */}
-      {config.provider === "custom" ? (
-        <label>
-          <span>Endpoint</span>
-          <input
-            type="text"
-            value={config.endpoint}
-            placeholder="https://example.com/v1"
-            onChange={(e) => onChange({ endpoint: e.target.value })}
-          />
-        </label>
-      ) : (
-        <p className="settings-note">
-          Requests go to <code>{OPENROUTER_URL}</code>. A request identical to one made within the
-          last five minutes is answered from OpenRouter's own cache — free, and without waiting for
-          a model.
-        </p>
-      )}
-      <label>
-        <span>API key</span>
-        <SecretInput value={config.apiKey} onChange={(apiKey) => onChange({ apiKey })} />
-      </label>
-      <div className="settings-models">
-        <span className="settings-label">Models</span>
-        {config.models.map((name, i) => (
-          <div className="settings-model" key={i}>
-            <input
-              type="text"
-              value={name}
-              placeholder="a model id"
-              aria-label={`Model ${i + 1}`}
-              onChange={(e) => replace(i, e.target.value)}
-            />
-            {/* The list is the app's only source of models, so it cannot be
-                emptied: the last row's button is drawn, but disabled. */}
+      <Field label="Name">
+        <input
+          type="text"
+          className="input"
+          value={config.name}
+          placeholder="You"
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </Field>
+      <p className="settings-note">
+        Drawn beside what you post in the channel, with a circle of its initials.
+      </p>
+      {/* The one control on this page that is not a field of the form: the scheme
+          belongs to the window, so it is applied where it is chosen and kept by
+          the window. The file has nothing to write for it, and nothing to reset
+          it to either. */}
+      <div className="settings-appearance">
+        <span className="field-label">Appearance</span>
+        <div className="seg" role="group" aria-label="Appearance">
+          {THEMES.map(({ id, label }) => (
             <button
-              className="settings-model-remove"
-              title="Remove model"
-              aria-label={`Remove ${name || "this model"}`}
-              disabled={config.models.length === 1}
-              onClick={() => change(config.models.filter((_, j) => j !== i))}
+              key={id}
+              className="btn btn--sm"
+              aria-pressed={theme === id}
+              onClick={() => setTheme(id)}
             >
-              <X />
+              {label}
             </button>
-          </div>
-        ))}
-        <button className="settings-model-add" onClick={() => change([...config.models, ""])}>
-          <Plus />
-          Add model
-        </button>
+          ))}
+        </div>
         <p className="settings-note">
-          The first is what a new chat starts from, once the history has nothing to say; every chat
-          keeps the model it was given.
+          Applied at once, and kept for this window. The file the settings write holds where
+          requests go and what they are sent with, not what the window looks like.
         </p>
       </div>
     </div>
@@ -243,9 +174,9 @@ function CustomizationTab({
 }) {
   return (
     <div className="settings">
-      <label className="settings-prompt">
-        <span>System prompt</span>
+      <Field label="System prompt" className="settings-prompt">
         <textarea
+          className="input input--area"
           value={config.systemPrompt}
           rows={10}
           spellCheck={false}
@@ -253,7 +184,7 @@ function CustomizationTab({
           aria-label="System prompt"
           onChange={(e) => onChange({ systemPrompt: e.target.value })}
         />
-      </label>
+      </Field>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
  * Whether the row this is used in is being removed.
  *
  * Escape gives the question up from wherever the keyboard is, the way it gives
- * up a rewrite in the composer and a rename in a row's own field.
+ * up a rewrite in the composer.
  */
 export function useDeleteQuestion() {
   const [asking, setAsking] = useState(false);
@@ -59,15 +59,15 @@ export function RowDelete({
     <div className="row-actions">
       {asking ? (
         <>
-          <button className="row-action confirm" onClick={onDelete}>
+          <button className="row-action btn btn--quiet btn--mini btn--danger" onClick={onDelete}>
             Delete
           </button>
-          <button className="row-action" onClick={giveUp}>
+          <button className="row-action btn btn--quiet btn--mini" onClick={giveUp}>
             Cancel
           </button>
         </>
       ) : (
-        <button className="row-action" aria-label={label} onClick={ask}>
+        <button className="row-action btn btn--quiet btn--mini" aria-label={label} onClick={ask}>
           <Trash2 />
         </button>
       )}

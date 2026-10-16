@@ -1,0 +1,389 @@
+/* ------------------------------------------------------------------ channel */
+
+/* The channel stands where the chat did: a scrolling feed of threads down the
+   panel, the composer fixed under it, and the ↓ button on the feed's edge. A row
+   is a thread, not a card: the whole width of one centred measure, quiet until
+   the pointer is on it. So the feed reads as a channel rather than a list of
+   boxes. */
+
+.channel-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.channel-feed {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  /* Nothing chains out of the feed to the window, and the panel itself does not
+     rubber-band. */
+  overscroll-behavior: none;
+  /* The pane's own bar stands above the feed in the flow; what keeps the first
+     thread clear of it is the list's own top padding rather than the scroller's,
+     so that a divider pinned to the top of what is scrolled is at the top of the
+     pane and not under that bar. */
+  /* The foot of the feed: the room the composer floating over it takes (its own
+     height) and the air under the last thread. It is a margin rather than the
+     padding it used to be — padding belongs to the scrollport, and a scrollport
+     that reaches the pane's foot has the platform's scrollbar cut off behind the
+     bar — so the feed ends where the composer begins, and what the composer
+     grows by still comes out of this room rather than out of the feed. */
+  padding: 0 24px 24px;
+  margin-bottom: var(--composer-h, 0px);
+  /* The centred column stays centred when the platform draws a classic
+     scrollbar, which takes width from this box alone. */
+  scrollbar-gutter: stable both-edges;
+  /* The feed is a layer of its own: a divider is pinned with a z-index, and
+     without this it would be pinned over the panels the window puts up beside
+     or over the channel rather than under them. */
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.channel-list {
+  width: 100%;
+  max-width: var(--content-w);
+  /* The pane draws its own bar above the feed, in the flow and of the same
+     height the window's chrome once floated over, so the list has only to keep
+     its own air off it and not the strip as well. */
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A stretch of the channel, one to a period: the divider that opens it and the
+   threads that belong to it. Each stretch is a column of its own, which is what
+   lets its divider be pinned while its own threads are what is under it, and
+   what leaves the rule it opens on behind as the feed moves. */
+.channel-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The rule a stretch opens on. It is drawn where the pill stands rather than
+   where the stretch begins — at the middle of the divider's own band — and it
+   belongs to the feed rather than to the pill, so a divider the feed has
+   scrolled under is a pill over the threads below it and not a line above them.
+   Drawn behind the pill, whose own colour is what the rule stops at its edges
+   for. */
+.channel-group::before {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--border);
+}
+
+/* The divider: the band between two stretches of the feed, with the pill in the
+   middle of it. The pill is pinned to the top of the pane, so the threads of its
+   stretch scroll under it and it names the stretch they belong to. The band
+   itself is clear, so what passes behind the pill is the feed's own words — and
+   being clear and full width it must not catch the clicks meant for those words,
+   so it is out of hit testing and the pill alone is put back in. */
+.channel-divider {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  pointer-events: none;
+}
+
+.channel-divider .btn {
+  pointer-events: auto;
+}
+
+/* One thread. Flat, like a channel message and not a card: the pointer lifts it
+   with a tint rather than a border, and an open or confirming row keeps the open
+   chat's treatment. */
+.channel-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  transition: background-color 120ms ease;
+}
+
+/* What a row offers while the pointer is in it, at its own top-right corner: pin
+   the thread, or delete it. The corner is empty — the face and the words are at
+   the row's left — and the menu is taken out of the flow, so the feed is the same
+   height whether or not it is drawn. It is faded rather than hidden: a hidden
+   subtree takes no tab stop, and with neither pin nor delete bound to a key this
+   corner is the only way to a thread's two actions, so the keyboard has to be
+   able to reach it while it is still invisible. It takes no clicks until it is
+   drawn, so the row stays clickable through it. It names the row it hangs in
+   rather than wearing `.row-menu` alone, since this sheet is imported by the row
+   itself and so is in the bundle *before* the library's `.menu`, whose fixed
+   placement is what a menu standing in a row has to overrule. */
+.channel-row .row-menu {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+/* Drawn under the pointer, or while something in it has the caret — the
+   keyboard's own way in, the caret being the one mark the faded pill leaves —
+   and for as long as the question is up, so that the answer to it is still there
+   to give once the pointer has moved. */
+.channel-row:hover .row-menu,
+.row-menu:focus-within,
+.channel-row.confirming .row-menu {
+  opacity: 1;
+}
+
+/* The buttons take the clicks back while the menu is drawn, rather than the menu
+   itself: the corner sits inside the row's stretched target, and it is the
+   buttons that are the pill — the two pixels between them belong to the thread.
+   The last clause is the question's own two answers, which wear no
+   `.row-menu-action` of their own. */
+.channel-row:hover .row-menu .btn,
+.row-menu:focus-within .btn,
+.channel-row.confirming .row-menu .btn {
+  pointer-events: auto;
+}
+
+/* The pin that is already on the thread: the colour says which way the press
+   goes, so the two readings of one button are told apart before it is pressed. */
+.row-menu-action.on {
+  color: var(--pin);
+}
+
+/* The pin, on the line the name is on rather than on one of its own: a row's
+   height is settled when it is written, and a mark added later must not move
+   what is under it. */
+.pin-mark {
+  flex: none;
+  color: var(--pin);
+  transform: translateY(1px);
+}
+
+.channel-row.active {
+  background-color: var(--sidebar-active);
+}
+
+/* Under the pointer the tint is there at once rather than fading up: swept down
+   the feed, what the pointer is on has to read before it has moved on. Leaving
+   still takes the fade, which is what the row's own transition is there for. */
+.channel-row:hover {
+  background-color: var(--row-hover);
+  transition: none;
+}
+
+/* A pinned thread: the block a channel gives one — a ground of its own and a rule
+   down its left edge. It is written after the two rules above on purpose: a pin is
+   a state of the row rather than a thing the pointer does to it, so hovering a
+   pinned row, or opening it, leaves its ground where it is. The padding the rule
+   takes is given back, so the face, the name and the words stay on the column
+   every other row is on. */
+.channel-row.pinned {
+  padding-left: 11px;
+  border-left: 3px solid var(--pin);
+  border-radius: 0 10px 10px 0;
+  background-color: var(--pin-bg);
+}
+
+/* The face at the row's left sits against the line its name sits on rather than
+   the row's middle, the way a channel stands an avatar against a message. */
+.channel-row > .avatar {
+  margin-top: 1px;
+}
+
+.channel-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The whole row is the click target: the button's `::after` below reaches past
+   the words to the row's own edges — its padding included and the actions under
+   it — so a click anywhere on a thread opens it, not just the words. */
+.channel-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* The message as it was typed: the transcript's own prompt face and size, its
+   newlines kept, a long line wrapped rather than run off the row. A row is here
+   to say which thread it is rather than to hold the whole prompt, so at most
+   three lines are shown and the rest is cut with an ellipsis; the message in
+   full is in the opening of the thread the row opens. The clamp needs the box
+   display and the hidden overflow, and it keeps the whitespace, so a prompt's
+   own newlines still break where they were typed. */
+.channel-root {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-family: var(--font-message);
+  font-size: var(--chat-text);
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The message's own box, and the question stacked in it: what the row's height is
+   made of is the message, and the question is put in the message's own cell, so
+   asking a row leaves the box exactly the height it had. The box is not
+   positioned on purpose: the row's click target is the button's `::after`,
+   stretched over the whole row from the nearest positioned box above it, and a
+   positioned box here would shrink a click on the row's face, its status line or
+   its empty corner into a click on the message alone. */
+.channel-message {
+  display: grid;
+}
+
+.channel-message > * {
+  grid-area: 1 / 1;
+}
+
+/* The question the row asks in its own words, in the message's box: the same face
+   and the same measure as the message, since it stands where the message stands,
+   and one line inside a box that may be three. */
+.channel-ask {
+  font-family: var(--font-message);
+  font-size: var(--chat-text);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* While the question is up the message steps out of sight — the box it fills
+   stays exactly as it was, so the row does not move — and it stops taking
+   clicks, so the question's own row is not a way into the thread. The hiding is
+   done on the button that carries the message rather than on the message: the
+   button is a way into the thread on its own, and the keyboard walks it whether
+   or not anything is drawn, so a merely clickless button would still open the
+   very row the question is about, invisibly and with nothing marking the caret
+   on it. Visibility takes the tab stop out while the box keeps the height it
+   held — and the message inside it is hidden with it, so it wants no rule of its
+   own. */
+.channel-row.confirming .channel-open {
+  visibility: hidden;
+}
+
+/* The pictures the prompt was posted with, under the words it was posted as: a
+   thread's attachments at the size a row of the feed can hold. The transcript
+   draws the same ones at the size they were sent — a hundred and four to a side
+   — and a row is a line of a channel rather than a page: each keeps its own
+   square and is cropped to fill it, the way the transcript's are. */
+.channel-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  /* Room under them, so what follows a picture is not read as part of it: the
+     pictures belong to the prompt above, and the line below is about the run. */
+  margin-bottom: 5px;
+}
+
+.channel-image {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+/* A box whose picture has not been read yet: it is the size and the place the
+   picture will be, and nothing is drawn in it rather than something that is not
+   the picture. */
+.channel-image.held {
+  visibility: hidden;
+}
+
+/* The line under the prompt: what the run is doing, and — once it is done — who
+   answered it, how much was said, and the moment it last was. It holds its height
+   whether or not it has anything to say: a row is created with what it was
+   created with, and a thread whose first answer lands must not grow under the
+   reader and push every row below it down. Its tone classes are namespaced
+   (`tone-thinking` and the rest) because a bare `thinking` or `failed` on a feed
+   row is a name the transcript's own blocks answer to as well: a rule written for
+   one of those, with a margin of its own, would reach in here and move the line
+   the moment a run began thinking. */
+.channel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* The count is the louder of the two things on that line, the way a channel's is
+   — the circle and how many it wrote — with the moment it last did behind them.
+   A thread that needs the user wears the app's blue instead: that is the one
+   state that is the user's move, and the count is not one. A failure wears the
+   error red. */
+.channel-status.tone-replies {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Everyone who has said something in a thread, before the count of what they
+   said: the person's own circle once they have spoken in it, and the assistant's
+   mark. Side by side rather than overlapped, since the circles have no ring to
+   tell them apart and the row's own background changes under the pointer. */
+.channel-participants {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.channel-last {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.channel-status.tone-needs {
+  color: var(--reasoning);
+}
+
+.channel-status.tone-failed {
+  color: var(--danger);
+}
+
+/* A post that did not land: the same notice the transcript shows, at the feed's
+   own end where the post would have been. */
+.channel-error {
+  width: 100%;
+  max-width: var(--content-w);
+  margin-top: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13.5px;
+}

@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { enabledServers, offeredServers } from "../lazy";
 import { tokens } from "../tools";
 import type { McpCost, McpFailure, McpServer, McpTool } from "../types";
 
@@ -24,22 +25,6 @@ export interface ServersProps {
 }
 
 /**
- * The servers a chat offers: every enabled one while it has never chosen, and
- * otherwise the ones it kept — never one the settings window has switched off,
- * since a server that is not started has nothing for a chat to call.
- *
- * One rule for one question, written once: the list draws it and the composer
- * counts it, and a chat that is sent a server the list shows as off — or shown
- * one it is not sent — would be two answers to the same thing.
- */
-export function offeredServers(declared: McpServer[], chosen: string[] | null): string[] {
-  const enabled = declared.filter((server) => server.enabled);
-  return chosen === null
-    ? enabled.map((server) => server.id)
-    : chosen.filter((id) => enabled.some((server) => server.id === id));
-}
-
-/**
  * The model context protocol servers the open chat may call, under the
  * composer's tools control: a switch for each, and a button that asks them all
  * again.
@@ -62,7 +47,7 @@ export function ServersMenu({
   onChoose,
   onRefresh,
 }: ServersProps) {
-  const enabled = declared.filter((server) => server.enabled);
+  const enabled = enabledServers(declared);
   const offered = offeredServers(declared, chosen);
 
   /**
@@ -101,7 +86,7 @@ export function ServersMenu({
         return (
           <button
             key={server.id}
-            className="menu-server"
+            className="menu-option menu-server"
             aria-pressed={offered.includes(server.id)}
             onClick={() => toggle(server.id)}
           >
@@ -118,7 +103,7 @@ export function ServersMenu({
       {enabled.length === 0 && (
         <p className="menu-note">No servers are enabled. Add one in the settings.</p>
       )}
-      <button className="menu-refresh" disabled={reading} onClick={onRefresh}>
+      <button className="btn btn--subtle menu-refresh" disabled={reading} onClick={onRefresh}>
         <RefreshCw className={reading ? "spinning" : undefined} />
         Refresh tools
       </button>

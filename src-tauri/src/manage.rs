@@ -16,6 +16,7 @@ use std::time::Instant;
 use serde_json::{json, Value};
 
 use crate::mcp;
+use crate::settings;
 use crate::{apply_config, apply_servers, AppConfig, AppState};
 
 /// Whether this call is one of the app's own, rather than a server's.
@@ -85,8 +86,8 @@ pub fn tools() -> Vec<mcp::ToolOffer> {
         offer(
             "models_list",
             "List the models",
-            "List the models this app offers, in the order the picker shows them — the \
-             first being what a new chat starts from.",
+            "List the models this app offers, in the order the picker shows them, and \
+             the model a new chat starts from.",
             object(json!({}), &[]),
         ),
         offer(
@@ -208,7 +209,13 @@ pub(crate) async fn call(
     };
 
     let done = match name {
-        "models_list" => Ok(models_answer(&state.config.lock().models)),
+        "models_list" => {
+            let config = state.config.lock();
+            Ok(models_answer(
+                &config.models,
+                settings::default_model(&config),
+            ))
+        }
         "model_add" => add_model(app, state, &args),
         "model_remove" => remove_model(app, state, &args),
         "mcp_list" => Ok(servers_answer(&declared()?)),
@@ -251,23 +258,24 @@ fn wanted(args: &Value, key: &str) -> Result<String, String> {
 
 // ------------------------------------------------------------------- models
 
-/// The models, in the order they are offered, as the model is told them.
-fn models_answer(models: &[String]) -> String {
-    let starts = models.first().cloned().unwrap_or_default();
+/// The models, in the order they are offered, as the model is told them, and the
+/// one a new chat starts from — which is a model of its own rather than the head
+/// of that list, so that choosing one is not a way of showing it first.
+fn models_answer(models: &[String], starts: &str) -> String {
     format!(
-        "The models are, in the order a new chat follows them:\n{}\nA new chat starts from \"{starts}\".",
+        "The models are, in the order the picker shows them:\n{}\nA new chat starts from \"{starts}\".",
         serde_json::to_string(models).unwrap_or_else(|_| "[]".to_string())
     )
 }
 
 /// Adds one model — at the end, unless a place is given — answering with the
 /// list as it now stands.
-fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String> {
+fn model_added(models: &mut Vec<String>, starts: &str, args: &Value) -> Result<String, String> {
     let model = wanted(args, "model")?;
     if let Some(place) = models.iter().position(|known| known == &model) {
         return Err(format!(
             "\"{model}\" is already a model, at place {place}. {}",
-            models_answer(models)
+            models_answer(models, starts)
         ));
     }
     let position = match args.get("position") {
@@ -288,7 +296,7 @@ fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String>
             return Err(format!(
                 "There is no place {place}: the list holds {} model(s). {}",
                 models.len(),
-                models_answer(models)
+                models_answer(models, starts)
             ))
         }
         None => {
@@ -296,20 +304,29 @@ fn model_added(models: &mut Vec<String>, args: &Value) -> Result<String, String>
             format!("\"{model}\" was added at the end.")
         }
     };
-    Ok(format!("{added}\n{}", models_answer(models)))
+    Ok(format!("{added}\n{}", models_answer(models, starts)))
 }
 
-/// Removes one model by its id. The last one stays: a chat needs a model to ask.
+/// Removes one model by its id, answering with what it took away. The list as
+/// it now stands, and the default that removal leaves, are the caller's to
+/// append: the default has to be resolved against the list that is left rather
+/// than the one it found, so the one resolution serves the answer and the file
+/// both. The last model stays: a chat needs a model to ask.
 ///
 /// Which mistake the caller made is worked out before it is answered: a model
 /// that is not there is said so even when the list holds only one, since that is
 /// what was asked about.
-fn model_removed(models: &mut Vec<String>, args: &Value) -> Result<String, String> {
+fn model_removed(models: &mut Vec<String>, starts: &str, args: &Value) -> Result<String, String> {
     let model = wanted(args, "model")?;
     let place = models
         .iter()
         .position(|known| known == &model)
-        .ok_or_else(|| format!("\"{model}\" is not one of the models. {}", models_answer(models)))?;
+        .ok_or_else(|| {
+            format!(
+                "\"{model}\" is not one of the models. {}",
+                models_answer(models, starts)
+            )
+        })?;
     if models.len() <= 1 {
         return Err(format!(
             "\"{model}\" is the only model, and the list cannot be emptied: a chat needs \
@@ -317,26 +334,56 @@ fn model_removed(models: &mut Vec<String>, args: &Value) -> Result<String, Strin
         ));
     }
     models.remove(place);
-    Ok(format!(
-        "\"{model}\" was removed.\n{}",
-        models_answer(models)
-    ))
+    Ok(format!("\"{model}\" was removed."))
+}
+
+/// The default a removal leaves, resolved against the list that remains: one
+/// that named the model that went falls to the head of what is left, since that
+/// is where every reader of the old default would land anyway, and one that
+/// named a model still there goes on naming it.
+///
+/// Split from [`settings::default_model`] because that one reads a config, and
+/// the resolution here happens between the removal and the write, where no
+/// config exists yet: the answer and the file are both built from what this
+/// returns, so they cannot name different models.
+fn default_after_removal(models: &[String], starts: &str, gone: &str) -> String {
+    if starts == gone {
+        models.first().cloned().unwrap_or_default()
+    } else {
+        starts.to_string()
+    }
 }
 
 fn add_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Result<String, String> {
     let config = state.config.lock().clone();
     let mut models = config.models.clone();
-    let said = model_added(&mut models, args)?;
+    let said = model_added(&mut models, settings::default_model(&config), args)?;
     apply_config(app, state, AppConfig { models, ..config })?;
     Ok(said)
 }
 
 fn remove_model(app: &tauri::AppHandle, state: &AppState, args: &Value) -> Result<String, String> {
     let config = state.config.lock().clone();
+    let gone = wanted(args, "model")?;
     let mut models = config.models.clone();
-    let said = model_removed(&mut models, args)?;
-    apply_config(app, state, AppConfig { models, ..config })?;
-    Ok(said)
+    let starts = settings::default_model(&config);
+    let said = model_removed(&mut models, starts, args)?;
+    // The model is gone before the default is resolved, so the answer and the
+    // file are built from the list it left and the default that list gives: a
+    // default that named the model that went cannot be written down, or said
+    // back, as the model a new chat starts from.
+    let default_model = default_after_removal(&models, starts, &gone);
+    let answer = models_answer(&models, &default_model);
+    apply_config(
+        app,
+        state,
+        AppConfig {
+            models,
+            default_model,
+            ..config
+        },
+    )?;
+    Ok(format!("{said}\n{answer}"))
 }
 
 // ------------------------------------------------------------------ servers
@@ -642,279 +689,6 @@ async fn test_server(state: &AppState, args: &Value) -> Result<String, String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "tests/manage.rs"]
+mod tests;
 
-    fn args(value: Value) -> Value {
-        value
-    }
-
-    /// The names a call is recognised by and the names that are offered are one
-    /// list: a tool the model is given has to be one this module answers.
-    #[test]
-    fn every_offered_tool_is_one_that_owns_its_name() {
-        let tools = tools();
-        assert_eq!(tools.len(), 8);
-        for tool in &tools {
-            assert!(owns(&tool.name), "{} is offered but not owned", tool.name);
-            assert!(tool.auto_run, "{} would stop the turn", tool.name);
-            assert!(tool.server.is_empty(), "{} claims a server", tool.name);
-            assert!(!tool.description.is_empty(), "{} has nothing to say", tool.name);
-            assert_eq!(tool.parameters["type"], json!("object"), "{}", tool.name);
-        }
-        assert!(!owns("ledger__list_accounts"));
-        assert!(!owns("load_lazy_mcp"));
-        assert!(!owns("models_lists"));
-
-        // They ride in every request there is, so what they cost is worth a
-        // bound: past it, holding them back would be a decision to take again.
-        let wire: Vec<crate::types::chat::Tool> = tools.iter().map(mcp::ToolOffer::as_tool).collect();
-        let bytes = serde_json::to_string(&wire).map_or(0, |json| json.len());
-        eprintln!("the app's own tools cost {bytes} bytes a request");
-        assert!(bytes < 4096, "the app's own tools cost {bytes} bytes a request");
-    }
-
-    /// A model is added where it was asked for, or at the end — and one that is
-    /// already there is said so rather than added twice, since the list is what
-    /// the picker shows and what a new chat starts from.
-    #[test]
-    fn a_model_is_added_once_and_where_it_was_asked_for() {
-        let mut models = vec!["a/one".to_string()];
-
-        let said = model_added(&mut models, &args(json!({ "model": "b/two" }))).unwrap();
-        assert_eq!(models, vec!["a/one", "b/two"]);
-        assert!(said.contains("at the end"), "{said}");
-
-        let said = model_added(&mut models, &args(json!({ "model": "c/three", "position": 1 }))).unwrap();
-        assert_eq!(models, vec!["a/one", "c/three", "b/two"]);
-        assert!(said.contains("place 1"), "{said}");
-
-        // Both halves of the answer name the list as it now stands.
-        assert!(said.contains("c/three"), "{said}");
-
-        let refused = model_added(&mut models, &args(json!({ "model": "c/three" }))).unwrap_err();
-        assert!(refused.contains("already a model, at place 1"), "{refused}");
-        assert_eq!(models.len(), 3);
-
-        let refused = model_added(&mut models, &args(json!({ "model": "d/four", "position": 9 }))).unwrap_err();
-        assert!(refused.contains("no place 9"), "{refused}");
-        assert_eq!(models.len(), 3);
-
-        let refused = model_added(&mut models, &args(json!({ "model": "   " }))).unwrap_err();
-        assert!(refused.contains("empty"), "{refused}");
-    }
-
-    /// The last model stays: the settings window cannot empty the list either,
-    /// and a chat with no model has nothing to ask.
-    #[test]
-    fn the_last_model_is_not_removed() {
-        let mut models = vec!["a/one".to_string()];
-        let refused = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap_err();
-        assert!(refused.contains("only model"), "{refused}");
-        assert_eq!(models, vec!["a/one"]);
-
-        let mut models = vec!["a/one".to_string(), "b/two".to_string()];
-        let said = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap();
-        assert_eq!(models, vec!["b/two"]);
-        assert!(said.contains("was removed"), "{said}");
-
-        let refused = model_removed(&mut models, &args(json!({ "model": "a/one" }))).unwrap_err();
-        assert!(refused.contains("is not one of the models"), "{refused}");
-        assert!(refused.contains("b/two"), "{refused}");
-    }
-
-    /// A server is declared whole, with the defaults the file's own keys have,
-    /// and one id is one server: a second declaration of it is refused rather
-    /// than shadowing the first.
-    #[test]
-    fn a_server_is_declared_whole_and_its_id_is_its_own() {
-        let mut servers = Vec::new();
-        let said = server_added(
-            &mut servers,
-            &args(json!({
-                "id": "ledger",
-                "transport": { "type": "http", "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer sk-1" } }
-            })),
-        )
-        .unwrap();
-        assert!(said.contains("was declared"), "{said}");
-        let server = &servers[0];
-        assert_eq!(server.name, "ledger", "the id is the name until one is given");
-        assert!(server.enabled && server.auto_run && !server.lazy);
-        // The answer names the header and never its value.
-        assert!(said.contains("Authorization"), "{said}");
-        assert!(!said.contains("sk-1"), "a value was read back out: {said}");
-
-        let refused = server_added(
-            &mut servers,
-            &args(json!({ "id": "LEDGER", "transport": { "type": "http", "url": "https://elsewhere" } })),
-        )
-        .unwrap_err();
-        assert!(refused.contains("already the id"), "{refused}");
-        assert_eq!(servers.len(), 1);
-
-        let refused = server_added(
-            &mut servers,
-            &args(json!({ "id": "two words", "transport": { "type": "http", "url": "https://x" } })),
-        )
-        .unwrap_err();
-        assert!(refused.contains("one word"), "{refused}");
-
-        // A server has to be reachable by something.
-        let refused = server_added(
-            &mut servers,
-            &args(json!({ "id": "quiet", "transport": { "type": "http" } })),
-        )
-        .unwrap_err();
-        assert!(refused.contains("needs a \"url\""), "{refused}");
-        let refused = server_added(
-            &mut servers,
-            &args(json!({ "id": "quiet", "transport": { "type": "stdio" } })),
-        )
-        .unwrap_err();
-        assert!(refused.contains("needs a \"command\""), "{refused}");
-        let refused = server_added(&mut servers, &args(json!({ "id": "quiet" }))).unwrap_err();
-        assert!(refused.contains("\"transport\" is required"), "{refused}");
-        assert_eq!(servers.len(), 1);
-    }
-
-    /// A change touches what it names and nothing else: a new url keeps the
-    /// headers, a flag turns over on its own, and a null is how a header goes.
-    #[test]
-    fn a_server_is_changed_part_by_part() {
-        let mut servers = vec![mcp::Server {
-            id: "ledger".into(),
-            name: "Ledger".into(),
-            enabled: true,
-            auto_run: true,
-            lazy: false,
-            description: String::new(),
-            transport: mcp::Transport::Http {
-                url: "https://old.example.com/mcp".into(),
-                headers: [("Authorization".to_string(), "Bearer sk-1".to_string())]
-                    .into_iter()
-                    .collect(),
-            },
-        }];
-
-        let said = server_updated(
-            &mut servers,
-            &args(json!({
-                "id": "ledger",
-                "name": "The ledger",
-                "enabled": false,
-                "lazy": true,
-                "description": "Accounts and receipts",
-                "transport": { "url": "https://new.example.com/mcp" }
-            })),
-        )
-        .unwrap();
-        let server = &servers[0];
-        assert_eq!(server.name, "The ledger");
-        assert!(!server.enabled && server.lazy && server.auto_run, "autoRun was not written, so it stands");
-        assert_eq!(server.description, "Accounts and receipts");
-        match &server.transport {
-            mcp::Transport::Http { url, headers } => {
-                assert_eq!(url, "https://new.example.com/mcp");
-                // The header was not mentioned, so it is still there — and not
-                // read back out.
-                assert_eq!(headers.get("Authorization").map(String::as_str), Some("Bearer sk-1"));
-            }
-            other => panic!("{other:?}"),
-        }
-        assert!(!said.contains("sk-1"), "a value was read back out: {said}");
-
-        // A null removes an entry, and the transport can be replaced outright.
-        server_updated(
-            &mut servers,
-            &args(json!({
-                "id": "ledger",
-                "transport": { "type": "stdio", "command": "ledger-mcp", "args": ["--stdio"] }
-            })),
-        )
-        .unwrap();
-        assert_eq!(
-            servers[0].transport,
-            mcp::Transport::Stdio {
-                command: "ledger-mcp".into(),
-                args: vec!["--stdio".into()],
-                env: BTreeMap::new(),
-            }
-        );
-
-        let refused = server_updated(&mut servers, &args(json!({ "id": "notes" }))).unwrap_err();
-        assert!(refused.contains("No server is declared"), "{refused}");
-        assert!(refused.contains("ledger"), "{refused}");
-    }
-
-    /// Removing one says what it was and what is left, and a caller that names
-    /// one that is not there is told what is.
-    #[test]
-    fn a_server_is_removed_by_its_id() {
-        let mut servers = vec![
-            mcp::Server {
-                id: "ledger".into(),
-                name: "Ledger".into(),
-                enabled: true,
-                auto_run: true,
-                lazy: false,
-                description: String::new(),
-                transport: mcp::Transport::Http {
-                    url: "https://example.com/mcp".into(),
-                    headers: BTreeMap::new(),
-                },
-            },
-            mcp::Server {
-                id: "notes".into(),
-                name: "Notes".into(),
-                enabled: true,
-                auto_run: true,
-                lazy: false,
-                description: String::new(),
-                transport: mcp::Transport::Stdio {
-                    command: "notes-mcp".into(),
-                    args: Vec::new(),
-                    env: BTreeMap::new(),
-                },
-            },
-        ];
-
-        let said = server_removed(&mut servers, &args(json!({ "id": "LEDGER" }))).unwrap();
-        assert!(said.contains("was removed"), "{said}");
-        assert!(said.contains("notes"), "{said}");
-        assert_eq!(servers.len(), 1);
-
-        let refused = server_removed(&mut servers, &args(json!({ "id": "ledger" }))).unwrap_err();
-        assert!(refused.contains("No server is declared"), "{refused}");
-
-        let said = server_removed(&mut servers, &args(json!({ "id": "notes" }))).unwrap();
-        assert!(said.contains("No MCP servers are declared"), "{said}");
-    }
-
-    /// What the model is told about the servers: what each is and how it is
-    /// reached — and a bearer token is not part of it.
-    #[test]
-    fn the_servers_are_listed_without_their_secrets() {
-        let servers = vec![mcp::Server {
-            id: "ledger".into(),
-            name: "Ledger".into(),
-            enabled: true,
-            auto_run: false,
-            lazy: true,
-            description: "Accounts and receipts".into(),
-            transport: mcp::Transport::Http {
-                url: "https://example.com/mcp".into(),
-                headers: [("Authorization".to_string(), "Bearer sk-secret".to_string())]
-                    .into_iter()
-                    .collect(),
-            },
-        }];
-        let said = servers_answer(&servers);
-        assert!(said.contains("ledger") && said.contains("Accounts and receipts"), "{said}");
-        assert!(said.contains("https://example.com/mcp"), "{said}");
-        assert!(said.contains("Authorization"), "{said}");
-        assert!(!said.contains("sk-secret"), "a header value was read out: {said}");
-
-        assert_eq!(servers_answer(&[]), "No MCP servers are declared.");
-    }
-}

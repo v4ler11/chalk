@@ -1,112 +1,112 @@
-import { useState } from "react";
-import { Check, ChevronDown, EllipsisVertical } from "lucide-react";
+import { ArrowLeft, EllipsisVertical } from "lucide-react";
 import { MOD } from "../keybinds";
+import { Hint } from "./Hint";
+import { Menu, MenuOption, useOpenMenu } from "./Menu";
 
 interface Props {
-  /** The model the open chat is holding, named in the chip. */
-  model: string;
-  /** The models the settings offer, in their order. */
-  models: string[];
-  onPick: (model: string) => void;
+  /** Whether a thread is open. The way back to the feed belongs to the pane a
+   *  thread puts up, so it is part of that pane's bar and travels with it, and
+   *  the JSON view is a thread's own: a channel's menu does not offer it. */
+  thread: boolean;
+  /** The way back to the feed, which exists only while a thread is open. */
+  onBack: () => void;
   /** Whether the plain-JSON view is standing in for the transcript. */
   jsonView: boolean;
   onJsonView: (on: boolean) => void;
+  /** What a pane that has taken the window over is called: the settings, the
+   *  JSON view. A mode is not a thread, so its name and its way out stand on
+   *  this same strip — one bar across the pane, the way every pane has one. */
+  title?: string;
+  /** Leaves the mode, from the red ESC at the strip's right. */
+  onClose?: () => void;
 }
 
 /**
- * The chat panel's own nav: the strip across the top of the panel, which drags
- * the window wherever the controls are not, the model in use at its right, and
- * the three-dots beside it — the window's view switches, which outlive the chat
- * they are taken in.
+ * The panel's own bar: the strip across the top of a pane, which drags the
+ * window wherever the controls are not. It is drawn by each pane, so a thread's
+ * bar arrives with the thread and leaves with it, and everything on it does the
+ * same rather than appearing over a pane it does not belong to.
  *
- * The chip opens the list of models: choosing one is a per-chat act and belongs
- * beside the chat, while the list itself is written in Settings, which the
- * sidebar's own row opens.
+ * The way back to the feed is at its left while a thread is open, and the
+ * three-dots at its right, whose one item is the JSON view: that view is a
+ * thread's own, so a bar belonging to anything else carries no menu rather than a
+ * menu with nothing in it. The settings used to be an item here and are a row of
+ * the window's own column now, with the panes they open among.
  *
- * The rule under it is what separates this nav from the transcript below.
+ * A pane that has taken the window over wears the same strip and nothing more:
+ * its name at the left and its way out at the right, rather than a second bar
+ * under this one — the strip is the pane's own band, and a second one is a band
+ * of its own for a name that belongs on this one.
+ *
+ * The model that used to be named here is in the composer now, beside the message
+ * it applies to. The rule under this strip is what separates the bar from the
+ * pane below it.
  */
-export function ChatNav({ model, models, onPick, jsonView, onJsonView }: Props) {
-  const [open, setOpen] = useState(false);
-  const [viewOpen, setViewOpen] = useState(false);
+export function ChatNav({ thread, onBack, jsonView, onJsonView, title, onClose }: Props) {
+  const menus = useOpenMenu<"view">();
+  const viewOpen = menus.open === "view";
 
   return (
     <div className="chat-nav" data-tauri-drag-region="deep">
-      <div className="model-picker">
-        <button
-          className="model-chip"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <span className="model-name">{model || "model"}</span>
-          <ChevronDown className="chevron" />
-        </button>
+      {/* What a pane that has taken the window over is: named at the strip's
+          left, where a thread's way back stands, since it is the same kind of
+          thing — what this pane is — and left by the red ESC at its right. */}
+      {title !== undefined && (
+        <>
+          <span className="pane-title">{title}</span>
+          <button className="btn btn--key btn--danger btn--danger-outline" onClick={onClose}>
+            ESC
+          </button>
+        </>
+      )}
 
-        {open && (
-          <>
-            {/* Anywhere else closes the list, which is what a click outside a
-                menu is for. */}
-            <div className="menu-backdrop" onClick={() => setOpen(false)} />
-            <div className="menu below model-menu" role="listbox">
-              {models.map((name) => (
-                <button
-                  key={name}
-                  className={`menu-option${name === model ? " active" : ""}`}
-                  role="option"
-                  aria-selected={name === model}
+      {/* What belongs to a thread is on its bar and nothing else is: the way back
+          to the feed, and the dots holding the switches a thread has. Any other
+          pane's bar is the strip alone — the window's drag region, and the rule
+          under it. */}
+      {thread && (
+        <>
+          {/* The way back, in the bar rather than in the window's corner: it
+              belongs to the pane a thread puts up, so it travels with that
+              pane. */}
+          <Hint label={<>Channel <kbd>Esc</kbd></>} decorative>
+            <button
+              className="btn btn--quiet btn--icon"
+              aria-label="Back to channel"
+              onClick={onBack}
+            >
+              <ArrowLeft />
+            </button>
+          </Hint>
+
+          <div className="nav-menu">
+            <button
+              className={`btn btn--quiet btn--icon${viewOpen ? " active" : ""}`}
+              aria-haspopup="menu"
+              aria-expanded={viewOpen}
+              aria-label="Views"
+              onClick={() => menus.toggle("view")}
+            >
+              <EllipsisVertical />
+            </button>
+
+            {viewOpen && (
+              <Menu className="view-menu" role="menu" onClose={menus.close}>
+                <MenuOption
+                  label="JSON view"
+                  selected={jsonView}
+                  role="menuitemcheckbox"
+                  shortcut={`${MOD}J`}
                   onClick={() => {
-                    onPick(name);
-                    setOpen(false);
+                    onJsonView(!jsonView);
+                    menus.close();
                   }}
-                >
-                  <span className="menu-option-name">{name}</span>
-                  {name === model && <Check className="menu-option-check" />}
-                </button>
-              ))}
-              {models.length === 0 && <span className="menu-option empty">No models yet</span>}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* The view switches, of which there is one: the conversation as plain
-          JSON instead of the transcript and the composer. It is the window's
-          rather than the chat's — switching chats while it is on keeps showing
-          JSON, and the sidebar's own row is what leaves it. */}
-      <div className="nav-menu">
-        <button
-          className={`icon-btn${viewOpen ? " active" : ""}`}
-          aria-haspopup="menu"
-          aria-expanded={viewOpen}
-          aria-label="View"
-          onClick={() => setViewOpen((o) => !o)}
-        >
-          <EllipsisVertical className="icon" />
-        </button>
-
-        {viewOpen && (
-          <>
-            <div className="menu-backdrop" onClick={() => setViewOpen(false)} />
-            <div className="menu below view-menu" role="menu">
-              <button
-                className={`menu-option${jsonView ? " active" : ""}`}
-                role="menuitemcheckbox"
-                aria-checked={jsonView}
-                onClick={() => {
-                  onJsonView(!jsonView);
-                  setViewOpen(false);
-                }}
-              >
-                <span className="menu-option-name">JSON view</span>
-                {/* The shortcut is named where its command lives, as the rail's
-                    buttons name theirs. */}
-                <kbd>{MOD}J</kbd>
-                {jsonView && <Check className="menu-option-check" />}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+                />
+              </Menu>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

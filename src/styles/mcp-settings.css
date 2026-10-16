@@ -1,58 +1,70 @@
 /* ------------------------------------------------------------ mcp settings */
 
-/* The MCP page is two panes, not one form: the servers down the left, the one
-   that is open on the right. It takes the whole page, so each column scrolls
-   on its own and neither can push the other's Save off the bottom. */
+/* The MCP page is two columns, not one form: the servers down the left, the one
+   that is open on the right, and the design's rule drawn between the two. The
+   page keeps that design's own content width — 180 of list, then the form —
+   rather than letting a URL field run the whole pane; a wider window gives it
+   more air on the right, not longer fields. */
 .mcp {
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: 16px;
+  /* No gap between the columns: the rule carries its own air (below). A gap
+     would be added to whatever the columns keep beside them, so the list's rows
+     would stand 12 from the left border the pane draws and 12 more from the rule
+     — the same row read at two distances from the two lines it sits between. */
+  width: 100%;
+  max-width: 992px;
 }
 
 /* The list of servers: a row each, the way the window's own sidebar lists its
-   sections, with New server kept at its head. */
+   sections, with New server kept at its head. It is the settings' own column —
+   the sections' width, and their 12 either side — because the two are read one
+   beside the other: the design's measure is 180 of list, and the rows are what
+   180 is once that padding is taken out of it, which is what a section row
+   measures. Its own scrollbar is drawn over the rows' pill rather than over
+   their names: a row keeps 8 inside itself and the column 12 more, so what the
+   bar lies across is ground, and the name — and the mark the row says itself
+   with — ends clear of it. */
 .mcp-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: none;
-  /* Wide enough for the question a row asks before it is removed — the same
-     one the history's rows ask, in the same words. */
-  width: 240px;
-  padding-right: 12px;
-  border-right: 1px solid var(--border);
+  width: 180px;
+  padding: 0 12px;
   overflow-y: auto;
   overscroll-behavior: none;
 }
 
-.mcp-new {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  padding: 6px 8px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.mcp-new:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-.mcp-new svg {
+/* The rule the design draws between the two columns. The list keeps 12 of its
+   own between its rows and its edge, which is the rule's air on that side; the
+   rule carries the 12 the form needs on the other, so a row stands the same 12
+   from the line the pane draws on its left and from the rule on its right. */
+.mcp-divider {
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 1px;
+  margin-right: 12px;
+  background-color: var(--border);
 }
 
+/* New server keeps its head; its dashed pill is the library's. Its own padding
+   is the rows': a button at the head of a list is the list's first row, and a
+   label set 2px further in than every name under it reads as a mistake. What it
+   holds is centred in it, so the air either side of the label is the same air —
+   the pill spans the list, and a label laid out from the left would leave the
+   whole of the row's width spare on its right. The 7 is the rows' 8 less the
+   dashed border the pill carries. */
+.mcp-new {
+  margin-bottom: 4px;
+  padding: 6px 7px;
+}
+
+/* A row: one height, one radius and one padding with the sections the settings
+   are read by (`.nav-row`), since this list is the same kind of thing — a name
+   per row, the row under the pointer answering to it — and the two are read one
+   above the other. The padding is the nav's 8 rather than 10: the ink starts
+   where the nav's icons do. */
 .mcp-row {
   position: relative;
   display: flex;
@@ -104,38 +116,217 @@ button.mcp-row-name::after {
 /* A server that is switched off is still listed, and says so in passing. */
 .mcp-row-off {
   flex: none;
+  transition: opacity 120ms ease;
   font-size: 11px;
   color: var(--text-muted);
 }
 
-/* The open server: its fields, then its report and its own actions. The gaps
-   are the form's own, one step tighter: a server is a handful of fields, and the
-   whole of it — with its actions at the foot — is meant to fit without the
-   column scrolling under the pointer. */
+/* The back of the row holds one thing at a time: that mark, and, under the
+   pointer, the bin. The bin is drawn over the mark rather than beside it, so a
+   name is not shortened for the room the back of the row would keep — this list
+   is the design's own measure, and a name, a mark and a bin do not fit across it
+   on one line. While the question is up the answers take the flow again, since
+   they are what the row is about then. The inset is 4 rather than 8 because the
+   control is an icon centred in its own box: the box at 4 puts the mark's ink at
+   8 from the edge, which is where the name's ink stands from the other one, and
+   a row whose two ends are read at different distances reads as askew. */
+.mcp-row:not(.confirming) .row-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+}
+
+/* The mark steps aside for the bin, and only where the bin itself is drawn: the
+   pointer on the row, the question up, or the keyboard having reached the bin —
+   the three conditions the shared sheet reveals the actions under. Focus on
+   anything else in the row, the name included, is not one of them: the mark and
+   the bin are one thing at a time, and a name reached by the keyboard would
+   otherwise leave the row wearing neither. */
+.mcp-row:hover .mcp-row-off,
+.mcp-row:has(.row-actions:focus-within) .mcp-row-off,
+.mcp-row.confirming .mcp-row-off {
+  opacity: 0;
+}
+
+/* The question a row asks before it is removed. This list is the design's own
+   180, which is narrower than the question is: it takes the row's whole width
+   and the two answers take the line under it, rather than the question being cut
+   short to fit beside them. */
+.mcp-row.confirming {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.mcp-row.confirming .mcp-row-name {
+  flex: 1 1 100%;
+}
+
+/* The open server: its sections, in a column that scrolls itself. The button
+   that writes the server is not kept at this column's foot — it rides the
+   form's head line instead, which `.mcp-footer` says what keeps it there — so
+   the column holds the fields alone, with their own scrolling. */
 .mcp-detail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 13px;
   flex: 1;
   min-width: 0;
   overflow-y: auto;
   overscroll-behavior: none;
+  /* The selected server's column scrolls itself, and its scrollbar is drawn
+     inside it: the room is kept as padding rather than asked for with
+     `scrollbar-gutter`, which the webview the app runs in does not honour — a
+     field that ran to the edge of the scrollport would be read with the bar
+     lying across its right-hand rule. Padding is part of the scrollport, so the
+     fields end clear of the bar whichever way the platform draws one, and the
+     room is a bar's width and a few pixels more: a field ending exactly where
+     the bar begins is a field the bar is drawn against. */
+  padding-right: 20px;
 }
 
-.mcp-detail .settings {
+/* A section of the form: what it is called, and then what it holds. The gap
+   inside one is tighter than between two, since the sections are the page's own
+   paragraphs rather than its pages. */
+.mcp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* The page's own name for a group of fields, a size above the fields themselves:
+   the strip says which mode the window is in, and this says which part of the
+   server is being written. */
+.mcp-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.mcp-section-sub {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* The design's rule between two sections of the form. */
+.mcp-rule {
+  flex: none;
+  height: 1px;
+  background-color: var(--border);
+}
+
+/* The two ways a server is reached, as the cards that choose between them: a
+   mark, the transport's own word for itself, what it does, and who it is for.
+   The one in force is ruled in the page's ink — a fill would make it another kind
+   of surface — and its mark is filled in, since it is the one the form is
+   writing about. */
+.mcp-types {
+  display: flex;
   gap: 12px;
 }
 
-/* Two fields on one line, where they are both short: a name and the id it is
-   named by. It keeps a server's whole form inside the column. */
-.settings-row {
+.mcp-type {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
-}
-
-.settings-row > label {
   flex: 1;
   min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mcp-type:hover {
+  border-color: var(--text-muted);
+}
+
+.mcp-type.on,
+.mcp-type.on:hover {
+  border: 1.5px solid var(--text-primary);
+}
+
+.mcp-type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  color: var(--text-muted);
+}
+
+.mcp-type.on .mcp-type-icon {
+  background-color: var(--text-primary);
+  color: var(--bg);
+}
+
+.mcp-type-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mcp-type-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcp-type-title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mcp-type.on .mcp-type-title {
+  color: var(--text-primary);
+}
+
+/* The transport written where the protocol writes it: the same mono chip the
+   ids are read in. */
+.mcp-type-badge {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.mcp-type.on .mcp-type-badge {
+  background-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.mcp-type-text {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.mcp-type.on .mcp-type-text {
+  color: var(--text-secondary);
+}
+
+.mcp-type-eg {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .mcp-empty {
@@ -144,82 +335,23 @@ button.mcp-row-name::after {
   font-size: 13px;
 }
 
-/* The type is chosen from a list rather than typed, so it wears the fields'
-   shape without their freedom. */
-.mcp-detail select {
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  background-color: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: 15px;
-}
-
-.mcp-detail select:focus {
-  border-color: var(--text-muted);
-}
-
-/* The switch: an empty square when it is off, and a filled square with a tick on
-   it when it is on. The box is the app's own rather than the platform's, because
-   the platform draws that one in its own colours while every other control here
-   is the app's — and it reads the same in both schemes, since the tick is the
-   page's colour and so is light on the dark fill and dark on the light one. The
-   input keeps the click, the keyboard and the accessibility tree; only its box
-   is replaced. */
-.mcp-check {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.mcp-check input {
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  opacity: 0;
-}
-
-.mcp-check-box {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 15px;
-  height: 15px;
-  border: 1px solid var(--text-muted);
-  border-radius: 4px;
-  color: var(--bg);
-}
-
-.mcp-check input:checked + .mcp-check-box {
-  border-color: var(--text-primary);
-  background-color: var(--text-primary);
-}
-
-.mcp-check input:focus-visible + .mcp-check-box {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.mcp-check-box svg {
-  width: 11px;
-  height: 11px;
-  stroke-width: 3;
-}
-
 /* Headers and environment are the same list: a name, a value, and a way to drop
    the row, with the way to add one beside the label above them. */
 .mcp-kv {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* A list and the note that explains it are one block rather than two: the note
+   holds the 4px a field's own label holds from its control — the same reading,
+   one line further down — instead of the gap the section keeps between its own
+   blocks, so the label, the rows and the note are read as one thing. What the
+   pair is given back is spent under it, before the connection box. */
+.mcp-kv-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .mcp-kv-row {
@@ -233,33 +365,9 @@ button.mcp-row-name::after {
   min-width: 0;
 }
 
-.mcp-kv-remove {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 34px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.mcp-kv-remove:hover {
-  background-color: var(--sidebar);
-  color: var(--text-primary);
-}
-
-.mcp-kv-remove svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* The label and the way to add a row, on one line: a list of headers costs its
-   rows and not a row of its own. */
+   rows and not a row of its own. The `+` beside the label is the library's
+   subtle icon button. */
 .mcp-kv-head {
   display: flex;
   align-items: center;
@@ -267,118 +375,76 @@ button.mcp-row-name::after {
   gap: 8px;
 }
 
-.mcp-kv-add {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background-color: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.mcp-kv-add:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
-
-.mcp-kv-add svg {
-  width: 12px;
-  height: 12px;
-}
-
-/* Test does not commit, whatever it finds: it is outlined so the filled Save is
-   the only button in the pane that looks like it writes. */
-.mcp-secondary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.mcp-secondary:hover:not(:disabled) {
-  border-color: var(--text-muted);
-  background-color: var(--sidebar-hover);
-}
-
-.mcp-secondary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.mcp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* The one filled button in the pane: what writes `mcp.json`. */
-.mcp-actions .mcp-primary {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background-color: var(--accent);
-  color: var(--accent-contrast);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.mcp-actions .mcp-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.mcp-saved {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-/* What a verify or test answered: the server, the revision it agreed to, and
-   the tools it offers. */
-.mcp-report {
+/* The connection, tried where it is written: the state it is in, the button that
+   asks it, and what it answered with. The box stands on the app's field ground,
+   since it is about the fields above it rather than a surface of its own — and
+   it is about them as a block, so it stands apart from them: the section's gap,
+   and then a sentence's worth of air. */
+.mcp-test {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
   background-color: var(--input-bg);
 }
 
-.mcp-report-head {
+.mcp-test-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 16px;
 }
 
-.mcp-report-name {
+.mcp-test-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* A ring rather than a badge: the design's mark for a state, which takes the
+   colour of the state it is in — the green of what answered, the red of what
+   did not — and the supporting ink while there is nothing to say. */
+.mcp-test-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.mcp-test-dot.ok {
+  border-color: var(--ok);
+}
+
+.mcp-test-dot.bad {
+  border-color: var(--danger);
+}
+
+.mcp-test-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mcp-test-title {
   color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.mcp-test-sub {
+  color: var(--text-secondary);
   font-size: 13px;
-  font-weight: 500;
+  line-height: 1.35;
 }
 
-.mcp-report-protocol {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
+/* What a test answered: the tools the server offers, under the state that says
+   it answered at all. The name the model calls is the one thing here that is not
+   prose. */
 .mcp-tools {
   display: flex;
   flex-direction: column;
@@ -399,7 +465,6 @@ button.mcp-row-name::after {
   font-size: 13px;
 }
 
-/* The name the model calls: the one thing here that is not prose. */
 .mcp-tool-name {
   color: var(--text-muted);
   font-family: var(--font-mono);
@@ -411,4 +476,30 @@ button.mcp-row-name::after {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* The form's first line carries both what the form is about and the control that
+   writes it: the section's own head, and the button, on one line — the head's
+   title is the line's own type, so the button is set against it by baseline
+   rather than by a box, which is what puts the two on the same line whatever
+   either one's height. */
+.mcp-head-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mcp-head-row .mcp-section-head {
+  min-width: 0;
+}
+
+/* The button that writes the server, and the receipt for the last write: it rides
+   the form's head line rather than the foot of the column, so it stands in the
+   same place whether the form is taller than the window or shorter than it. */
+.mcp-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }

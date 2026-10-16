@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Copy, History, Wrench } from "lucide-react";
 import * as api from "../api";
+import { useCopy } from "../useCopy";
 import { groupTools } from "../lazy";
+import { useRuns } from "../useRuns";
 import { tokens, toolBytes } from "../tools";
 import type { NavSection } from "./SectionNav";
-import type { LazyServer, McpCost, McpTool, UiMessage } from "../types";
+import type { McpCost, RequestPreview } from "../types";
 
 /** Which JSON the pane is showing: the conversation, or the tools it offers. */
 export type JsonTab = "history" | "tools";
@@ -18,44 +20,46 @@ export const JSON_SECTIONS: NavSection[] = [
 interface Props {
   /** Which JSON to show: the conversation, or the tools. */
   tab: JsonTab;
-  /** The open chat's transcript, as the window holds it. */
-  messages: UiMessage[];
-  /** The configured prompt sent ahead of every request, and never part of a
-   *  transcript; shown in front of it, as a request carries it. */
-  systemPrompt: string;
-  /** The tools the request carries: `toolsFor`'s answer, the very list the chat
-   *  command is handed. What is not here is not in the request. */
-  tools: McpTool[];
+  /** The thread whose request is shown. The backend assembles it — the system
+   *  prompt resolved, the headers written, the lazy addendum named — so the
+   *  window reads the request rather than rendering its own idea of one. */
+  chat: number;
   /** What each server's tools cost a request, as last read; the app's own group
    *  has none, and is measured from its tools instead. */
   costs: McpCost[];
-  /** The lazily imported servers still waiting to be loaded, as the prompt will
-   *  name them; the backend needs them to build the request's system message. */
-  lazy: LazyServer[];
-}
-
-/**
- * Writes text to the clipboard, with the old selection copy as the fallback
- * where the async clipboard is unavailable — the same two ways the transcript's
- * own copy works.
- */
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
-  }
 }
 
 const TOKEN =
   /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\btrue\b|\bfalse\b|\bnull\b|[{}\[\],:]/g;
+
+/** Nothing open, for a text whose markers have not been touched. */
+const EMPTY: ReadonlySet<number> = new Set();
+
+/** What the pane shows while there is no request to show, held by identity so a
+ *  render that has not heard back yet does not rebuild the JSON. */
+const NO_MESSAGES: RequestPreview["messages"] = [];
+const NO_TOOLS: RequestPreview["tools"] = [];
+
+/**
+ * How much of one value is shown before the rest of it is only counted, and the
+ * marker that counts it is the way to see it.
+ *
+ * A transcript carries what was sent and what came back, and one of those can be
+ * a page of base64 — a screenshot's data URL, a file read whole. The pane is for
+ * reading the shape of a request, so a value past this length is laid out by its
+ * beginning alone: the JSON appears at once instead of pushing megabytes of
+ * glyphs through the layout, which is the whole of the cost of this view. What
+ * is left out is not gone — the marker under it opens the value in place, and
+ * **Copy** takes the request whole either way, since what it copies is the text
+ * and not what was made of it.
+ */
+const SHOWN = 200;
+
+/** What is left of a value, as the marker counts it: `18 KB`, `2.2 MB`. */
+function size(characters: number): string {
+  const kb = characters / 1024;
+  return kb < 1000 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+}
 
 /**
  * The pretty-printed JSON as coloured spans: keys, strings, numbers and the
@@ -64,15 +68,24 @@ const TOKEN =
  * reads as JSON and copies as JSON.
  *
  * A string is a key when the next thing after it is the colon that binds it,
- * which is the only place the two are told apart.
+ * which is the only place the two are told apart. One longer than [`SHOWN`] is
+ * shown by its beginning with a marker under it, and the marker is a button that
+ * opens the rest of the value in place and closes it again. The value's own
+ * index is what `open` holds and `expand` turns over, so what is opened is
+ * opened for the text it belongs to rather than for the position it happened to
+ * land in.
  */
-function highlight(source: string): ReactNode[] {
-  const out: ReactNode[] = [];
+function highlight(
+  source: string,
+  open: ReadonlySet<number>,
+  expand: (index: number) => void,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
   let end = 0;
   let key = 0;
   for (const match of source.matchAll(TOKEN)) {
     const at = match.index ?? 0;
-    if (at > end) out.push(source.slice(end, at));
+    if (at > end) nodes.push(source.slice(end, at));
     const token = match[0];
     let cls: string | null = null;
     if (token[0] === '"') {
@@ -84,11 +97,52 @@ function highlight(source: string): ReactNode[] {
     } else if (/^-?\d/.test(token)) {
       cls = "json-number";
     }
-    out.push(cls ? <span key={key++} className={cls}>{token}</span> : token);
+    if (cls === "json-string" && token.length > SHOWN) {
+      const index = key++;
+      const head = token.slice(0, SHOWN);
+      const rest = token.slice(SHOWN);
+      nodes.push(
+        <span key={index} className="json-string">
+          {head}
+        </span>,
+      );
+      if (open.has(index)) {
+        nodes.push(
+          <span key={key++} className="json-string">
+            {rest}
+          </span>,
+          <button
+            key={key++}
+            type="button"
+            className="json-more"
+            title="Hide this value again"
+            aria-expanded
+            onClick={() => expand(index)}
+          >
+            … show less
+          </button>,
+        );
+      } else {
+        nodes.push(
+          <button
+            key={key++}
+            type="button"
+            className="json-more"
+            title="Show this value in full"
+            aria-expanded={false}
+            onClick={() => expand(index)}
+          >
+            … {size(rest.length)} more
+          </button>,
+        );
+      }
+    } else {
+      nodes.push(cls ? <span key={key++} className={cls}>{token}</span> : token);
+    }
     end = at + token.length;
   }
-  if (end < source.length) out.push(source.slice(end));
-  return out;
+  if (end < source.length) nodes.push(source.slice(end));
+  return nodes;
 }
 
 /**
@@ -102,25 +156,40 @@ function highlight(source: string): ReactNode[] {
  * History tab's system message instead. The Copy button holds the pane's
  * bottom-right corner whatever the JSON is doing.
  */
-export function JsonView({
-  tab,
-  messages,
-  systemPrompt,
-  tools,
-  costs,
-  lazy,
-}: Props) {
-  const [copied, setCopied] = useState(false);
-  // The request's own messages, as the backend assembles them — the configured
-  // prompt resolved and the lazily imported servers named under it. `null` until
-  // it answers, and left `null` where there is no backend to ask (the harness),
-  // so the fallback below is what a browser shows.
-  const [preview, setPreview] = useState<UiMessage[] | null>(null);
+export function JsonView({ tab, chat, costs }: Props) {
+  const { copied, copy } = useCopy();
+  // The request as the backend assembles it: the prompt resolved, the prompts
+  // headed with the time they were sent, the lazy addendum named, and the tools
+  // the round would offer. `null` until it answers, and left `null` where there
+  // is no backend to ask (the harness), so the pane shows nothing rather than
+  // the window's own idea of a request.
+  const [preview, setPreview] = useState<RequestPreview | null>(null);
+
+  // What the open thread's run holds the request is assembled from: the
+  // transcript the messages come from, and the model, the reasoning level, the
+  // servers the chat offers and the ones this run loaded lazily, which the tools
+  // and the addendum come from. Any of them changing is a different request, and
+  // a pane still showing the request as it was before is not showing the request
+  // the model is given — a run committing an answer, a tool's result or a server
+  // loaded lazily is only the commonest way that happens, and `chat_set` while
+  // the pane is open is another.
+  //
+  // Read from the run's own store rather than handed down, since the window
+  // draws the transcript and the pane is what has to follow it. Each field is
+  // compared by identity, so the partial arriving — which replaces nothing else
+  // — is not a fetch, and a token in flight is not one either.
+  const run = useRuns().get(chat);
+  const held = run?.kind === "snapshot" ? run.snapshot : null;
+  const transcript = held?.messages;
+  const model = held?.model;
+  const reasoning = held?.reasoning;
+  const servers = held?.servers;
+  const loaded = held?.loaded;
 
   useEffect(() => {
     let alive = true;
     api
-      .requestPreview(messages, lazy)
+      .requestPreview(chat)
       .then((asked) => {
         if (alive) setPreview(asked);
       })
@@ -130,17 +199,14 @@ export function JsonView({
     return () => {
       alive = false;
     };
-  }, [messages, lazy]);
+  }, [chat, transcript, model, reasoning, servers, loaded]);
 
+  const messages = preview?.messages ?? NO_MESSAGES;
+  const tools = preview?.tools ?? NO_TOOLS;
   const groups = useMemo(() => groupTools(tools), [tools]);
 
-  // What the model is sent, and, only when the backend cannot be asked, the
-  // window's own reading of it — the prompt as written, with no addendum.
-  const conversation = useMemo<unknown[]>(() => {
-    if (preview !== null) return preview;
-    const said = systemPrompt.trim();
-    return said === "" ? messages : [{ role: "system", content: said }, ...messages];
-  }, [preview, messages, systemPrompt]);
+  // What the model is sent, whole: the backend's own assembly, read as it is.
+  const conversation = messages;
 
   const payload = useMemo(
     () => (tab === "tools" ? groups.flatMap((group) => group.tools) : conversation),
@@ -148,28 +214,49 @@ export function JsonView({
   );
   const text = useMemo(() => JSON.stringify(payload, null, 2), [payload]);
 
-  // What each group's own JSON is. The conversation is highlighted only when it
-  // is what is showing, since a large pool of schemas is not cheap to colour.
+  // Which abbreviated values are open, held against the text they belong to: the
+  // markers are positions in one request's JSON and mean nothing in the next. A
+  // second press closes what the first opened, which is the only way back from a
+  // value big enough to be worth a control of its own.
+  const [expanded, setExpanded] = useState<{ text: string; open: ReadonlySet<number> }>({
+    text: "",
+    open: EMPTY,
+  });
+  const open = expanded.text === text ? expanded.open : EMPTY;
+  const expand = useCallback(
+    (index: number) =>
+      setExpanded((previous) => {
+        const shown = new Set(previous.text === text ? previous.open : []);
+        if (shown.has(index)) shown.delete(index);
+        else shown.add(index);
+        return { text, open: shown };
+      }),
+    [text],
+  );
+
+  // What each group's own JSON is, worked out for the tab that is showing it
+  // and not the other: the tools are a pool of schemas to colour and the
+  // conversation is megabytes of one, so neither is worth doing for a pane that
+  // is not the one on screen.
   const bodies = useMemo(
     () =>
-      groups.map((group) => {
-        const bytes = costs.find((cost) => cost.server === group.id)?.bytes ?? toolBytes(group.tools);
-        const count = group.tools.length;
-        return {
-          group,
-          meta: `${count === 1 ? "1 tool" : `${count} tools`} ~${tokens(bytes)} Tok`,
-          body: highlight(JSON.stringify(group.tools, null, 2)),
-        };
-      }),
-    [groups, costs],
+      tab === "tools"
+        ? groups.map((group) => {
+            const bytes = costs.find((cost) => cost.server === group.id)?.bytes ?? toolBytes(group.tools);
+            const count = group.tools.length;
+            return {
+              group,
+              meta: `${count === 1 ? "1 tool" : `${count} tools`} ~${tokens(bytes)} Tok`,
+              body: highlight(JSON.stringify(group.tools, null, 2), open, expand),
+            };
+          })
+        : [],
+    [tab, groups, costs, open, expand],
   );
-  const body = useMemo(() => (tab === "history" ? highlight(text) : null), [tab, text]);
-
-  async function copy() {
-    await copyText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }
+  const body = useMemo(
+    () => (tab === "history" ? highlight(text, open, expand) : null),
+    [tab, text, open, expand],
+  );
 
   return (
     <div className="json-pane">
@@ -192,8 +279,8 @@ export function JsonView({
           <pre className="json-pre">{body}</pre>
         )}
       </div>
-      <button className="json-copy" onClick={copy} aria-label="Copy JSON">
-        {copied ? <Check className="icon" /> : <Copy className="icon" />}
+      <button className="btn btn--subtle btn--tonal json-copy" onClick={() => copy(text)} aria-label="Copy JSON">
+        {copied ? <Check /> : <Copy />}
         <span>{copied ? "Copied" : "Copy"}</span>
       </button>
     </div>

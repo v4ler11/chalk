@@ -24,9 +24,38 @@ pub const CUSTOM: &str = "custom";
 /// Where OpenRouter's name resolves to.
 pub const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1";
 
+/// A gateway a model can be asked of by name: a model whose id begins with the
+/// gateway's own name is sent to it, with the key kept here rather than the
+/// app's own. It is what lets one app talk to several providers at once — the
+/// picker's models can each name the gateway that serves them.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Gateway {
+    /// The gateway's own name, and the prefix its models' ids carry. It is one
+    /// `/`-separated segment — a model's id is read by its first segment alone
+    /// — so a name with a slash in it can never match, and is not something a
+    /// model's id can lead with.
+    pub id: String,
+    /// Where it is, when the name is not one the app knows. Written out to the
+    /// file as it was written in: empty for a name that resolves here.
+    #[serde(default)]
+    pub endpoint: String,
+    /// The key its requests go with — the gateway's, not the app's, which is
+    /// the whole reason for naming one. Defaulted like the endpoint, because
+    /// the file is hand-edited and a gateway that needs no key — a local Ollama,
+    /// say — should not fail the whole file's parse by leaving one out.
+    #[serde(default)]
+    pub api_key: String,
+}
+
 /// The settings as the file holds them: the keys are the file's keys.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Settings {
+    /// What the channel calls the person using it: their own words, drawn
+    /// beside what they post. Nothing in the app needs it to work, so a file
+    /// without one is a file that was written before there was anywhere to put
+    /// it, and reads as nothing at all.
+    #[serde(default)]
+    pub name: String,
     /// Where requests go: [`OPENROUTER`], or [`CUSTOM`].
     pub provider: String,
     /// Where a custom provider is: the base URL of an OpenAI-compatible API,
@@ -35,14 +64,26 @@ pub struct Settings {
     #[serde(default)]
     pub endpoint: String,
     pub api_key: String,
-    /// The models to choose between, in the order the picker shows them. The
-    /// first is what a chat starts from when the history has nothing to say;
-    /// a chat then keeps whichever it was given.
+    /// The models to choose between, in the order the picker shows them. A chat
+    /// keeps whichever it was given for as long as it lives.
     pub models: Vec<String>,
+    /// What a new chat starts from, when the history has nothing to say. It is
+    /// a model's id rather than a place in the list: choosing a default is not
+    /// a way of reordering the picker, and a default is not forgotten by adding
+    /// a model above it. Absent from every file written before it was a key,
+    /// and empty or naming a model the list no longer holds, both of which are
+    /// read as the head of the list.
+    #[serde(default)]
+    pub default_model: String,
     /// Sent ahead of every chat as a `system` message. It belongs to the
     /// request rather than to the transcript, so no chat ever stores it.
     #[serde(default)]
     pub system_prompt: String,
+    /// The gateways a model can be asked of by naming one in its id. Absent
+    /// from every file written before they existed, which is no gateways
+    /// rather than a file that cannot be read.
+    #[serde(default)]
+    pub gateways: Vec<Gateway>,
 }
 
 /// The settings as the frontend sees them: camelCase over the wire, the file's
@@ -50,21 +91,57 @@ pub struct Settings {
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
+    pub name: String,
     pub provider: String,
     pub endpoint: String,
     pub api_key: String,
     pub models: Vec<String>,
+    pub default_model: String,
     pub system_prompt: String,
+    pub gateways: Vec<AppGateway>,
+}
+
+/// A gateway as the frontend sees it: the same fields as the file's, spelled the
+/// way every other setting is on the wire.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AppGateway {
+    pub id: String,
+    pub endpoint: String,
+    pub api_key: String,
+}
+
+impl From<&Gateway> for AppGateway {
+    fn from(gateway: &Gateway) -> Self {
+        AppGateway {
+            id: gateway.id.clone(),
+            endpoint: gateway.endpoint.clone(),
+            api_key: gateway.api_key.clone(),
+        }
+    }
+}
+
+impl From<&AppGateway> for Gateway {
+    fn from(gateway: &AppGateway) -> Self {
+        Gateway {
+            id: gateway.id.clone(),
+            endpoint: gateway.endpoint.clone(),
+            api_key: gateway.api_key.clone(),
+        }
+    }
 }
 
 impl From<&Settings> for AppConfig {
     fn from(settings: &Settings) -> Self {
         AppConfig {
+            name: settings.name.clone(),
             provider: settings.provider.clone(),
             endpoint: settings.endpoint.clone(),
             api_key: settings.api_key.clone(),
             models: settings.models.clone(),
+            default_model: settings.default_model.clone(),
             system_prompt: settings.system_prompt.clone(),
+            gateways: settings.gateways.iter().map(AppGateway::from).collect(),
         }
     }
 }
@@ -72,11 +149,14 @@ impl From<&Settings> for AppConfig {
 impl From<&AppConfig> for Settings {
     fn from(config: &AppConfig) -> Self {
         Settings {
+            name: config.name.clone(),
             provider: config.provider.clone(),
             endpoint: config.endpoint.clone(),
             api_key: config.api_key.clone(),
             models: config.models.clone(),
+            default_model: config.default_model.clone(),
             system_prompt: config.system_prompt.clone(),
+            gateways: config.gateways.iter().map(Gateway::from).collect(),
         }
     }
 }
@@ -87,6 +167,10 @@ impl From<&AppConfig> for Settings {
 /// written in a shape this file no longer has — see [`provider_from`].
 #[derive(Deserialize)]
 struct Raw {
+    /// Absent from every file written before there was a name to hold, which is
+    /// no name rather than a file that cannot be read.
+    #[serde(default)]
+    name: String,
     #[serde(default)]
     provider: String,
     #[serde(default)]
@@ -96,21 +180,37 @@ struct Raw {
     models: Vec<String>,
     #[serde(default)]
     model: Option<String>,
+    /// Absent from every file written before the default was a key, which is the
+    /// head of the list rather than a file that cannot be read.
+    #[serde(default)]
+    default_model: String,
     /// Absent from every file written before the prompt existed, which is an
     /// empty prompt rather than a file that cannot be read.
     #[serde(default)]
     system_prompt: String,
+    /// Absent from every file written before gateways existed, which is none.
+    #[serde(default)]
+    gateways: Vec<Gateway>,
 }
 
 /// The endpoint a gateway's name stood for, back when the provider was written
 /// as a name and translated here. Anything else — an unknown name, or the
 /// endpoint itself — is `None`, and is read as what it already looks like.
+///
+/// Every URL is the root its `/chat/completions` hangs off, which is what makes
+/// a name enough: a gateway named `google` is asked for where Google's
+/// OpenAI-compatible API is, with nothing written out for it. Anthropic is not
+/// among them — its own API is not shaped like this one — so a gateway named
+/// `anthropic` needs the endpoint of whatever speaks for it.
 fn known(name: &str) -> Option<&'static str> {
     match name {
         "openrouter" => Some(OPENROUTER_URL),
         "openai" => Some("https://api.openai.com/v1"),
+        "google" => Some("https://generativelanguage.googleapis.com/v1beta/openai"),
         "deepseek" => Some("https://api.deepseek.com/v1"),
         "groq" => Some("https://api.groq.com/openai/v1"),
+        "mistral" => Some("https://api.mistral.ai/v1"),
+        "xai" => Some("https://api.x.ai/v1"),
         "ollama" => Some("http://localhost:11434/v1"),
         "lmstudio" => Some("http://localhost:1234/v1"),
         _ => None,
@@ -134,7 +234,7 @@ pub fn provider_from(written: &str, endpoint: String) -> (String, String) {
             // what the app asks for — the response cache — and what it reads
             // back, so a URL that is OpenRouter's is not left as a custom
             // provider merely because it was spelled out.
-            None if name.trim_end_matches('/') == OPENROUTER_URL => (OPENROUTER.into(), String::new()),
+            None if is_openrouter_url(name) => (OPENROUTER.into(), String::new()),
             None => (CUSTOM.into(), name.to_string()),
         },
     }
@@ -159,13 +259,26 @@ impl From<Raw> for Settings {
         if models.is_empty() {
             models = defaults().models;
         }
+        // What a new chat starts from: the model the file names, if the list
+        // still holds it. Anything else — a file written before the key
+        // existed, or a default removed from the list by hand — is the head of
+        // the list, so nothing downstream is ever handed a default it cannot
+        // ask a provider for.
+        let default_model = models
+            .iter()
+            .find(|model| model.trim() == raw.default_model.trim())
+            .cloned()
+            .unwrap_or_else(|| models.first().cloned().unwrap_or_default());
         let (provider, endpoint) = provider_from(&raw.provider, raw.endpoint);
         Settings {
+            name: raw.name,
             provider,
             endpoint,
             api_key: raw.api_key,
             models,
+            default_model,
             system_prompt: raw.system_prompt,
+            gateways: raw.gateways,
         }
     }
 }
@@ -229,6 +342,9 @@ pub fn write_to(path: &Path, settings: &Settings) -> Result<(), String> {
 /// What a first run starts with.
 pub fn defaults() -> Settings {
     Settings {
+        // Nobody has said who they are yet, and the app does not need to know:
+        // the channel draws "You" until they write their name in.
+        name: String::new(),
         provider: OPENROUTER.into(),
         endpoint: String::new(),
         // No key ships with the app: the file is the user's, and the key in it
@@ -236,8 +352,39 @@ pub fn defaults() -> Settings {
         // one is refused by the provider, which is the honest answer.
         api_key: String::new(),
         models: vec!["deepseek/deepseek-v4.1-flash".into()],
+        // The same model, named as the default: one model's worth of chat, which
+        // is what a first run has to ask with.
+        default_model: "deepseek/deepseek-v4.1-flash".into(),
         system_prompt: String::new(),
+        // No gateway ships with the app: a model is asked of the app's own
+        // provider until the user names one.
+        gateways: Vec::new(),
     }
+}
+
+/// What a new chat starts from, when the history has nothing to say: the model
+/// the settings name, or the head of the list.
+///
+/// The named one is taken only while the list still holds it, so a default left
+/// behind by a removal falls to the list itself rather than being asked of a
+/// provider that does not serve it. A list with nothing in it — which only a
+/// save from the window can hand this, since a hand-edited file's empty or
+/// all-blank list is filled with the defaults when it is read — is no model at
+/// all, and the empty string is what every reader of this already does with
+/// that.
+pub fn default_model(config: &AppConfig) -> &str {
+    let named = config.default_model.trim();
+    if !named.is_empty() {
+        if let Some(known) = config.models.iter().find(|model| model.trim() == named) {
+            return known;
+        }
+    }
+    config
+        .models
+        .iter()
+        .find(|model| !model.trim().is_empty())
+        .map(String::as_str)
+        .unwrap_or("")
 }
 
 /// The endpoint requests go to: the one a custom provider names, or the one
@@ -252,196 +399,93 @@ pub fn endpoint<'a>(provider: &str, endpoint: &'a str) -> &'a str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "chalk-settings-{name}-{}.yaml",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_file(&path);
-        path
+/// Where a gateway's requests go, when the app has a place of its own for them:
+/// the endpoint it wrote out, or the one the app knows its name for. `None` is
+/// a gateway the app has no URL for — an unknown name that wrote none — and
+/// there is nowhere of its own to send to; the caller has to fall back, and
+/// must take the app's own key with it, because the key belongs to wherever the
+/// request actually goes.
+fn gateway_url(gateway: &AppGateway) -> Option<String> {
+    let written = gateway.endpoint.trim();
+    if !written.is_empty() {
+        return Some(written.to_string());
     }
+    known(gateway.id.trim()).map(str::to_string)
+}
 
-    #[test]
-    fn settings_round_trip_through_a_file() {
-        let path = temp("round-trip");
-        let settings = Settings {
-            provider: CUSTOM.into(),
-            endpoint: "https://api.groq.com/openai/v1".into(),
-            api_key: "sk-1".into(),
-            models: vec!["llama-3.3-70b".into(), "mixtral-8x7b".into()],
-            system_prompt: "Answer in one line.".into(),
-        };
-        write_to(&path, &settings).unwrap();
-        assert_eq!(read(&path).unwrap(), settings);
-        let _ = std::fs::remove_file(&path);
+/// Where a model is asked, and what it is asked as: the whole of what a request
+/// needs to reach the right place under the right credentials, for a model the
+/// other end knows by name.
+///
+/// The four facts are one answer and are decided together, which is the point of
+/// the type: a model asked of a gateway of its own goes to that gateway's URL,
+/// with that gateway's key, under **the model's own name** — the app's id for it
+/// leads with the gateway's name, which the gateway has never heard of (`gpt-5`,
+/// not `openai/gpt-5`) — while a model the app's own provider serves keeps its
+/// id whole, because there the id *is* the model's name: `deepseek/deepseek-v4.1-flash`
+/// is OpenRouter's spelling of DeepSeek's model, vendor prefix and all.
+pub struct Destination {
+    /// The gateway's own name, or the app's own provider where that is where the
+    /// request goes.
+    pub gateway: String,
+    /// The URL its `/chat/completions` hangs off.
+    pub url: String,
+    /// The key the request is sent with: the gateway's own, or the app's own
+    /// where the app's own provider is where it goes.
+    pub key: String,
+    /// The model as the other end calls it.
+    pub model: String,
+}
+
+/// Where a model is asked: the gateway its id's first segment names, when that
+/// gateway has a place of its own to send to, or the app's own provider
+/// otherwise.
+///
+/// A model's id leads with the gateway that serves it — `openai/gpt-5` is
+/// OpenAI's model as this app spells it — so the first segment is read as a
+/// gateway's name, and what remains is the model's own name. A segment that
+/// names no gateway the app has is not a gateway: OpenRouter's own
+/// vendor-prefixed ids look the same, and they are the app's own provider's to
+/// route, as is a model with no prefix at all. A gateway whose name the app has
+/// no URL for and that wrote none is the same case: there is nowhere of its own
+/// to send to, so the request goes where the app's own provider is, under that
+/// name, with its key, and with the id whole — the app's own provider is where
+/// the id was addressed, so nothing about it is this app's to trim.
+pub fn destination(config: &AppConfig, model: &str) -> Destination {
+    let segment = model
+        .split_once('/')
+        .map(|(segment, _)| segment)
+        .filter(|segment| !segment.is_empty());
+    if let Some(segment) = segment {
+        if let Some(gateway) = config.gateways.iter().find(|g| g.id.trim() == segment) {
+            if let Some(url) = gateway_url(gateway) {
+                return Destination {
+                    gateway: gateway.id.clone(),
+                    url,
+                    key: gateway.api_key.clone(),
+                    // Everything after the name that led it: a server's own model
+                    // names hold slashes often enough (`Qwen/Qwen2.5-7B-Instruct`)
+                    // that only the first segment is the gateway's.
+                    model: model.split_once('/').map(|(_, own)| own).unwrap_or(model).to_string(),
+                };
+            }
+        }
     }
-
-    /// The shape this file had before models were a list: one `model` key, which
-    /// has to become a list of one rather than being lost.
-    #[test]
-    fn an_old_file_with_a_single_model_reads_as_a_list_of_one() {
-        let path = temp("old-model-key");
-        std::fs::write(
-            &path,
-            "provider: openrouter\napi_key: sk-1\nmodel: some/old-model\n",
-        )
-        .unwrap();
-        let settings = read(&path).unwrap();
-        assert_eq!(settings.models, vec!["some/old-model".to_string()]);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn a_blank_row_is_not_a_model() {
-        let path = temp("blank-row");
-        std::fs::write(
-            &path,
-            "provider: openrouter\napi_key: sk-1\nmodels:\n  - \"\"\n  - real/model\n  - \"  \"\n",
-        )
-        .unwrap();
-        assert_eq!(read(&path).unwrap().models, vec!["real/model".to_string()]);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn an_empty_model_list_falls_back_to_the_default() {
-        let path = temp("no-models");
-        std::fs::write(&path, "provider: openrouter\napi_key: sk-1\nmodels: []\n").unwrap();
-        assert_eq!(read(&path).unwrap().models, defaults().models);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn the_settings_file_is_the_owner_s_alone_to_read() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let path = temp("permissions");
-        write_to(&path, &defaults()).unwrap();
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, 0o600);
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_directory_it_makes_is_private() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let dir = std::env::temp_dir().join(format!("chalk-settings-dir-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        write_to(&dir.join(FILE), &defaults()).unwrap();
-        let mode = std::fs::metadata(&dir).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, 0o700);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The rule that keeps a save from making somewhere like `/tmp` private.
-    #[cfg(unix)]
-    #[test]
-    fn a_directory_it_did_not_make_keeps_its_mode() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let dir = std::env::temp_dir();
-        let before = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
-        write_to(&temp("existing-dir"), &defaults()).unwrap();
-        let after = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
-        assert_eq!(after, before);
-    }
-
-    #[test]
-    fn the_file_is_the_one_under_the_home_directory() {
-        assert_eq!(
-            path_in(Path::new("/home/someone")),
-            PathBuf::from("/home/someone/.chalk/settings.yaml")
-        );
-    }
-
-    #[test]
-    fn a_hand_edited_file_parses_with_comments_and_unknown_keys() {
-        let path = temp("hand-edited");
-        std::fs::write(
-            &path,
-            "# where the requests go\nprovider: openai\napi_key: 'sk-quoted'\nmodels:\n  - gpt-4o\n  - o3-mini\nsomething_else: 2\n",
-        )
-        .unwrap();
-        let settings = read(&path).unwrap();
-        // A gateway this file no longer names: it is read as the endpoint it
-        // stood for, under the custom provider the selector offers.
-        assert_eq!(settings.provider, CUSTOM);
-        assert_eq!(settings.endpoint, "https://api.openai.com/v1");
-        assert_eq!(settings.api_key, "sk-quoted");
-        assert_eq!(settings.models, vec!["gpt-4o".to_string(), "o3-mini".into()]);
-        // The prompt was not a key when this file was written; no prompt is the
-        // only thing it can mean.
-        assert_eq!(settings.system_prompt, "");
-        let _ = std::fs::remove_file(&path);
-    }
-
-    /// The file most of these were left in: the endpoint written out by hand,
-    /// which is OpenRouter's own. It is OpenRouter rather than a custom provider
-    /// pointing at the same URL, because that is what turns its cache on.
-    #[test]
-    fn openrouters_own_endpoint_is_read_as_openrouter() {
-        let path = temp("openrouter-url");
-        std::fs::write(
-            &path,
-            "provider: https://openrouter.ai/api/v1\napi_key: sk-1\nmodels:\n  - some/model\n",
-        )
-        .unwrap();
-        let settings = read(&path).unwrap();
-        assert_eq!(settings.provider, OPENROUTER);
-        assert_eq!(settings.endpoint, "");
-        let _ = std::fs::remove_file(&path);
-    }
-
-    /// A file the selector wrote: both names keep what they were given.
-    #[test]
-    fn the_two_names_survive_a_round_trip() {
-        assert_eq!(provider_from(CUSTOM, "http://localhost:8080/v1".into()), (CUSTOM.into(), "http://localhost:8080/v1".into()));
-        assert_eq!(provider_from(OPENROUTER, "ignored".into()), (OPENROUTER.into(), String::new()));
-        // A file with no provider at all is the app's own default.
-        assert_eq!(provider_from("", String::new()), (OPENROUTER.into(), String::new()));
-    }
-
-    /// Nobody's file named this, and it is not an endpoint: it is passed
-    /// through as written, so a typo reads back as the typo it is.
-    #[test]
-    fn an_unknown_name_is_taken_as_an_endpoint() {
-        assert_eq!(
-            provider_from("my-gateway", String::new()),
-            (CUSTOM.into(), "my-gateway".into())
-        );
-    }
-
-    #[test]
-    fn the_endpoint_is_the_one_the_provider_names() {
-        assert_eq!(endpoint(OPENROUTER, ""), OPENROUTER_URL);
-        assert_eq!(endpoint(CUSTOM, " https://example.com/v1 "), "https://example.com/v1");
-        // A custom provider with nothing written in its field is an endpoint of
-        // nothing: the request fails and says so, rather than being sent to a
-        // URL nobody chose.
-        assert_eq!(endpoint(CUSTOM, ""), "");
-    }
-
-    #[test]
-    fn the_config_crosses_to_the_frontend_in_its_own_spelling() {
-        let settings = Settings {
-            provider: OPENROUTER.into(),
-            endpoint: String::new(),
-            api_key: "sk-1".into(),
-            models: vec!["some/model".into()],
-            system_prompt: "Be brief.".into(),
-        };
-        let config = AppConfig::from(&settings);
-        assert_eq!(
-            serde_json::to_string(&config).unwrap(),
-            r#"{"provider":"openrouter","endpoint":"","apiKey":"sk-1","models":["some/model"],"systemPrompt":"Be brief."}"#
-        );
-        assert_eq!(Settings::from(&config), settings);
+    Destination {
+        gateway: config.provider.clone(),
+        url: endpoint(&config.provider, &config.endpoint).to_string(),
+        key: config.api_key.clone(),
+        model: model.to_string(),
     }
 }
+
+/// Whether a URL is OpenRouter's — the one gateway whose response cache this app
+/// asks for and whose own word on a response it reads back.
+pub fn is_openrouter_url(url: &str) -> bool {
+    url.trim_end_matches('/') == OPENROUTER_URL
+}
+
+#[cfg(test)]
+#[path = "tests/settings.rs"]
+mod tests;
+

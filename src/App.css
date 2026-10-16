@@ -4,18 +4,27 @@
  * the one the file had when it was one file.
  *
  *   base          the palette, the reset, and the window's own box
+ *   components    the controls every feature presses: buttons, pills, fields,
+ *                 menus — a feature styles its own surfaces, not these
  *   shell         the window's chrome, and the chat panel's column
- *   sidebar       the history down the left
+ *   sidebar       the window's own column, and the views there are to look at
+ *   row           the delete control at the end of a list row
  *   main          the chat panel: its nav, the modes, and the transcript
+ *   pins          the pinned messages, gathered out of every thread
  *   composer      the bar the prompt is typed in, and the approval card
  *   side-windows  the settings' own chrome, and the log window
  *   mcp-settings  the MCP page
- *   dark          the OS dark scheme's overrides, which touch nothing else
+ *   dark          the dark scheme's tokens, and the two log rules beside them,
+ *                 selected by the attribute the theme module paints on <html>
+ *                 rather than by the OS's own query
  */
 @import "./styles/base.css";
+@import "./styles/components.css";
 @import "./styles/shell.css";
 @import "./styles/sidebar.css";
+@import "./styles/row.css";
 @import "./styles/main.css";
+@import "./styles/pins.css";
 @import "./styles/composer.css";
 @import "./styles/side-windows.css";
 @import "./styles/mcp-settings.css";

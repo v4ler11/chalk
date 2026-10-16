@@ -24,18 +24,18 @@ interface Props {
  * says there was any.
  */
 export function Thinking({ text, waitMs, thinkingMs }: Props) {
+  // The wait is on both drawings of the box: a model that reasoned nothing is
+  // shown the wait alone, and one that did is shown it above the reasoning.
+  const waiting = <span className="timer">Waiting {formatDuration(waitMs)}</span>;
+
   if (text === "") {
-    return (
-      <div className="thinking">
-        <span className="timer">Waiting {formatDuration(waitMs)}</span>
-      </div>
-    );
+    return <div className="thinking">{waiting}</div>;
   }
 
   return (
     <details className="thinking">
       <summary>
-        <span className="timer">Waiting {formatDuration(waitMs)}</span>
+        {waiting}
         <span className="thinking-line">
           <span className="timer">Thinking {formatDuration(thinkingMs)}</span>
           <ChevronRight className="chevron" />
