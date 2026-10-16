@@ -70,7 +70,7 @@ the provider regardless.
 cd src-tauri && cargo test --no-default-features
 ```
 
-Expect `41 passed; 0 failed`, plus `mcp_smoke` which is `#[ignore]`d by design
+Expect `107 passed; 0 failed`, plus `mcp_smoke` which is `#[ignore]`d by design
 (it spawns real servers and needs `python3`). Run it explicitly with
 `--ignored` only when the MCP client changed. Note `cargo test` compiles the
 integration tests: a `Server`-shaped struct that gained a field and was not
